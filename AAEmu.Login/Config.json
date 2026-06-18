@@ -1,0 +1,30 @@
+{
+	"Logging": {
+		"LogLevel": {
+			"Microsoft.AspNetCore.Hosting.Diagnostics": "Warning",
+			"Microsoft.AspNetCore.Routing.EndpointMiddleware": "Warning"
+		}
+	},
+	"SecretKey": "test",
+	"AutoAccount": true,
+	"SkipHostResolve": false,
+	"InternalNetwork": {
+		"Host": "*",
+		"Port": 1234
+	},
+	"Network": {
+		"Host": "*",
+		"NumConnections": 10,
+		"Port": 1237
+	},
+	"Connections": {
+		"MySQLProvider": {
+			"Database": "aaemu_login",
+			"Host": "%db_host%",
+			"Password": "%db_password%",
+			"Port": "%db_port%",
+			"User": "%db_user%"
+		}
+	},
+	"GameServers": []
+}

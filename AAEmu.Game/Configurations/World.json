@@ -1,0 +1,25 @@
+{
+    "World": {
+        "MOTD": "Welcome to AAEmu!",
+        "LogoutMessage": "Hope to see you soon.",
+        "AutoSaveInterval": 5.0,
+        "ExpRate": 1.0,
+        "HonorRate": 1.0,
+        "VocationRate": 1.0,
+        "LootRate": 1.0,
+        "GoldLootMultiplier": 1.0,
+        "GrowthRate": 1.0,
+        "DaysForTaxPayment": 7,
+        "IgnoreFallDamageAccessLevel": 100,
+        "GodMode": false,
+        "GeoDataMode": true,
+        "PreLoadTerrain": false,
+        "MaxInstances": 32,
+        "TargetPhysicsTps": 25.0,
+        "WindModel": "Official",
+        "ActabilityRate": 1.0,
+        "UsePersistentHouseDoodads": false,
+        "PvpHonorRate": 1.0,
+        "TagShareEnabled": false
+    }
+}

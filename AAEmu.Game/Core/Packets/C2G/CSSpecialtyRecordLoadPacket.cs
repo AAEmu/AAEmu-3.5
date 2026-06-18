@@ -1,0 +1,15 @@
+﻿using AAEmu.Commons.Network;
+using AAEmu.Game.Core.Network.Game;
+
+namespace AAEmu.Game.Core.Packets.C2G;
+
+public class CSSpecialtyRecordLoadPacket() : GamePacket(CSOffsets.CSSpecialtyRecordLoadPacket, 1)
+{
+    public override void Read(PacketStream stream)
+    {
+        var zoneId = stream.ReadInt32();
+        var id = stream.ReadUInt32();
+
+        Logger.Warn("CSSpecialtyRecordLoadPacket, ZoneId: {0}, Id: {1}", zoneId, id);
+    }
+}

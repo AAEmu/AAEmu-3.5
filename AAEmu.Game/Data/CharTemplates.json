@@ -1,0 +1,58 @@
+[
+    {
+        "Id": 1,
+        "Name": "Nuian",
+        "Pos": {
+            "X": 15578.042,
+            "Y": 15382.122,
+            "Z": 126.484,
+            "Roll": 0,
+            "Pitch": 0,
+            "Yaw": 160
+        },
+        "NumInventorySlot": 50,
+        "NumBankSlot": 50
+    },
+    {
+        "Id": 4,
+        "Name": "Elf",
+        "Pos": {
+            "X": 10388.576,
+            "Y": 15982.466,
+            "Z": 367.606,
+            "Roll": 0,
+            "Pitch": 0,
+            "Yaw": 45
+        },
+        "NumInventorySlot": 50,
+        "NumBankSlot": 50
+    },
+    {
+        "Id": 5,
+        "Name": "Hariharan",
+        "Pos": {
+            "X": 19304.874,
+            "Y": 7646.06,
+            "Z": 212.704,
+            "Roll": 0,
+            "Pitch": 0,
+            "Yaw": 210
+        },
+        "NumInventorySlot": 50,
+        "NumBankSlot": 50
+    },
+    {
+        "Id": 6,
+        "Name": "Ferre",
+        "Pos": {
+            "X": 23881.218,
+            "Y": 10495.782,
+            "Z": 589.7838,
+            "Roll": 0,
+            "Pitch": 0,
+            "Yaw": 200
+        },
+        "NumInventorySlot": 50,
+        "NumBankSlot": 50
+    }
+]
