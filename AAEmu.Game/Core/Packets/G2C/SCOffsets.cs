@@ -9,8 +9,8 @@ public static class SCOffsets
     public const ushort SCLeaveWorldGrantedPacket = 0x03;
     public const ushort SCLeaveWorldCanceledPacket = 0x04;
     public const ushort SCWorldQueuePacket = 0x05;
-    public const ushort SCInitialConfigPacket = 0x06;
-    public const ushort SCTrionConfigPacket = 0x07;
+    public const ushort SCInitialConfigPacket = 0x03D;
+    public const ushort SCTrionConfigPacket = 0x08A;
     public const ushort SCFactionListPacket = 0x08;
     public const ushort SCFactionRelationListPacket = 0x09;
     public const ushort SCExpeditionRolePolicyListPacket = 0x0b;
@@ -64,9 +64,9 @@ public static class SCOffsets
     public const ushort SCCharacterDeletedPacket = 0x3b;
     public const ushort SCCancelCharacterDeleteResponsePacket = 0x3c;
     public const ushort SCCharacterCreationFailedPacket = 0x3d;
-    public const ushort SCCharacterListPacket = 0x3e;
-    public const ushort SCRaceCongestionPacket = 0x3f;
-    public const ushort SCCharacterStatePacket = 0x40;
+    public const ushort SCCharacterListPacket = 0x076;
+    public const ushort SCRaceCongestionPacket = 0x05C;
+    public const ushort SCCharacterStatePacket = 0x17E;
     public const ushort SCNotifyResurrectionPacket = 0x41;
     public const ushort SCCharacterResurrectedPacket = 0x42;
     public const ushort SCForceAttackSetPacket = 0x43;
@@ -76,8 +76,8 @@ public static class SCOffsets
     public const ushort SCLpManagedPacket = 0x48;
     public const ushort SCCharacterBoundPacket = 0x49;
     public const ushort SCCooldownsPacket = 0x4a;
-    public const ushort SCCharacterInvenInitPacket = 0x4b;
-    public const ushort SCCharacterInvenContentsPacket = 0x4c;
+    public const ushort SCCharacterInvenInitPacket = 0x063;
+    public const ushort SCCharacterInvenContentsPacket = 0x1C7;
     public const ushort SCInvenExpandedPacket = 0x4d;
     public const ushort SCFriendsPacket = 0x4e;
     public const ushort SCSearchListPacket = 0x4f;
@@ -289,7 +289,7 @@ public static class SCOffsets
     public const ushort SCUnkPacket4 = 0x128;
     public const ushort SCEmotionExpressedPacket = 0x12b;
     public const ushort SCSoldItemListPacket = 0x12c;
-    public const ushort SCActionSlotsPacket = 0x12d;
+    public const ushort SCActionSlotsPacket = 0x0D8;
     public const ushort SCAuctionPostedPacket = 0x12e;
     public const ushort SCAuctionSearchedPacket = 0x12f;
     public const ushort SCAuctionLowestPricePacket = 0x130;
@@ -436,7 +436,7 @@ public static class SCOffsets
     public const ushort SCCraftFailedPacket = 0x1bf;
     public const ushort SCExpertLimitModifiedPacket = 0x1c0;
     public const ushort SCExpertExpandedPacket = 0x1c1;
-    public const ushort SCAccountInfoPacket = 0x1c2;
+    public const ushort SCAccountInfoPacket = 0x1F9;
     public const ushort SCAiDebugPacket = 0x1c3;
     public const ushort SCAiAggroPacket = 0x1c4;
     public const ushort SCHSRequestPacket = 0x1c5;
@@ -467,7 +467,7 @@ public static class SCOffsets
     public const ushort SCSendUserMusicPacket = 0x1df;
     public const ushort SCUserNoteLoadedPacket = 0x1e0;
     public const ushort SCPauseUserMusicPacket = 0x1e1;
-    public const ushort SCGetSlotCountPacket = 0x1e2;
+    public const ushort SCGetSlotCountPacket = 0x266;
     public const ushort SCSecondPassSettedPacket = 0x1e3;
     public const ushort SCSecondPassKeyTablesPacket = 0x1e4;
     public const ushort SCSecondPassChangedPacket = 0x1e5;
@@ -517,7 +517,8 @@ public static class SCOffsets
     public const ushort SCUnkPacket25 = 0x212;
     public const ushort SCUnkPacket26 = 0x213;
     public const ushort SCUnkPacket27 = 0x214;
-    public const ushort SCAccountAttributeConfigPacket = 0x215;
-    public const ushort SCIdleKickPacket = 0x216;
-    public const ushort SCLevelRestrictionConfigPacket = 0x217;
+    public const ushort SCAccountAttributePacket = 0x0CA; // For encrypted packets (3.5)
+    public const ushort SCAccountAttributeConfigPacket = 0x070;
+    public const ushort SCIdleKickPacket = 0x159;
+    public const ushort SCLevelRestrictionConfigPacket = 0x263;
 }

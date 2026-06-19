@@ -5,7 +5,8 @@ public static class CSOffsets
     // All opcodes here are updated for version client_12_r208022
     // World
     public const ushort X2EnterWorldPacket = 0x000;
-    public const ushort CSLeaveWorldPacket = 0x001;
+    public const ushort CSAesXorKeyPacket = 0x094; // Encryption key exchange packet
+    public const ushort CSLeaveWorldPacket = 0x093;
     public const ushort CSCancelLeaveWorldPacket = 0x002;
     public const ushort CSCreateExpeditionPacket = 0x004;
     public const ushort CSChangeExpeditionSponsorPacket = 0xfff; // TODO : this packet seems like it has been removed.
@@ -36,11 +37,11 @@ public static class CSOffsets
     public const ushort CSCreateCharacterPacket = 0x022;
     public const ushort CSEditCharacterPacket = 0x023;
     public const ushort CSDeleteCharacterPacket = 0x024;
-    public const ushort CSSelectCharacterPacket = 0x025;
-    public const ushort CSSpawnCharacterPacket = 0x026;
+    public const ushort CSSelectCharacterPacket = 0x03D;
+    public const ushort CSSpawnCharacterPacket = 0x12C;
     public const ushort CSCancelCharacterDeletePacket = 0x027;
-    public const ushort CSNotifyInGamePacket = 0x029;
-    public const ushort CSNotifyInGameCompletedPacket = 0x02a;
+    public const ushort CSNotifyInGamePacket = 0x108;
+    public const ushort CSNotifyInGameCompletedPacket = 0x045;
     public const ushort CSEditorGameModePacket = 0x02b;
     public const ushort CSChangeTargetPacket = 0x02c;
     public const ushort CSRequestCharBriefPacket = 0x02d;
@@ -204,7 +205,7 @@ public static class CSOffsets
     public const ushort CSTryQuestCompleteAsLetItDonePacket = 0x0dd;
     public const ushort CSUsePortalPacket = 0x0de;
     public const ushort CSDeletePortalPacket = 0x0df;
-    public const ushort CSInstanceLoadedPacket = 0x0e0;
+    public const ushort CSInstanceLoadedPacket = 0x0F6;
     public const ushort CSApplyToInstantGamePacket = 0x0e1;
     public const ushort CSCancelInstantGamePacket = 0x0e2;
     public const ushort CSJoinInstantGamePacket = 0x0e3;

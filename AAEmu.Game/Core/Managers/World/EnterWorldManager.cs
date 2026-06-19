@@ -72,7 +72,7 @@ public class EnterWorldManager(
 
                 var port = AppConfiguration.Instance.StreamNetwork.Port;
                 var gm = connection.GetAttribute("gmFlag") != null;
-                connection.SendPacket(new X2EnterWorldResponsePacket(0, gm, connection.Id, port));
+                connection.SendPacket(new X2EnterWorldResponsePacket(0, gm, connection.Id, port, connection));
                 connection.SendPacket(new ChangeStatePacket(0));
             }
             else

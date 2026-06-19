@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Char;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCActionSlotsPacket(ActionSlot[] slots) : GamePacket(SCOffsets.SCActionSlotsPacket, 1)
+public class SCActionSlotsPacket(ActionSlot[] slots) : GamePacket(SCOffsets.SCActionSlotsPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {
@@ -21,6 +21,7 @@ public class SCActionSlotsPacket(ActionSlot[] slots) : GamePacket(SCOffsets.SCAc
                 case ActionSlotType.ItemType:
                 case ActionSlotType.Spell:
                 case ActionSlotType.RidePetSpell:
+                case ActionSlotType.BattlePetSpell:
                     {
                         stream.Write((uint)s.ActionId);
                         break;

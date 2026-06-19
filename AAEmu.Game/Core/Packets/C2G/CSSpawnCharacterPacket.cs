@@ -8,7 +8,7 @@ using AAEmu.Game.Models.Observers;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSpawnCharacterPacket() : GamePacket(CSOffsets.CSSpawnCharacterPacket, 1)
+public class CSSpawnCharacterPacket() : GamePacket(CSOffsets.CSSpawnCharacterPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

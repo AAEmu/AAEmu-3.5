@@ -5,7 +5,7 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSLeaveWorldPacket() : GamePacket(CSOffsets.CSLeaveWorldPacket, 1)
+public class CSLeaveWorldPacket() : GamePacket(CSOffsets.CSLeaveWorldPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

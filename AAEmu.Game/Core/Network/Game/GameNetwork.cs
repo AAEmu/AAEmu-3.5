@@ -22,8 +22,8 @@ public class GameNetwork : Singleton<GameNetwork>
 
         // World
         RegisterPacket(CSOffsets.X2EnterWorldPacket, 1, typeof(X2EnterWorldPacket));
-        RegisterPacket(CSOffsets.CSLeaveWorldPacket, 1, typeof(CSLeaveWorldPacket));
-        RegisterPacket(CSOffsets.CSCancelLeaveWorldPacket, 1, typeof(CSCancelLeaveWorldPacket));
+        RegisterPacket(CSOffsets.CSLeaveWorldPacket, 5, typeof(CSLeaveWorldPacket));
+        RegisterPacket(CSOffsets.CSCancelLeaveWorldPacket, 5, typeof(CSCancelLeaveWorldPacket));
         RegisterPacket(CSOffsets.CSCreateExpeditionPacket, 1, typeof(CSCreateExpeditionPacket));
         //RegisterPacket(0x005, 1, typeof(CSChangeExpeditionSponsorPacket)); // TODO: this packet seems like it has been removed.
         RegisterPacket(CSOffsets.CSChangeExpeditionRolePolicyPacket, 1, typeof(CSChangeExpeditionRolePolicyPacket));
@@ -53,11 +53,11 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSCreateCharacterPacket, 1, typeof(CSCreateCharacterPacket));
         RegisterPacket(CSOffsets.CSEditCharacterPacket, 1, typeof(CSEditCharacterPacket));
         RegisterPacket(CSOffsets.CSDeleteCharacterPacket, 1, typeof(CSDeleteCharacterPacket));
-        RegisterPacket(CSOffsets.CSSelectCharacterPacket, 1, typeof(CSSelectCharacterPacket));
-        RegisterPacket(CSOffsets.CSSpawnCharacterPacket, 1, typeof(CSSpawnCharacterPacket));
+        RegisterPacket(CSOffsets.CSSelectCharacterPacket, 5, typeof(CSSelectCharacterPacket));
+        RegisterPacket(CSOffsets.CSSpawnCharacterPacket, 5, typeof(CSSpawnCharacterPacket));
         RegisterPacket(CSOffsets.CSCancelCharacterDeletePacket, 1, typeof(CSCancelCharacterDeletePacket));
-        RegisterPacket(CSOffsets.CSNotifyInGamePacket, 1, typeof(CSNotifyInGamePacket));
-        RegisterPacket(CSOffsets.CSNotifyInGameCompletedPacket, 1, typeof(CSNotifyInGameCompletedPacket));
+        RegisterPacket(CSOffsets.CSNotifyInGamePacket, 5, typeof(CSNotifyInGamePacket));
+        RegisterPacket(CSOffsets.CSNotifyInGameCompletedPacket, 5, typeof(CSNotifyInGameCompletedPacket));
         RegisterPacket(CSOffsets.CSEditorGameModePacket, 1, typeof(CSEditorGameModePacket));
         RegisterPacket(CSOffsets.CSChangeTargetPacket, 1, typeof(CSChangeTargetPacket));
         RegisterPacket(CSOffsets.CSRequestCharBriefPacket, 1, typeof(CSRequestCharBriefPacket));
@@ -221,7 +221,7 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSTryQuestCompleteAsLetItDonePacket, 1, typeof(CSTryQuestCompleteAsLetItDonePacket));
         RegisterPacket(CSOffsets.CSUsePortalPacket, 1, typeof(CSUsePortalPacket));
         RegisterPacket(CSOffsets.CSDeletePortalPacket, 1, typeof(CSDeletePortalPacket));
-        RegisterPacket(CSOffsets.CSInstanceLoadedPacket, 1, typeof(CSInstanceLoadedPacket));
+        RegisterPacket(CSOffsets.CSInstanceLoadedPacket, 5, typeof(CSInstanceLoadedPacket));
         RegisterPacket(CSOffsets.CSApplyToInstantGamePacket, 1, typeof(CSApplyToInstantGamePacket));
         RegisterPacket(CSOffsets.CSCancelInstantGamePacket, 1, typeof(CSCancelInstantGamePacket));
         RegisterPacket(CSOffsets.CSJoinInstantGamePacket, 1, typeof(CSJoinInstantGamePacket));
@@ -302,6 +302,10 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSSetupSecondPassword, 1, typeof(CSSetupSecondPassword));
         // 0x141 unk packet
         // 0x142 unk packet
+
+        // Encryption (Level 1 and Level 5)
+        RegisterPacket(CSOffsets.CSAesXorKeyPacket, 1, typeof(CSAesXorKeyPacket));
+        RegisterPacket(CSOffsets.CSAesXorKeyPacket, 5, typeof(CSAesXorKey_05_Packet));
 
         // Proxy
         RegisterPacket(0x000, 2, typeof(ChangeStatePacket));

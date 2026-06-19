@@ -11,7 +11,7 @@ using AAEmu.Game.Models.Game.Units.Route;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterPacket, 1)
+public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

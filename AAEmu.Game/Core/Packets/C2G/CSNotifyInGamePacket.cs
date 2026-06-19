@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Chat;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSNotifyInGamePacket() : GamePacket(CSOffsets.CSNotifyInGamePacket, 1)
+public class CSNotifyInGamePacket() : GamePacket(CSOffsets.CSNotifyInGamePacket, 5)
 {
     public override void Read(PacketStream stream)
     {
