@@ -1,11 +1,11 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCUnitFactionChangedPacket(uint unitId, string unitName, FactionsEnum id, FactionsEnum id2, bool temp)
-    : GamePacket(SCOffsets.SCUnitFactionChangedPacket, 1)
+    : GamePacket(SCOffsets.SCUnitFactionChangedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

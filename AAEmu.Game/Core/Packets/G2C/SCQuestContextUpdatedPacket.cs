@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Quests;
 
@@ -11,7 +11,7 @@ public class SCQuestContextUpdatedPacket(
     int para2 = 0,
     int para3 = 0,
     int para4 = 0)
-    : GamePacket(SCOffsets.SCQuestContextUpdatedPacket, 1)
+    : GamePacket(SCOffsets.SCQuestContextUpdatedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCancelLeaveWorldPacket() : GamePacket(CSOffsets.CSCancelLeaveWorldPacket, 1)
+public class CSCancelLeaveWorldPacket() : GamePacket(CSOffsets.CSCancelLeaveWorldPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

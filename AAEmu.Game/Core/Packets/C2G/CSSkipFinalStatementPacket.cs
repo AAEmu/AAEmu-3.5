@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSkipFinalStatementPacket() : GamePacket(CSOffsets.CSSkipFinalStatementPacket, 1)
+public class CSSkipFinalStatementPacket() : GamePacket(CSOffsets.CSSkipFinalStatementPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

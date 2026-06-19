@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSKickTeamMemberPacket() : GamePacket(CSOffsets.CSKickTeamMemberPacket, 1)
+public class CSKickTeamMemberPacket() : GamePacket(CSOffsets.CSKickTeamMemberPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

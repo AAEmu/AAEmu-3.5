@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Char;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSUpdateActionSlotPacket() : GamePacket(CSOffsets.CSUpdateActionSlotPacket, 1)
+public class CSUpdateActionSlotPacket() : GamePacket(CSOffsets.CSUpdateActionSlotPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

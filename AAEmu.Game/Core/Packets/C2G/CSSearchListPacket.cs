@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSearchListPacket() : GamePacket(CSOffsets.CSSearchListPacket, 1)
+public class CSSearchListPacket() : GamePacket(CSOffsets.CSSearchListPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -8,7 +8,7 @@ using AAEmu.Game.Models.Game.Chat;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSendChatMessagePacket() : GamePacket(CSOffsets.CSSendChatMessagePacket, 1)
+public class CSSendChatMessagePacket() : GamePacket(CSOffsets.CSSendChatMessagePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

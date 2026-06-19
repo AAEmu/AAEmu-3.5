@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSFactionImmigrationInviteReplyPacket() : GamePacket(CSOffsets.CSFactionImmigrationInviteReplyPacket, 1)
+public class CSFactionImmigrationInviteReplyPacket() : GamePacket(CSOffsets.CSFactionImmigrationInviteReplyPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

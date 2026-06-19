@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDeleteFriendPacket() : GamePacket(CSOffsets.CSDeleteFriendPacket, 1)
+public class CSDeleteFriendPacket() : GamePacket(CSOffsets.CSDeleteFriendPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

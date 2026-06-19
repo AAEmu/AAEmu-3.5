@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSUseTeleportPacket() : GamePacket(CSOffsets.CSUseTeleportPacket, 1)
+public class CSUseTeleportPacket() : GamePacket(CSOffsets.CSUseTeleportPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

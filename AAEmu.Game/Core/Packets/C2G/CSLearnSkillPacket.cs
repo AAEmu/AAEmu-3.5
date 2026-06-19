@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSLearnSkillPacket() : GamePacket(CSOffsets.CSLearnSkillPacket, 1)
+public class CSLearnSkillPacket() : GamePacket(CSOffsets.CSLearnSkillPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

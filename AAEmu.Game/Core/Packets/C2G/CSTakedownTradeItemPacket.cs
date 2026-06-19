@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSTakedownTradeItemPacket() : GamePacket(CSOffsets.CSTakedownTradeItemPacket, 1)
+public class CSTakedownTradeItemPacket() : GamePacket(CSOffsets.CSTakedownTradeItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -8,7 +8,7 @@ namespace AAEmu.Game.Core.Packets.C2G;
 /// <summary>
 /// Leader changed looting rules
 /// </summary>
-public class CSChangeLootingRulePacket() : GamePacket(CSOffsets.CSChangeLootingRulePacket, 1)
+public class CSChangeLootingRulePacket() : GamePacket(CSOffsets.CSChangeLootingRulePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

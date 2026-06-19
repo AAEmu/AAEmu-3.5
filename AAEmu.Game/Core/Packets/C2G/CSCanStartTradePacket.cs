@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCanStartTradePacket() : GamePacket(CSOffsets.CSCanStartTradePacket, 1)
+public class CSCanStartTradePacket() : GamePacket(CSOffsets.CSCanStartTradePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

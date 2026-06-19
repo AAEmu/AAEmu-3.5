@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
@@ -12,7 +12,7 @@ public class SCLoadInstancePacket(
     float angX,
     float angY,
     float angZ)
-    : GamePacket(SCOffsets.SCLoadInstancePacket, 1)
+    : GamePacket(SCOffsets.SCLoadInstancePacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

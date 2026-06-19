@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCreateHousePacket() : GamePacket(CSOffsets.CSCreateHousePacket, 1)
+public class CSCreateHousePacket() : GamePacket(CSOffsets.CSCreateHousePacket, 5)
 {
     //
 

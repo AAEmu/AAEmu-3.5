@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCFamilyMemberRemovedPacket(uint familyId, bool kicked, uint memberId)
-    : GamePacket(SCOffsets.SCFamilyMemberRemovedPacket, 1)
+    : GamePacket(SCOffsets.SCFamilyMemberRemovedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

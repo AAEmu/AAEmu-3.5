@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSActiveWeaponChangedPacket() : GamePacket(CSOffsets.CSActiveWeaponChangedPacket, 1)
+public class CSActiveWeaponChangedPacket() : GamePacket(CSOffsets.CSActiveWeaponChangedPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

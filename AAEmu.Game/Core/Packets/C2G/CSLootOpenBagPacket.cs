@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.DoodadObj;
@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSLootOpenBagPacket() : GamePacket(CSOffsets.CSLootOpenBagPacket, 1)
+public class CSLootOpenBagPacket() : GamePacket(CSOffsets.CSLootOpenBagPacket, 5)
 {
     // Generic RecoverItem pickup skill used by world trade/material packs (same path as the right-click pickup).
     // 15309 = housing crate recover; that one is intentionally NOT handled here and stays on the normal doodad

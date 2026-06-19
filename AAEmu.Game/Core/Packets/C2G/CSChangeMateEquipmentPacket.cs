@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeMateEquipmentPacket() : GamePacket(CSOffsets.CSChangeMateEquipmentPacket, 1)
+public class CSChangeMateEquipmentPacket() : GamePacket(CSOffsets.CSChangeMateEquipmentPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

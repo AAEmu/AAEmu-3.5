@@ -5,7 +5,7 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSReplyExpeditionInvitationPacket() : GamePacket(CSOffsets.CSReplyExpeditionInvitationPacket, 1)
+public class CSReplyExpeditionInvitationPacket() : GamePacket(CSOffsets.CSReplyExpeditionInvitationPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

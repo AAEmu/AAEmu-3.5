@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Numerics;
 
 using AAEmu.Commons.Network;
@@ -62,7 +62,11 @@ public class Unit : BaseUnit, IUnit
 
     public byte Level { get; set; }
 
+    public byte HierLevel { get; set; } // hierarchy level for 3.0.3.0
+
     public int Hp { get; set; }
+
+    public int HighAbilityRsc { get; set; }
 
     public int Hpp
     {

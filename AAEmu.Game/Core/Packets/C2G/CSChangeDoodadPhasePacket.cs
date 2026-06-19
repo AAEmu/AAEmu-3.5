@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeDoodadPhasePacket() : GamePacket(CSOffsets.CSChangeDoodadPhasePacket, 1)
+public class CSChangeDoodadPhasePacket() : GamePacket(CSOffsets.CSChangeDoodadPhasePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

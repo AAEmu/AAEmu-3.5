@@ -8,7 +8,7 @@ using AAEmu.Game.Models.Game.Items.Templates;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSConvertItemLookPacket() : GamePacket(CSOffsets.CSConvertItemLookPacket, 1)
+public class CSConvertItemLookPacket() : GamePacket(CSOffsets.CSConvertItemLookPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

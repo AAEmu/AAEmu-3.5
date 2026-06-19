@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSTakeAttachmentMoneyPacket() : GamePacket(CSOffsets.CSTakeAttachmentMoneyPacket, 1)
+public class CSTakeAttachmentMoneyPacket() : GamePacket(CSOffsets.CSTakeAttachmentMoneyPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

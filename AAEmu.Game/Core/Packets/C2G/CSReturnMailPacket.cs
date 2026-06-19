@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSReturnMailPacket() : GamePacket(CSOffsets.CSReturnMailPacket, 1)
+public class CSReturnMailPacket() : GamePacket(CSOffsets.CSReturnMailPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

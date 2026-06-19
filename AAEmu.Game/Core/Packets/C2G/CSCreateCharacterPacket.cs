@@ -7,7 +7,7 @@ using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCreateCharacterPacket() : GamePacket(CSOffsets.CSCreateCharacterPacket, 1)
+public class CSCreateCharacterPacket() : GamePacket(CSOffsets.CSCreateCharacterPacket, 5)
 {
     //
 

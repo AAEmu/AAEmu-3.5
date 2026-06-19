@@ -1,11 +1,11 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Team;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCTeamMemberDisconnectedPacket(uint teamId, uint id, TeamMember member)
-    : GamePacket(SCOffsets.SCTeamMemberDisconnectedPacket, 1)
+    : GamePacket(SCOffsets.SCTeamMemberDisconnectedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSUpdateDominionTaxRatePacket() : GamePacket(CSOffsets.CSUpdateDominionTaxRatePacket, 1)
+public class CSUpdateDominionTaxRatePacket() : GamePacket(CSOffsets.CSUpdateDominionTaxRatePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

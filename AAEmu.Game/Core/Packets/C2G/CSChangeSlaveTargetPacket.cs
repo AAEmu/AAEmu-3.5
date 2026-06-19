@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeSlaveTargetPacket() : GamePacket(CSOffsets.CSChangeSlaveTargetPacket, 1)
+public class CSChangeSlaveTargetPacket() : GamePacket(CSOffsets.CSChangeSlaveTargetPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

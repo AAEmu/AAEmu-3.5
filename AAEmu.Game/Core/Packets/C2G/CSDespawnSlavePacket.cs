@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDespawnSlavePacket() : GamePacket(CSOffsets.CSDespawnSlavePacket, 1)
+public class CSDespawnSlavePacket() : GamePacket(CSOffsets.CSDespawnSlavePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

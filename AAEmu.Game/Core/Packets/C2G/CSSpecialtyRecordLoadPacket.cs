@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSpecialtyRecordLoadPacket() : GamePacket(CSOffsets.CSSpecialtyRecordLoadPacket, 1)
+public class CSSpecialtyRecordLoadPacket() : GamePacket(CSOffsets.CSSpecialtyRecordLoadPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

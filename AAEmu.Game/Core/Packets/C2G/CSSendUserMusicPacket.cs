@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSendUserMusicPacket() : GamePacket(CSOffsets.CSSendUserMusicPacket, 1)
+public class CSSendUserMusicPacket() : GamePacket(CSOffsets.CSSendUserMusicPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

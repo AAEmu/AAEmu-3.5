@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSThisTimeUnpackItemPacket() : GamePacket(CSOffsets.CSThisTimeUnpackItemPacket, 1)
+public class CSThisTimeUnpackItemPacket() : GamePacket(CSOffsets.CSThisTimeUnpackItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

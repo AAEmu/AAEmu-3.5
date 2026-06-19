@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Skills.SkillControllers;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSkillControllerStatePacket() : GamePacket(CSOffsets.CSSkillControllerStatePacket, 1)
+public class CSSkillControllerStatePacket() : GamePacket(CSOffsets.CSSkillControllerStatePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

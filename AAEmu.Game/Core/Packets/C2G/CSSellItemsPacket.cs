@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSellItemsPacket() : GamePacket(CSOffsets.CSSellItemsPacket, 1)
+public class CSSellItemsPacket() : GamePacket(CSOffsets.CSSellItemsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

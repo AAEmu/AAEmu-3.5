@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRequestCharBriefPacket() : GamePacket(CSOffsets.CSRequestCharBriefPacket, 1)
+public class CSRequestCharBriefPacket() : GamePacket(CSOffsets.CSRequestCharBriefPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

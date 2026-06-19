@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Faction;
 
@@ -13,12 +13,12 @@ public class SCFactionListPacket : GamePacket
         _factions = [];
     }
 
-    public SCFactionListPacket(SystemFaction[] factions) : base(SCOffsets.SCFactionListPacket, 1)
+    public SCFactionListPacket(SystemFaction[] factions) : base(SCOffsets.SCFactionListPacket, 5)
     {
         _factions = factions;
     }
 
-    public SCFactionListPacket(SystemFaction faction) : base(SCOffsets.SCFactionListPacket, 1)
+    public SCFactionListPacket(SystemFaction faction) : base(SCOffsets.SCFactionListPacket, 5)
     {
         _factions = [faction];
     }

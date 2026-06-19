@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSReplyToJoinTeamPacket() : GamePacket(CSOffsets.CSReplyToJoinTeamPacket, 1)
+public class CSReplyToJoinTeamPacket() : GamePacket(CSOffsets.CSReplyToJoinTeamPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

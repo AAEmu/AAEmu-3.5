@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSICSMoneyRequestPacket() : GamePacket(CSOffsets.CSICSMoneyRequestPacket, 1)
+public class CSICSMoneyRequestPacket() : GamePacket(CSOffsets.CSICSMoneyRequestPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

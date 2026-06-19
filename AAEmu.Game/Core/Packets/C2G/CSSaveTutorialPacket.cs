@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSaveTutorialPacket() : GamePacket(CSOffsets.CSSaveTutorialPacket, 1)
+public class CSSaveTutorialPacket() : GamePacket(CSOffsets.CSSaveTutorialPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSFamilyKickPacket() : GamePacket(CSOffsets.CSFamilyKickPacket, 1)
+public class CSFamilyKickPacket() : GamePacket(CSOffsets.CSFamilyKickPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

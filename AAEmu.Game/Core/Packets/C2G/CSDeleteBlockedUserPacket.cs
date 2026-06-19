@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDeleteBlockedUserPacket() : GamePacket(CSOffsets.CSDeleteBlockedUserPacket, 1)
+public class CSDeleteBlockedUserPacket() : GamePacket(CSOffsets.CSDeleteBlockedUserPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

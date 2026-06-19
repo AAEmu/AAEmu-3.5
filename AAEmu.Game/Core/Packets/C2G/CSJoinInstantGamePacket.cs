@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSJoinInstantGamePacket() : GamePacket(CSOffsets.CSJoinInstantGamePacket, 1)
+public class CSJoinInstantGamePacket() : GamePacket(CSOffsets.CSJoinInstantGamePacket, 5)
 {
     private bool _join;
     private ulong _qualifiedId;

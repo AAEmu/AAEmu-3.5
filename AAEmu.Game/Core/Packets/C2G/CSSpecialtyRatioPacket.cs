@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSpecialtyRatioPacket() : GamePacket(CSOffsets.CSSpecialtyRatioPacket, 1)
+public class CSSpecialtyRatioPacket() : GamePacket(CSOffsets.CSSpecialtyRatioPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

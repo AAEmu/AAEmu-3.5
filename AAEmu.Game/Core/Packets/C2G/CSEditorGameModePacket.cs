@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSEditorGameModePacket() : GamePacket(CSOffsets.CSEditorGameModePacket, 1)
+public class CSEditorGameModePacket() : GamePacket(CSOffsets.CSEditorGameModePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

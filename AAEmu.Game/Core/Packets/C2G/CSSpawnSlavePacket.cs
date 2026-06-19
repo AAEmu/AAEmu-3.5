@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSpawnSlavePacket() : GamePacket(CSOffsets.CSSpawnSlavePacket, 1)
+public class CSSpawnSlavePacket() : GamePacket(CSOffsets.CSSpawnSlavePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

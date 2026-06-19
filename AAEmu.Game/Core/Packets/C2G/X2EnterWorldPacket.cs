@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class X2EnterWorldPacket() : GamePacket(CSOffsets.X2EnterWorldPacket, 1)
+public class X2EnterWorldPacket() : GamePacket(CSOffsets.X2EnterWorldPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

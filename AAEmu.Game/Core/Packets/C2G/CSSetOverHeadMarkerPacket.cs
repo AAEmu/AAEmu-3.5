@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Team;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSetOverHeadMarkerPacket() : GamePacket(CSOffsets.CSSetOverHeadMarkerPacket, 1)
+public class CSSetOverHeadMarkerPacket() : GamePacket(CSOffsets.CSSetOverHeadMarkerPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Items.Loots;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSLootItemPacket() : GamePacket(CSOffsets.CSLootItemPacket, 1)
+public class CSLootItemPacket() : GamePacket(CSOffsets.CSLootItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

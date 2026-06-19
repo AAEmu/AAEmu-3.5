@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSwapItemsPacket() : GamePacket(CSOffsets.CSSwapItemsPacket, 1)
+public class CSSwapItemsPacket() : GamePacket(CSOffsets.CSSwapItemsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

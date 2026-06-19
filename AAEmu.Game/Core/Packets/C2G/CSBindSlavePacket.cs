@@ -1,9 +1,9 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSBindSlavePacket() : GamePacket(CSOffsets.CSBindSlavePacket, 1)
+public class CSBindSlavePacket() : GamePacket(CSOffsets.CSBindSlavePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

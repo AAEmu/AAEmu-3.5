@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSTeleportEndedPacket() : GamePacket(CSOffsets.CSTeleportEndedPacket, 1)
+public class CSTeleportEndedPacket() : GamePacket(CSOffsets.CSTeleportEndedPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

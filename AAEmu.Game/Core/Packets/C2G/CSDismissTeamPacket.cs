@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDismissTeamPacket() : GamePacket(CSOffsets.CSDismissTeamPacket, 1)
+public class CSDismissTeamPacket() : GamePacket(CSOffsets.CSDismissTeamPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

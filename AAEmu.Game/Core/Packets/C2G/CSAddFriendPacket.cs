@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSAddFriendPacket() : GamePacket(CSOffsets.CSAddFriendPacket, 1)
+public class CSAddFriendPacket() : GamePacket(CSOffsets.CSAddFriendPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

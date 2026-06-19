@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSMoveTeamMemberPacket() : GamePacket(CSOffsets.CSMoveTeamMemberPacket, 1)
+public class CSMoveTeamMemberPacket() : GamePacket(CSOffsets.CSMoveTeamMemberPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

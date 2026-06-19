@@ -127,7 +127,8 @@ public partial class Character : Unit, ICharacter
     /// <summary>
     /// Total infamy
     /// </summary>
-    public int CrimeRecord {
+    public int CrimeRecord
+    {
         get;
         set
         {
@@ -138,6 +139,7 @@ public partial class Character : Unit, ICharacter
             }
         }
     }
+    public short CrimeScore { get; set; }
     public int JuryPoint { get; set; }
     public DateTime DeleteRequestTime { get; set; }
     public DateTime TransferRequestTime { get; set; }
@@ -1407,23 +1409,23 @@ public partial class Character : Unit, ICharacter
         {
             expDelta = (int)(expDelta * AppConfiguration.Instance.World.ExpRate);
         }
-        
+
         var newExperience = Experience + expDelta;
         var newLevel = ExperienceManager.Instance.GetLevelFromExp(newExperience, Level, out var overflow);
         var leveledUp = newLevel > Level;
-        
+
         // Prevent overflow - cap the experience at the amount for the highest level
         if (newLevel >= ExperienceManager.Instance.MaxPlayerLevel)
         {
             newExperience -= overflow;
         }
-        
+
         Experience = newExperience;
         Level = newLevel;
-        
+
         if (shouldAddAbilityExp)
             Abilities.AddActiveExp(expDelta); // TODO ... or all?
-        
+
         SendPacket(new SCExpChangedPacket(ObjId, expDelta, shouldAddAbilityExp));
 
         if (leveledUp)
@@ -1454,15 +1456,15 @@ public partial class Character : Unit, ICharacter
         // Check if player has enough exp to be at a higher level, and grant them the new level
         var newLevel = ExperienceManager.Instance.GetLevelFromExp(Experience, Level, out var overflow);
         var leveledUp = newLevel > Level;
-        
+
         // Prevent overflow - cap the experience at the amount for the highest level
         if (newLevel >= ExperienceManager.Instance.MaxPlayerLevel)
         {
             Experience -= overflow;
         }
-        
+
         Level = newLevel;
-        
+
         if (leveledUp)
         {
             Expedition?.OnCharacterRefresh(this);
@@ -1743,8 +1745,7 @@ public partial class Character : Unit, ICharacter
             }
 
             _unreleasedZoneTransportedOut = new CancellationTokenSource();
-            Task.Run(async () =>
-            {
+            Task.Run(async () => {
                 // Stay for a maximum of 10 seconds
                 for (var i = 0; i < 5; i++)
                 {
@@ -1891,7 +1892,7 @@ public partial class Character : Unit, ICharacter
         if (AppConfiguration.Instance.DebugInfo && CharacterManager.Instance.GetEffectiveAccessLevel(this) >= AppConfiguration.Instance.DebugInfoLevel)
             SendMessage(ChatType.System, message);
     }
-    
+
     /// <summary>
     /// Sends an error message to the player
     /// </summary>
@@ -2064,8 +2065,7 @@ public partial class Character : Unit, ICharacter
             // run the task to turn off the transport after timeToDespawn minutes
             mySlave.CancelTokenSource = new CancellationTokenSource();
             var token = mySlave.CancelTokenSource.Token;
-            mySlave.LeaveTask = new Task(() =>
-            {
+            mySlave.LeaveTask = new Task(() => {
                 Thread.Sleep(TimeSpan.FromMilliseconds(timeToDespawn)); // 10 minutes
                 if (token.IsCancellationRequested)
                     return;
@@ -2092,8 +2092,7 @@ public partial class Character : Unit, ICharacter
             // run the task to turn off the transport after timeToDespawn minutes
             slave.CancelTokenSource = new CancellationTokenSource();
             var token = slave.CancelTokenSource.Token;
-            slave.LeaveTask = new Task(() =>
-            {
+            slave.LeaveTask = new Task(() => {
                 Thread.Sleep(TimeSpan.FromMilliseconds(timeToDespawn));
                 if (token.IsCancellationRequested)
                     return;
@@ -2134,7 +2133,10 @@ public partial class Character : Unit, ICharacter
 
                     character = new Character(modelParams)
                     {
-                        AccountId = accountId, Id = reader.GetUInt32("id"), Name = reader.GetString("name"), AccessLevel = reader.GetInt32("access_level"),
+                        AccountId = accountId,
+                        Id = reader.GetUInt32("id"),
+                        Name = reader.GetString("name"),
+                        AccessLevel = reader.GetInt32("access_level"),
                         Race = (Race)reader.GetByte("race"),
                         Gender = (Gender)reader.GetByte("gender"),
                         Level = reader.GetByte("level"),
@@ -2153,7 +2155,7 @@ public partial class Character : Unit, ICharacter
                     character.Ability2 = (AbilityType)reader.GetByte("ability2");
                     character.Ability3 = (AbilityType)reader.GetByte("ability3");
                     character.ServerId = reader.GetUInt32("world_id");
-                    character.Transform = new Transform(character, null, 
+                    character.Transform = new Transform(character, null,
                         reader.GetUInt32("zone_id"), WorldManager.DefaultInstanceId,
                         reader.GetFloat("x"), reader.GetFloat("y"), reader.GetFloat("z"),
                         reader.GetFloat("yaw"), reader.GetFloat("pitch"), reader.GetFloat("roll")
@@ -2272,7 +2274,7 @@ public partial class Character : Unit, ICharacter
                     character.Ability2 = (AbilityType)reader.GetByte("ability2");
                     character.Ability3 = (AbilityType)reader.GetByte("ability3");
                     character.ServerId = reader.GetUInt32("world_id");
-                    character.Transform = new Transform(character, null, 
+                    character.Transform = new Transform(character, null,
                         reader.GetUInt32("zone_id"), WorldManager.DefaultInstanceId,
                         reader.GetFloat("x"), reader.GetFloat("y"), reader.GetFloat("z"),
                         reader.GetFloat("yaw"), reader.GetFloat("pitch"), reader.GetFloat("roll")
@@ -2656,7 +2658,7 @@ public partial class Character : Unit, ICharacter
             Skills?.Save(connection, transaction);
             Quests?.Save(connection, transaction);
             Mates?.Save(connection, transaction);
-            
+
             result = true;
         }
         catch (Exception ex)
@@ -2706,14 +2708,11 @@ public partial class Character : Unit, ICharacter
         stream.Write((uint)(Expedition?.Id ?? 0));
         stream.Write(Family);
 
-        var items = Inventory.Equipment.GetSlottedItemsList();
-        foreach (var item in items)
-        {
-            if (item == null)
-                stream.Write(0);
-            else
-                stream.Write(item);
-        }
+        #region CharacterInfo_3EB0
+
+        Inventory_Equip(stream);
+
+        #endregion CharacterInfo_3EB0
 
         stream.Write((byte)Ability1);
         stream.Write((byte)Ability2);
@@ -2726,31 +2725,77 @@ public partial class Character : Unit, ICharacter
         stream.Write(ModelParams);
         stream.Write(LaborPower);
         stream.Write(LaborPowerModified);
+        stream.Write((short)0); // add in 3042 localLaborPower
         stream.Write(DeadCount);
         stream.Write(DeadTime);
         stream.Write(RezWaitDuration);
         stream.Write(RezTime);
         stream.Write(RezPenaltyDuration);
         stream.Write(LeaveTime); // lastWorldLeaveTime
-        stream.Write(Money);
-        stream.Write(0L); // moneyAmount ?
-        stream.Write(CrimePoint); // current crime points (/50)
+        stream.Write(Money);      // moneyAmount
+        stream.Write(0L);         // moneyAmount
+        stream.Write(CrimePoint); // current crime points (/50) short in 3+ , int in 1.2
         stream.Write(CrimeRecord); // total infamy 
-        stream.Write((short)0); // crimeScore? trials served?
+        stream.Write(CrimeScore); // crimeScore for 1.2
         stream.Write(DeleteRequestTime);
         stream.Write(TransferRequestTime);
         stream.Write(DeleteTime); // deleteDelay
         stream.Write(ConsumedLaborPower);
         stream.Write(BmPoint); // loyalty tokens
-        stream.Write(Money2); // moneyAmount
-        stream.Write(0L); // moneyAmount ?
+        stream.Write(Money2);  // moneyAmount
+        stream.Write(0L);      // moneyAmount
         stream.Write(AutoUseAAPoint);
         stream.Write(PrevPoint);
         stream.Write(Point);
         stream.Write(Gift);
         stream.Write(Updated);
         stream.Write((byte)0); // forceNameChange ?
+        stream.Write(HighAbilityRsc); // highAbilityRsc for 3.0.3.0
+
         return stream;
+    }
+
+    private void Inventory_Equip(PacketStream stream)
+    {
+        #region Inventory_Equip
+
+        var index = 0;
+        var validFlags = 0;
+        // calculate validFlags
+        var items = Inventory.Equipment.GetSlottedItemsList();
+        foreach (var item in items)
+        {
+            if (item != null)
+            {
+                validFlags |= 1 << index;
+            }
+
+            index++;
+        }
+
+        stream.Write((uint)validFlags); // validFlags for 3.0.3.0
+        foreach (var item in items)
+        {
+            if (item != null)
+            {
+                stream.Write(item);
+            }
+        }
+
+        index = 0;
+        validFlags = 0;
+
+        foreach (var item in Inventory.Equipment.GetSlottedItemsList())
+        {
+            if (item == null) { continue; }
+
+            var _tmp = (int)item.ItemFlags << index;
+            ++index;
+            validFlags |= _tmp;
+        }
+        stream.Write(validFlags); //  ItemFlags flags for 3.0.3.0
+
+        #endregion Inventory_Equip
     }
 
     /// <summary>
@@ -2775,7 +2820,7 @@ public partial class Character : Unit, ICharacter
         CrimeRecord += amount; // total amount
         if (CrimeRecord < 0)
             CrimeRecord = 0;
-        
+
         SendPacket(new SCCrimeChangedPacket(amount, CrimePoint, CrimeRecord, 0));
     }
 
@@ -2903,7 +2948,7 @@ public partial class Character : Unit, ICharacter
             }
         }
     }
-    
+
     /// <summary>
     /// Tick called for players, about once per second
     /// </summary>

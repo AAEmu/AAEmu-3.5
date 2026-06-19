@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
@@ -16,7 +16,7 @@ public class SCCharacterBoundPacket(
     Vector3 pos,
     float zRot,
     bool isFavorite)
-    : GamePacket(SCOffsets.SCCharacterBoundPacket, 1)
+    : GamePacket(SCOffsets.SCCharacterBoundPacket, 5)
 {
     // Not sure what this should be
 

@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRepairAllEquipmentsPacket() : GamePacket(CSOffsets.CSRepairAllEquipmentsPacket, 1)
+public class CSRepairAllEquipmentsPacket() : GamePacket(CSOffsets.CSRepairAllEquipmentsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

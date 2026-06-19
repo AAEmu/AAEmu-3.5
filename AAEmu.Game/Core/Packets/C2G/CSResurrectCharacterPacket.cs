@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
@@ -13,7 +13,7 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSResurrectCharacterPacket() : GamePacket(CSOffsets.CSResurrectCharacterPacket, 1)
+public class CSResurrectCharacterPacket() : GamePacket(CSOffsets.CSResurrectCharacterPacket, 5)
 {
     /// <summary>Duration of the post-revive Respawn-Cooldown debuff in milliseconds (5 min).</summary>
     private const int RespawnCooldownDurationMs = 300_000;

@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSBuyCoinItemPacket() : GamePacket(CSOffsets.CSBuyCoinItemPacket, 1)
+public class CSBuyCoinItemPacket() : GamePacket(CSOffsets.CSBuyCoinItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

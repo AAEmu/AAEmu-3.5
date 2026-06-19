@@ -1,9 +1,9 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDestroySlavePacket() : GamePacket(CSOffsets.CSDestroySlavePacket, 1)
+public class CSDestroySlavePacket() : GamePacket(CSOffsets.CSDestroySlavePacket, 5)
 {
     //
 

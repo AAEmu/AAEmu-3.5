@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSaveUIDataPacket() : GamePacket(CSOffsets.CSSaveUIDataPacket, 1)
+public class CSSaveUIDataPacket() : GamePacket(CSOffsets.CSSaveUIDataPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

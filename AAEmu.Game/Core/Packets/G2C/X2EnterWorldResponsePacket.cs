@@ -1,4 +1,4 @@
-using AAEmu.Commons.Cryptography;
+﻿using AAEmu.Commons.Cryptography;
 using AAEmu.Commons.Network;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Network.Connections;
@@ -17,8 +17,8 @@ public class X2EnterWorldResponsePacket : GamePacket
     private readonly short _pubKeySize;
     private readonly int _authority = 1;
 
-    public X2EnterWorldResponsePacket(short reason, bool gm, uint token, ushort port, GameConnection connection) :
-        base(SCOffsets.X2EnterWorldResponsePacket, 5)
+    public X2EnterWorldResponsePacket(short reason, bool gm, uint token, ushort port, GameConnection connection)
+        : base(SCOffsets.X2EnterWorldResponsePacket, 5)
     {
         _connection = connection;
         _reason = reason;
@@ -36,7 +36,7 @@ public class X2EnterWorldResponsePacket : GamePacket
         stream.Write(_token);                // SC 0
         stream.Write(_port);                 // SP 1250
         stream.Write(Helpers.UnixTimeNow()); // WF 0
-        stream.Write((uint)0xffffff4c);      // TZ 0
+        stream.Write((uint)240);             // TZ 0
         stream.Write(_pubKeySize);           // H, Public Key Size  0401 (Should be 260)
         stream.Write(_pubKeySize);           // H, Pub key len (in pub key) 128 * 2 + 4 = 260
         stream.Write(_dwKeySize);            // 1024
@@ -46,7 +46,7 @@ public class X2EnterWorldResponsePacket : GamePacket
         //----- RSA -----
 
         stream.Write((uint)0x0100007F); //NAT address
-        stream.Write((ushort)25375); //NAT port
+        stream.Write((ushort)25375);    //NAT port
         stream.Write(_authority);       // authority 1 this field is in 3.5.5.3, but not in 3.0.3.0
 
         return stream;

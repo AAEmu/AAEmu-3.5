@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSplitBagItemPacket() : GamePacket(CSOffsets.CSSplitBagItemPacket, 1)
+public class CSSplitBagItemPacket() : GamePacket(CSOffsets.CSSplitBagItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

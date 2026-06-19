@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSTryQuestCompleteAsLetItDonePacket() : GamePacket(CSOffsets.CSTryQuestCompleteAsLetItDonePacket, 1)
+public class CSTryQuestCompleteAsLetItDonePacket() : GamePacket(CSOffsets.CSTryQuestCompleteAsLetItDonePacket, 5)
 {
     private uint _id;
     private uint _objId;

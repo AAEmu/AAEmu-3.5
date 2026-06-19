@@ -11,7 +11,7 @@ using AAEmu.Game.Utils;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 1)
+public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
 {
     public override PacketLogLevel LogLevel => PacketLogLevel.Off;
 

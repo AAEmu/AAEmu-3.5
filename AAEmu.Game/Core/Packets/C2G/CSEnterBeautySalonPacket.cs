@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSEnterBeautySalonPacket() : GamePacket(CSOffsets.CSEnterBeautySalonPacket, 1)
+public class CSEnterBeautySalonPacket() : GamePacket(CSOffsets.CSEnterBeautySalonPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

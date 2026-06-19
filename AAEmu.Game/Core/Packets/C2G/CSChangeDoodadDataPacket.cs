@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeDoodadDataPacket() : GamePacket(CSOffsets.CSChangeDoodadDataPacket, 1)
+public class CSChangeDoodadDataPacket() : GamePacket(CSOffsets.CSChangeDoodadDataPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSwapAbilityPacket() : GamePacket(CSOffsets.CSSwapAbilityPacket, 1)
+public class CSSwapAbilityPacket() : GamePacket(CSOffsets.CSSwapAbilityPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

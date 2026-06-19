@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeAppellationPacket() : GamePacket(CSOffsets.CSChangeAppellationPacket, 1)
+public class CSChangeAppellationPacket() : GamePacket(CSOffsets.CSChangeAppellationPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

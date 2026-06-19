@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSUpgradeExpertLimitPacket() : GamePacket(CSOffsets.CSUpgradeExpertLimitPacket, 1)
+public class CSUpgradeExpertLimitPacket() : GamePacket(CSOffsets.CSUpgradeExpertLimitPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

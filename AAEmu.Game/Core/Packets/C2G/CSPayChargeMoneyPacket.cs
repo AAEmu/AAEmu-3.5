@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSPayChargeMoneyPacket() : GamePacket(CSOffsets.CSPayChargeMoneyPacket, 1)
+public class CSPayChargeMoneyPacket() : GamePacket(CSOffsets.CSPayChargeMoneyPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

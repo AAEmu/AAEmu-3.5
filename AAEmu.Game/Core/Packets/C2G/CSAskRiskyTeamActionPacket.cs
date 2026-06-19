@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Team;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSAskRiskyTeamActionPacket() : GamePacket(CSOffsets.CSAskRiskyTeamActionPacket, 1)
+public class CSAskRiskyTeamActionPacket() : GamePacket(CSOffsets.CSAskRiskyTeamActionPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

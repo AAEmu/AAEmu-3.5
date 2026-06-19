@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSFamilyInviteMemberPacket() : GamePacket(CSOffsets.CSFamilyInviteMemberPacket, 1)
+public class CSFamilyInviteMemberPacket() : GamePacket(CSOffsets.CSFamilyInviteMemberPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

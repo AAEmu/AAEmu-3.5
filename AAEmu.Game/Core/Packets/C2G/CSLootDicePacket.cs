@@ -8,7 +8,7 @@ namespace AAEmu.Game.Core.Packets.C2G;
 /// <summary>
 /// Player does a die roll response
 /// </summary>
-public class CSLootDicePacket() : GamePacket(CSOffsets.CSLootDicePacket, 1)
+public class CSLootDicePacket() : GamePacket(CSOffsets.CSLootDicePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Network.Game;
 
@@ -14,7 +14,7 @@ public class SCMySlavePacket(
     float x,
     float y,
     float z)
-    : GamePacket(SCOffsets.SCMySlavePacket, 1)
+    : GamePacket(SCOffsets.SCMySlavePacket, 5)
 {
     // TODO slaveId
 

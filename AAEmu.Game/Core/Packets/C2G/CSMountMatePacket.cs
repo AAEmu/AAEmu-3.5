@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.DoodadObj.Static;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSMountMatePacket() : GamePacket(CSOffsets.CSMountMatePacket, 1)
+public class CSMountMatePacket() : GamePacket(CSOffsets.CSMountMatePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

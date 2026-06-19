@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRemoveBuffPacket() : GamePacket(CSOffsets.CSRemoveBuffPacket, 1)
+public class CSRemoveBuffPacket() : GamePacket(CSOffsets.CSRemoveBuffPacket, 5)
 {
     private static bool RemoveEffect(Buff buffEffect)
     {

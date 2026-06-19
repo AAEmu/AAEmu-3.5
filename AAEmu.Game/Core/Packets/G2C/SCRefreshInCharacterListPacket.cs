@@ -1,9 +1,9 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCRefreshInCharacterListPacket() : GamePacket(SCOffsets.SCRefreshInCharacterListPacket, 1)
+public class SCRefreshInCharacterListPacket() : GamePacket(SCOffsets.SCRefreshInCharacterListPacket, 5)
 {
     // TODO ... SCRaceCongestionPacket?!?!?!
 

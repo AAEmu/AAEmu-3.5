@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRequestHouseTaxPacket() : GamePacket(CSOffsets.CSRequestHouseTaxPacket, 1)
+public class CSRequestHouseTaxPacket() : GamePacket(CSOffsets.CSRequestHouseTaxPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

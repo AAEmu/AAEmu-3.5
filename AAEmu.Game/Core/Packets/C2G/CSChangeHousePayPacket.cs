@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeHousePayPacket() : GamePacket(CSOffsets.CSChangeHousePayPacket, 1)
+public class CSChangeHousePayPacket() : GamePacket(CSOffsets.CSChangeHousePayPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

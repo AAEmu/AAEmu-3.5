@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCriminalLockedPacket() : GamePacket(CSOffsets.CSCriminalLockedPacket, 1)
+public class CSCriminalLockedPacket() : GamePacket(CSOffsets.CSCriminalLockedPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

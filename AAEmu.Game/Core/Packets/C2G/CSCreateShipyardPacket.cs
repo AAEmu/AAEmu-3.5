@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Shipyard;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCreateShipyardPacket() : GamePacket(CSOffsets.CSCreateShipyardPacket, 1)
+public class CSCreateShipyardPacket() : GamePacket(CSOffsets.CSCreateShipyardPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

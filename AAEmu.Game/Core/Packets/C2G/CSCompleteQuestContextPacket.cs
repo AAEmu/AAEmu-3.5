@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCompleteQuestContextPacket() : GamePacket(CSOffsets.CSCompleteQuestContextPacket, 1)
+public class CSCompleteQuestContextPacket() : GamePacket(CSOffsets.CSCompleteQuestContextPacket, 5)
 {
     private uint _questContextId;
     private uint _npcObjId;

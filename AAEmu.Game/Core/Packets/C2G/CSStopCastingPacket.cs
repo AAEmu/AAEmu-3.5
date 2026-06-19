@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Tasks.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSStopCastingPacket() : GamePacket(CSOffsets.CSStopCastingPacket, 1)
+public class CSStopCastingPacket() : GamePacket(CSOffsets.CSStopCastingPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

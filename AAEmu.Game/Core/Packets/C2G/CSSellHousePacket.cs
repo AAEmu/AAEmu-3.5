@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSellHousePacket() : GamePacket(CSOffsets.CSSellHousePacket, 1)
+public class CSSellHousePacket() : GamePacket(CSOffsets.CSSellHousePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

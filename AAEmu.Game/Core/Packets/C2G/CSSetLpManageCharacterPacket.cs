@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSetLpManageCharacterPacket() : GamePacket(CSOffsets.CSSetLpManageCharacterPacket, 1)
+public class CSSetLpManageCharacterPacket() : GamePacket(CSOffsets.CSSetLpManageCharacterPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

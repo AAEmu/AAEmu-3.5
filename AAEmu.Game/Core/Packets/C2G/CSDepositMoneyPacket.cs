@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDepositMoneyPacket() : GamePacket(CSOffsets.CSDepositMoneyPacket, 1)
+public class CSDepositMoneyPacket() : GamePacket(CSOffsets.CSDepositMoneyPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

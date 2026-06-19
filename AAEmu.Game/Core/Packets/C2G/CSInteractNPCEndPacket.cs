@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSInteractNPCEndPacket() : GamePacket(CSOffsets.CSInteractNPCEndPacket, 1)
+public class CSInteractNPCEndPacket() : GamePacket(CSOffsets.CSInteractNPCEndPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

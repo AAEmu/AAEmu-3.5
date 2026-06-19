@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSBoardingTransferPacket() : GamePacket(CSOffsets.CSBoardingTransferPacket, 1)
+public class CSBoardingTransferPacket() : GamePacket(CSOffsets.CSBoardingTransferPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

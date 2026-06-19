@@ -7,7 +7,7 @@ namespace AAEmu.Game.Core.Packets.C2G;
 /// <summary>
 /// Player closed a loot container
 /// </summary>
-public class CSLootCloseBagPacket() : GamePacket(CSOffsets.CSLootCloseBagPacket, 1)
+public class CSLootCloseBagPacket() : GamePacket(CSOffsets.CSLootCloseBagPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

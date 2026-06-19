@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSaveUserMusicNotesPacket() : GamePacket(CSOffsets.CSSaveUserMusicNotesPacket, 1)
+public class CSSaveUserMusicNotesPacket() : GamePacket(CSOffsets.CSSaveUserMusicNotesPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

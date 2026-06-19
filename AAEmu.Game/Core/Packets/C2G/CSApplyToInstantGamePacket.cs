@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.InstantGame.Static;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSApplyToInstantGamePacket() : GamePacket(CSOffsets.CSApplyToInstantGamePacket, 1)
+public class CSApplyToInstantGamePacket() : GamePacket(CSOffsets.CSApplyToInstantGamePacket, 5)
 {
     private uint _instanceId;
     private InstantCorps _corps;

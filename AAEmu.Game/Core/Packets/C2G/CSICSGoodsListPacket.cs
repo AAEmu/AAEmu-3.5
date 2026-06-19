@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSICSGoodsListPacket() : GamePacket(CSOffsets.CSICSGoodsListPacket, 1)
+public class CSICSGoodsListPacket() : GamePacket(CSOffsets.CSICSGoodsListPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

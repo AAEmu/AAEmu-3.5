@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSReportSpamPacket() : GamePacket(CSOffsets.CSReportSpamPacket, 1)
+public class CSReportSpamPacket() : GamePacket(CSOffsets.CSReportSpamPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

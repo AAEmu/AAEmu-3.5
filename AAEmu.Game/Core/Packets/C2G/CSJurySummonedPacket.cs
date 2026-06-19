@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSJurySummonedPacket() : GamePacket(CSOffsets.CSJurySummonedPacket, 1)
+public class CSJurySummonedPacket() : GamePacket(CSOffsets.CSJurySummonedPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSellHouseCancelPacket() : GamePacket(CSOffsets.CSSellHouseCancelPacket, 1)
+public class CSSellHouseCancelPacket() : GamePacket(CSOffsets.CSSellHouseCancelPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

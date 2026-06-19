@@ -13,7 +13,7 @@ public class SCNpcChatMessagePacket(
     byte kind,
     uint type,
     string message)
-    : GamePacket(SCOffsets.SCNpcChatMessagePacket, 1)
+    : GamePacket(SCOffsets.SCNpcChatMessagePacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

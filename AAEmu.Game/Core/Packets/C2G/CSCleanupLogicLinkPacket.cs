@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCleanupLogicLinkPacket() : GamePacket(CSOffsets.CSCleanupLogicLinkPacket, 1)
+public class CSCleanupLogicLinkPacket() : GamePacket(CSOffsets.CSCleanupLogicLinkPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

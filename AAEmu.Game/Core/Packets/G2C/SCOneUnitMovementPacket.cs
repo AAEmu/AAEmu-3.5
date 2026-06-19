@@ -1,11 +1,11 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Units.Movements;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCOneUnitMovementPacket(uint id, MoveType type)
-    : GamePacket(SCOffsets.SCOneUnitMovementPacket, 1) // TODO ... SCUnitMovementsPacket
+    : GamePacket(SCOffsets.SCOneUnitMovementPacket, 1)
 {
     public override PacketLogLevel LogLevel => PacketLogLevel.Off;
 

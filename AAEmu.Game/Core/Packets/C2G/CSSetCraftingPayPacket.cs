@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSetCraftingPayPacket() : GamePacket(CSOffsets.CSSetCraftingPayPacket, 1)
+public class CSSetCraftingPayPacket() : GamePacket(CSOffsets.CSSetCraftingPayPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

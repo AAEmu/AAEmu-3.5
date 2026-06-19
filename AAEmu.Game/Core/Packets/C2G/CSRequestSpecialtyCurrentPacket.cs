@@ -5,7 +5,7 @@ using AAEmu.Game.Core.Packets.G2C;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRequestSpecialtyCurrentPacket() : GamePacket(CSOffsets.CSRequestSpecialtyCurrentPacket, 1)
+public class CSRequestSpecialtyCurrentPacket() : GamePacket(CSOffsets.CSRequestSpecialtyCurrentPacket, 5)
 {
     //
 

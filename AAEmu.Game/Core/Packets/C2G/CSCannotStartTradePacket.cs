@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCannotStartTradePacket() : GamePacket(CSOffsets.CSCannotStartTradePacket, 1)
+public class CSCannotStartTradePacket() : GamePacket(CSOffsets.CSCannotStartTradePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

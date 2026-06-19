@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSUsePortalPacket() : GamePacket(CSOffsets.CSUsePortalPacket, 1)
+public class CSUsePortalPacket() : GamePacket(CSOffsets.CSUsePortalPacket, 5)
 {
     // 0x0da
 

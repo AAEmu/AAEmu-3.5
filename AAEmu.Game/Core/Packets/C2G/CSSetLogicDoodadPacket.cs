@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSetLogicDoodadPacket() : GamePacket(CSOffsets.CSSetLogicDoodadPacket, 1)
+public class CSSetLogicDoodadPacket() : GamePacket(CSOffsets.CSSetLogicDoodadPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCCharacterLaborPowerChangedPacket(int amount, int action, int point, byte step)
-    : GamePacket(SCOffsets.SCCharacterLaborPowerChangedPacket, 1)
+    : GamePacket(SCOffsets.SCCharacterLaborPowerChangedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

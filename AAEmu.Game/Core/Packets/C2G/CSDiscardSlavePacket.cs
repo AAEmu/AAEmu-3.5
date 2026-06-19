@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.DoodadObj.Static;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDiscardSlavePacket() : GamePacket(CSOffsets.CSDiscardSlavePacket, 1)
+public class CSDiscardSlavePacket() : GamePacket(CSOffsets.CSDiscardSlavePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

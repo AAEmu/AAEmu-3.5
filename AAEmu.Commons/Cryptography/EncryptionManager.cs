@@ -51,7 +51,7 @@ namespace AAEmu.Commons.Cryptography
              return keys;
          }
 
-         public PacketStream WriteKeyParams(uint connectionId, uint accountId, PacketStream stream)
+         public PacketStream WriteKeyParams(uint connectionId, ulong accountId, PacketStream stream)
          {
              var keychain = GenerateRsaKeyPair(connectionId, accountId);
              var rsaParameters = keychain.RsaKeyPair.ExportParameters(false);
@@ -61,7 +61,7 @@ namespace AAEmu.Commons.Cryptography
              return stream;
          }
 
-         public void StoreClientKeys(byte[] aesKeyEncrypted, byte[] xorKeyEncrypted, uint accountId, uint connectionId)
+         public void StoreClientKeys(byte[] aesKeyEncrypted, byte[] xorKeyEncrypted, ulong accountId, uint connectionId)
          {
              if (!ConnectionKeys.TryGetValue(accountId, out var keys))
              {

@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Mails;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCMailListPacket(bool isSent, MailHeader[] mails) : GamePacket(SCOffsets.SCMailListPacket, 1)
+public class SCMailListPacket(bool isSent, MailHeader[] mails) : GamePacket(SCOffsets.SCMailListPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

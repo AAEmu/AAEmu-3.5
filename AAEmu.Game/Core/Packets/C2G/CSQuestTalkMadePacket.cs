@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSQuestTalkMadePacket() : GamePacket(CSOffsets.CSQuestTalkMadePacket, 1)
+public class CSQuestTalkMadePacket() : GamePacket(CSOffsets.CSQuestTalkMadePacket, 5)
 {
     private uint _npcObjId;
     private uint _questContextId;

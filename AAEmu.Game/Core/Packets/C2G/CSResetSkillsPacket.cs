@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSResetSkillsPacket() : GamePacket(CSOffsets.CSResetSkillsPacket, 1)
+public class CSResetSkillsPacket() : GamePacket(CSOffsets.CSResetSkillsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

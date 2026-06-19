@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 
 using AAEmu.Commons.Cryptography;
@@ -24,7 +24,7 @@ public class CSAesXorKey_05_Packet : GamePacket
         {
             var encAes = stream.ReadBytes(len / 2);
             var encXor = stream.ReadBytes(len2 / 2);
-            EncryptionManager.Instance.StoreClientKeys(encAes, encXor, (uint)Connection.AccountId, Connection.Id);
+            EncryptionManager.Instance.StoreClientKeys(encAes, encXor, Connection.AccountId, Connection.Id);
         }
 
         Connection.SendPacket(new SCGetSlotCountPacket(0));

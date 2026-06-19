@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.CashShop;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCICSGoodDetailPacket(bool pageEnd, IcsSku itemDetail) : GamePacket(SCOffsets.SCICSGoodDetailPacket, 1)
+public class SCICSGoodDetailPacket(bool pageEnd, IcsSku itemDetail) : GamePacket(SCOffsets.SCICSGoodDetailPacket, 5)
 {
     // private readonly CashShopItemDetail _itemDetail;
 

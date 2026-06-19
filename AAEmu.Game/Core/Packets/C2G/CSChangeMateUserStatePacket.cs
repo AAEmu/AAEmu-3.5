@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeMateUserStatePacket() : GamePacket(CSOffsets.CSChangeMateUserStatePacket, 1)
+public class CSChangeMateUserStatePacket() : GamePacket(CSOffsets.CSChangeMateUserStatePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Housing;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSChangeHousePermissionPacket() : GamePacket(CSOffsets.CSChangeHousePermissionPacket, 1)
+public class CSChangeHousePermissionPacket() : GamePacket(CSOffsets.CSChangeHousePermissionPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

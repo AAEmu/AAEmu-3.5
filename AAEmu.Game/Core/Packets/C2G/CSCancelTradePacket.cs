@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCancelTradePacket() : GamePacket(CSOffsets.CSCancelTradePacket, 1)
+public class CSCancelTradePacket() : GamePacket(CSOffsets.CSCancelTradePacket, 5)
 {
     public override void Read(PacketStream stream)
     {

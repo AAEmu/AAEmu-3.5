@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Packets.Debug;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCreateSkillControllerPacket() : GamePacket(CSOffsets.CSCreateSkillControllerPacket, 1)
+public class CSCreateSkillControllerPacket() : GamePacket(CSOffsets.CSCreateSkillControllerPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

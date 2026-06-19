@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCofferInteractionPacket() : GamePacket(CSOffsets.CSCofferInteractionPacket, 1)
+public class CSCofferInteractionPacket() : GamePacket(CSOffsets.CSCofferInteractionPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

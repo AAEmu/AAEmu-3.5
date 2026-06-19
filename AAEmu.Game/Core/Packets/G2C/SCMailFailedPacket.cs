@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Mails;
@@ -6,7 +6,7 @@ using AAEmu.Game.Models.Game.Mails;
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCMailFailedPacket(MailResult err, (SlotType slotType, byte slot)[] items, bool money)
-    : GamePacket(SCOffsets.SCMailFailedPacket, 1)
+    : GamePacket(SCOffsets.SCMailFailedPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

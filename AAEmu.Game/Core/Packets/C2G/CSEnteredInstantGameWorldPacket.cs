@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSEnteredInstantGameWorldPacket() : GamePacket(CSOffsets.CSEnteredInstantGameWorldPacket, 1)
+public class CSEnteredInstantGameWorldPacket() : GamePacket(CSOffsets.CSEnteredInstantGameWorldPacket, 5)
 {
     private ulong _qualifiedId;
 

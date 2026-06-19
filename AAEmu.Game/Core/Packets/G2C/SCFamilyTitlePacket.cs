@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCFamilyTitlePacket(uint unitId, byte role, string owner, string title)
-    : GamePacket(SCOffsets.SCFamilyTitlePacket, 1)
+    : GamePacket(SCOffsets.SCFamilyTitlePacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSNaviOpenPortalPacket() : GamePacket(CSOffsets.CSNaviOpenPortalPacket, 1)
+public class CSNaviOpenPortalPacket() : GamePacket(CSOffsets.CSNaviOpenPortalPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

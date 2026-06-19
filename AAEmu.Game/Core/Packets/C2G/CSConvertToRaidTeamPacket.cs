@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSConvertToRaidTeamPacket() : GamePacket(CSOffsets.CSConvertToRaidTeamPacket, 1)
+public class CSConvertToRaidTeamPacket() : GamePacket(CSOffsets.CSConvertToRaidTeamPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

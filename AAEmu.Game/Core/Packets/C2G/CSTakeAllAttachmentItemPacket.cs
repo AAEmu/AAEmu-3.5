@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Mails;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSTakeAllAttachmentItemPacket() : GamePacket(CSOffsets.CSTakeAllAttachmentItemPacket, 1)
+public class CSTakeAllAttachmentItemPacket() : GamePacket(CSOffsets.CSTakeAllAttachmentItemPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

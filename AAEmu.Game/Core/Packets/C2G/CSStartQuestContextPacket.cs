@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSStartQuestContextPacket() : GamePacket(CSOffsets.CSStartQuestContextPacket, 1)
+public class CSStartQuestContextPacket() : GamePacket(CSOffsets.CSStartQuestContextPacket, 5)
 {
     private uint _questContextId;
     private uint _npcObjId;

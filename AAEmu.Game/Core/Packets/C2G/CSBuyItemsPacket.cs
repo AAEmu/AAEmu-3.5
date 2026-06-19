@@ -12,7 +12,7 @@ using AAEmu.Game.Utils;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 1)
+public class CSBuyItemsPacket() : GamePacket(CSOffsets.CSBuyItemsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

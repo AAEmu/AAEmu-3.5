@@ -4,7 +4,7 @@ using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSStartedCinemaPacket() : GamePacket(CSOffsets.CSStartedCinemaPacket, 1)
+public class CSStartedCinemaPacket() : GamePacket(CSOffsets.CSStartedCinemaPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

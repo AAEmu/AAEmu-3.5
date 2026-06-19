@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSAuctionMyBidListPacket() : GamePacket(CSOffsets.CSAuctionMyBidListPacket, 1)
+public class CSAuctionMyBidListPacket() : GamePacket(CSOffsets.CSAuctionMyBidListPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

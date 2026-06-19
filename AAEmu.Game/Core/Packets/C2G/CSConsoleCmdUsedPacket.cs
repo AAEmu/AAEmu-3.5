@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSConsoleCmdUsedPacket() : GamePacket(CSOffsets.CSConsoleCmdUsedPacket, 1)
+public class CSConsoleCmdUsedPacket() : GamePacket(CSOffsets.CSConsoleCmdUsedPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

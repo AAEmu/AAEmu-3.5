@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSBuyPriestBuffPacket() : GamePacket(CSOffsets.CSBuyPriestBuffPacket, 1)
+public class CSBuyPriestBuffPacket() : GamePacket(CSOffsets.CSBuyPriestBuffPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

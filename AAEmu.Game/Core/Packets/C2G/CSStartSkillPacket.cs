@@ -15,7 +15,7 @@ using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 1)
+public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSInviteAreaToTeamPacket() : GamePacket(CSOffsets.CSInviteAreaToTeamPacket, 1)
+public class CSInviteAreaToTeamPacket() : GamePacket(CSOffsets.CSInviteAreaToTeamPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

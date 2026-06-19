@@ -4,7 +4,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSMakeTeamOwnerPacket() : GamePacket(CSOffsets.CSMakeTeamOwnerPacket, 1)
+public class CSMakeTeamOwnerPacket() : GamePacket(CSOffsets.CSMakeTeamOwnerPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

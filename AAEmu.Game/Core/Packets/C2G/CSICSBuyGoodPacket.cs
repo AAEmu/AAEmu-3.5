@@ -9,7 +9,7 @@ using AAEmu.Game.Models.Tasks.CashShop;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSICSBuyGoodPacket() : GamePacket(CSOffsets.CSICSBuyGoodPacket, 1)
+public class CSICSBuyGoodPacket() : GamePacket(CSOffsets.CSICSBuyGoodPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

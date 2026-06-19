@@ -560,7 +560,19 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
 
         character.SendPacket(new SCExpeditionRolePolicyListPacket([]));
     }
-
+    
+    public void SendExpeditionProtect(GameConnection connection)
+    {
+        if (connection.ActiveChar is { Expedition: not null })
+        {
+            connection.ActiveChar.SendPacket(new SCProtectFactionPacket(1, connection.ActiveChar.Expedition.ProtectTime));
+        }
+        else
+        {
+            connection.SendPacket(new SCProtectFactionPacket(1, DateTime.MinValue));
+        }
+    }
+    
     public FactionsEnum GetExpeditionOfCharacter(uint characterId)
     {
         return (from guild in _expeditions.Values from member in guild.Members where member.CharacterId == characterId select guild.Id).FirstOrDefault();

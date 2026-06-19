@@ -5,14 +5,8 @@ using AAEmu.Game.Models.Game.World;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCInstantGameAddPointPacket(
-    ZoneInstanceId zoneInstanceId,
-    InstantCorps corps,
-    int points,
-    int score1,
-    int score2,
-    string charName)
-    : GamePacket(SCOffsets.SCInstantGameAddPointPacket, 1)
+public class SCInstantGameAddPointPacket(ZoneInstanceId zoneInstanceId, InstantCorps corps, int points, int score1, int score2, string charName)
+    : GamePacket(SCOffsets.SCInstantGameAddPointPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

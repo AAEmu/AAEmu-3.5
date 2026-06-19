@@ -6,6 +6,7 @@ using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Housing;
+using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Shipyard;
 using AAEmu.Game.Models.Game.Skills;
@@ -24,7 +25,7 @@ public class SCUnitStatePacket : GamePacket
 
     // private byte _attachPoint;
 
-    public SCUnitStatePacket(Unit unit) : base(SCOffsets.SCUnitStatePacket, 1)
+    public SCUnitStatePacket(Unit unit) : base(SCOffsets.SCUnitStatePacket, 5)
     {
         _unit = unit;
         _modelPostureType = unit.ModelPostureType;
@@ -142,11 +143,20 @@ public class SCUnitStatePacket : GamePacket
         stream.WritePosition(_unit.Transform.Local.Position);
         stream.Write(_unit.Scale);
         stream.Write(_unit.Level);
+        stream.Write(_unit.HierLevel); // hierarchy level for 3.0.3.0
+        for (var i = 0; i < 4; i++)
+            stream.Write((sbyte)-1); // slot for 3.0.3.0
+
         stream.Write(_unit.ModelId); // modelRef
 
         #region Inventory_Equip
-        Inventory_Equip(stream, _unit, _baseUnitType); // Equip character
-        //Inventory_Equip(stream, _unit); // Equip character
+        // Inventory_Equip(stream, _unit, _baseUnitType); // Equip character
+        
+        #region CharacterInfo_3EB0
+
+        Inventory_Equip3(stream, _unit); // Equip character
+
+        #endregion CharacterInfo_3EB0
         #endregion Inventory_Equip
 
         stream.Write(_unit.ModelParams);
@@ -376,128 +386,55 @@ public class SCUnitStatePacket : GamePacket
     }
 
     #region Inventory_Equip
-    private void Inventory_Equip(PacketStream stream, Unit unit, BaseUnitType baseUnitType)
-    {
-        if (unit == null)
-        {
-            return;
-        }
-        
+    #region CharacterInfo_3EB0
 
-        // calculate validFlags
-        var index = 0;
-        var validFlags = 0;
-        var items = unit.Equipment.GetSlottedItemsList();
-        foreach (var item in items)
-        {
-            if (item != null)
-            {
-                validFlags |= 1 << index;
-            }
-            index++;
-        }
-        if (validFlags <= 0 && baseUnitType == BaseUnitType.Npc)
-        {
-            // ReSharper disable once GrammarMistakeInComment
-            unit.ModelParams.SetType(UnitCustomModelType.Skin); // additional check that the NPC has no body and no face
-        }
-        index = 0;
-        do
-        {
-            var item = unit.Equipment.GetItemBySlot(index);
-            if (index - 19 < 0 || index - 19 > 6)
-            {
-                if (index != 27) // not CosPlay
-                {
-                    switch (baseUnitType)
-                    {
-                        case BaseUnitType.Character: // Character
-                        case BaseUnitType.Housing:   // Housing
-                        case BaseUnitType.Mate:      // Mate
-                        case BaseUnitType.Slave:     // Slave
-                            if (item != null)
-                            {
-                                stream.Write(item);
-                            }
-                            else
-                            {
-                                stream.Write(0);
-                            }
-                            break;
-                        case BaseUnitType.Npc:       // Npc
-                            if (item != null)
-                            {
-                                stream.Write(item.TemplateId);
-                                stream.Write(item.Id);
-                                stream.Write(item.Grade);
-                            }
-                            else
-                            {
-                                stream.Write(0);
-                            }
-                            break;
-                        case BaseUnitType.Transfer:
-                        case BaseUnitType.Shipyard:
-                            break;
-                    }
-                }
-                else
-                {
-                    if (baseUnitType == BaseUnitType.Transfer || baseUnitType == BaseUnitType.Shipyard)
-                    {
-                        return;
-                    }
-                    if (item != null)
-                    {
-                        stream.Write(item); // Cosplay [27]
-                    }
-                    else
-                    {
-                        stream.Write(0);
-                    }
-                }
-            }
-            else
-            {
-                if (item != null)
-                {
-                    stream.Write(item.TemplateId); // BodyPart | somehow_special [19..26]
-                }
-                else
-                {
-                    stream.Write(0);
-                }
-            }
-            ++index;
-        } while (index < 28);
-    }
-
-    /* Unused
-    private static void Inventory_Equip(PacketStream stream, Unit unit0)
+    private void Inventory_Equip3(PacketStream stream, Unit unit)
     {
-        switch (unit0)
+        var items = new List<Item>();
+
+        switch (unit)
         {
-            case Character unit:
+            case Character character:
                 {
-                    var items = unit.Inventory.Equipment.GetSlottedItemsList();
-                    foreach (var item in items)
-                    {
-                        if (item == null)
-                        {
-                            stream.Write(0);
-                        }
-                        else
-                        {
-                            stream.Write(item);
-                        }
-                    }
+                    items = character.Inventory.Equipment.GetSlottedItemsList();
+                    WriteEquip(stream, items);
+                    var itemFlags = CalculateItemFlags(items);
+                    stream.Write(itemFlags); // ItemFlags flags for 3.0.3.0
                     break;
                 }
-            case Npc unit:
+            case House house:
                 {
-                    for (var i = 0; i < unit.Equipment.GetSlottedItemsList().Count; i++)
+                    items = house.Equipment.GetSlottedItemsList();
+                    WriteEquip(stream, items);
+                    break;
+                }
+            case Mate mate:
+                {
+                    items = mate.Equipment.GetSlottedItemsList();
+                    WriteEquip(stream, items);
+                    break;
+                }
+            case Slave slave:
+                {
+                    items = slave.Equipment.GetSlottedItemsList();
+                    WriteEquip(stream, items);
+                    break;
+                }
+            case Npc npc:
+                {
+                    items = npc.Equipment.GetSlottedItemsList();
+                    var validFlags = CalculateValidFlags(items);
+                    stream.Write((uint)validFlags);
+
+                    if (validFlags <= 0)
                     {
-                        var item = unit.Equipment.GetItemBySlot(i);
+                        unit.ModelParams.SetType(UnitCustomModelType.Skin); // дополнительная проверка, что у NPC нет тела и лица
+                        return;
+                    }
+
+                    for (var i = 0; i < items.Count; i++)
+                    {
+                        var item = npc.Equipment.GetItemBySlot(i);
 
                         if (item is BodyPart)
                         {
@@ -516,72 +453,71 @@ public class SCUnitStatePacket : GamePacket
                                 stream.Write((byte)0);
                             }
                         }
-                        else
-                        {
-                            stream.Write(0);
-                        }
                     }
                     break;
                 }
-            case Slave unit:
+            // for transfer and Shipyard
+            default:
                 {
-                    var items = unit.Equipment.GetSlottedItemsList();
-                    foreach (var item in items)
-                    {
-                        if (item == null)
-                        {
-                            stream.Write(0);
-                        }
-                        else
-                        {
-                            stream.Write(item);
-                        }
-                    }
+                    stream.Write(0u); // validFlags for 3.0.3.0
                     break;
                 }
-            case House unit:
-                {
-                    var items = unit.Equipment.GetSlottedItemsList();
-                    foreach (var item in items)
-                    {
-                        if (item == null)
-                        {
-                            stream.Write(0);
-                        }
-                        else
-                        {
-                            stream.Write(item);
-                        }
-                    }
-                    break;
-                }
-            case Mate unit:
-                {
-                    var items = unit.Equipment.GetSlottedItemsList();
-                    foreach (var item in items)
-                    {
-                        if (item == null)
-                        {
-                            stream.Write(0);
-                        }
-                        else
-                        {
-                            stream.Write(item);
-                        }
-                    }
-                    break;
-                }
-            case Shipyard _:
-            case Transfer _:
-                for (var i = 0; i < 7; i++)
-                {
-                    stream.Write(0); // somehow_special [19..26]
-                }
-                break;
         }
     }
-    */
-    #endregion Inventory_Equip
+
+    private static void WriteEquip(PacketStream stream, List<Item> items)
+    {
+        var validFlags = CalculateValidFlags(items);
+        stream.Write((uint)validFlags); // validFlags for 3.0.3.0
+        WriteItems(stream, items);
+    }
+
+    private static void WriteItems(PacketStream stream, List<Item> items)
+    {
+        foreach (var item in items)
+        {
+            if (item != null)
+            {
+                stream.Write(item);
+            }
+        }
+    }
+
+    private static int CalculateValidFlags(List<Item> items)
+    {
+        var validFlags = 0;
+        var index = 0;
+        foreach (var item in items)
+        {
+            if (item != null)
+            {
+                validFlags |= 1 << index;
+            }
+
+            index++;
+        }
+
+        return validFlags;
+    }
+
+    private static int CalculateItemFlags(List<Item> items)
+    {
+        var itemFlags = 0;
+        var index = 0;
+
+        foreach (var tmp in items
+                     .Where(item => item != null)
+                     .Select(item => (int)item.ItemFlags << index))
+        {
+            ++index;
+            itemFlags |= tmp;
+        }
+
+        return itemFlags;
+    }
+
+    #endregion CharacterInfo_3EB0
+#endregion Inventory_Equip
 
     #region NetBuff
     private static void WriteBuff(PacketStream stream, Buff effect)

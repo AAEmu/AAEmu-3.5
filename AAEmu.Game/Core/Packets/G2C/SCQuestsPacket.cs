@@ -1,10 +1,10 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Quests;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCQuestsPacket(Quest[] quests) : GamePacket(SCOffsets.SCQuestsPacket, 1)
+public class SCQuestsPacket(Quest[] quests) : GamePacket(SCOffsets.SCQuestsPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {

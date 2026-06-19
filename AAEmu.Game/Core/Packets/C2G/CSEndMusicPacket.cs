@@ -6,7 +6,7 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSEndMusicPacket() : GamePacket(CSOffsets.CSEndMusicPacket, 1)
+public class CSEndMusicPacket() : GamePacket(CSOffsets.CSEndMusicPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

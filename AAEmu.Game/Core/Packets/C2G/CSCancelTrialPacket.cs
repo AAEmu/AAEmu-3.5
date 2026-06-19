@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSCancelTrialPacket() : GamePacket(CSOffsets.CSCancelTrialPacket, 1)
+public class CSCancelTrialPacket() : GamePacket(CSOffsets.CSCancelTrialPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

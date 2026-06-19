@@ -15,13 +15,13 @@ public static class SCOffsets
     public const ushort SCGameRuleConfigPacket = 0x279; //+
     public const ushort SCProtectFactionPacket = 0x288; //+
     public const ushort SCTaxItemConfig2Packet = 0x229; //+
-    public const ushort SCChatSpamConfigPacket = 0x2D6; //+
+    public const ushort SCChatSpamDelayPacket = 0x2D6; //+ SCChatSpamConfigPacket
     public const ushort SCInitialConfigPacket = 0x03D; //+
 
     public const ushort SCGameGuardPacket = 0xfff;    // level = 5
 
     // остальные пакеты
-    public const ushort SCEnterWorldResponsePacket = 0xfff;
+    //public const ushort SCEnterWorldResponsePacket = 0x000;
     public const ushort SCReconnectAuthPacket = 0x13A;
     public const ushort SCPrepareLeaveWorldPacket = 0x092;
     public const ushort SCLeaveWorldGrantedPacket = 0x1F7;
@@ -802,7 +802,7 @@ public static class SCOffsets
     public const ushort SCUserNoteLoadedPacket = 0xfff;
     public const ushort SCAiAggroPacket = 0xfff;
     public const ushort SCCancelCharacterDeleteResponsePacket = 0xfff;
-    public const ushort SCChatSpamDelayPacket = 0xfff;
+    //public const ushort SCChatSpamDelayPacket = 0x2D6;
     public const ushort SCCrimeChangedPacket = 0xfff;
     public const ushort SCDeleteCharacterResponsePacket = 0xfff;
     public const ushort SCDoodadQuestAcceptPacket = 0xfff;

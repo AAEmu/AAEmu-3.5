@@ -7,7 +7,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSDestroyItemPacket() : GamePacket(CSOffsets.CSDestroyItemPacket, 1)
+public class CSDestroyItemPacket() : GamePacket(CSOffsets.CSDestroyItemPacket, 5)
 {
     //
 

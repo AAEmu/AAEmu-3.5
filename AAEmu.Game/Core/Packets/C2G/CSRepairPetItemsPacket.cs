@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSRepairPetItemsPacket() : GamePacket(CSOffsets.CSRepairPetItemsPacket, 1)
+public class CSRepairPetItemsPacket() : GamePacket(CSOffsets.CSRepairPetItemsPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

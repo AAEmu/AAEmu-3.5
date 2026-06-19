@@ -8,7 +8,7 @@ using AAEmu.Game.Utils;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
-public class CSSendMailPacket() : GamePacket(CSOffsets.CSSendMailPacket, 1)
+public class CSSendMailPacket() : GamePacket(CSOffsets.CSSendMailPacket, 5)
 {
     public override void Read(PacketStream stream)
     {

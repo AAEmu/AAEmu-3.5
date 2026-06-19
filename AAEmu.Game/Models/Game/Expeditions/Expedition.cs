@@ -15,6 +15,7 @@ public class Expedition : SystemFaction
     public List<ExpeditionMember> Members { get; set; } = [];
     public List<ExpeditionRolePolicy> Policies { get; set; } = [];
 
+    public DateTime ProtectTime { get; set; }
     public bool isDisbanded { get; set; } = false;
 
     public void RemoveMember(ExpeditionMember member)
