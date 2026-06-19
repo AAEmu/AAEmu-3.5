@@ -8,6 +8,7 @@ using AAEmu.Login.Core.Network.Login;
 using AAEmu.Login.Core.PacketHandlers.C2L;
 using AAEmu.Login.Core.Packets.L2C;
 using AAEmu.Login.Models;
+using AAEmu.Commons.Network;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -27,6 +28,7 @@ public class LoginSessionTests
     private readonly List<LoginPacket> _sentPackets = [];
     private readonly CancellationTokenSource _connectionClosedCts = new();
     private readonly FakeTimeProvider _fakeTimeProvider = new();
+    private readonly IOptions<AppConfiguration> _appConfig;
     private readonly LoginSession _session;
 
     public LoginSessionTests()
@@ -37,17 +39,12 @@ public class LoginSessionTests
         _mockConnection.SendPacketAsync(Any<LoginPacket>(), Any<CancellationToken>())
             .Callback((p, _) => _sentPackets.Add(p));
 
-        var appConfig = Options.Create(new AppConfiguration
+        _appConfig = Options.Create(new AppConfiguration
         {
             SecretKey = "test", EnterWorldTimeout = TimeSpan.FromMilliseconds(200), GameServers = []
         });
 
-        _session = new LoginSession(
-            _mockConnection.Object,
-            _mockGameController.Object,
-            _fakeTimeProvider,
-            appConfig,
-            Mock.Of<ILogger<LoginSession>>().Object);
+        _session = CreateSession(_mockGameController.Object);
     }
 
     private static Mock<IAuthenticationFlow> CreateMockFlow(AuthFlowResult result)
@@ -65,6 +62,14 @@ public class LoginSessionTests
         _sentPackets.Clear();
     }
 
+    private LoginSession CreateSession(IGameController gameController) =>
+        new(
+            _mockConnection.Object,
+            gameController,
+            _fakeTimeProvider,
+            _appConfig,
+            Mock.Of<ILogger<LoginSession>>().Object);
+
     private GameServer CreateActiveGameServer(GameServerId gsId)
     {
         var server = new GameServer(gsId, "TestServer", "127.0.0.1", 1234)
@@ -73,6 +78,54 @@ public class LoginSessionTests
         };
         _mockGameController.GetGameServer(gsId).Returns(server);
         return server;
+    }
+
+    private sealed class MirrorGameControllerFake : IGameController
+    {
+        private readonly Dictionary<GameServerId, GameServer> _gameServers = [];
+        private readonly Dictionary<GameServerId, GameServerId> _parentGameServers = [];
+
+        public void AddMirror(GameServerId mirrorGsId, GameServerId parentGsId)
+        {
+            _parentGameServers[mirrorGsId] = parentGsId;
+        }
+
+        public void AddGameServer(GameServerId gsId, GameServer gameServer)
+        {
+            _gameServers[gsId] = gameServer;
+        }
+
+        public bool TryGetParentId(GameServerId gsId, out GameServerId id) =>
+            _parentGameServers.TryGetValue(gsId, out id);
+
+        public void Load()
+        {
+        }
+
+        public void Add(GameServerId gsId, List<GameServerId> mirrorsId, InternalConnection connection)
+        {
+        }
+
+        public void Remove(GameServerId gsId)
+        {
+        }
+
+        public Task<WorldListResult> GetWorldListAsync(ILoginConnection connection) =>
+            throw new NotSupportedException();
+
+        public void SetLoad(GameServerId gsId, byte load)
+        {
+        }
+
+        public GameServer? GetGameServer(GameServerId gsId) => _gameServers.GetValueOrDefault(gsId);
+
+        public void RequestEnterWorld(AccountId accountId, ConnectionId connectionId, GameServerId gsId)
+        {
+        }
+
+        public void RouteEnterWorldResponse(ConnectionId connectionId, GameServerId gsId, byte result)
+        {
+        }
     }
 
     [Test]
@@ -231,6 +284,49 @@ public class LoginSessionTests
         await Assert.That(_sentPackets.Count).IsEqualTo(1);
         await Assert.That(_sentPackets[0].GetType()).IsEqualTo(typeof(ACWorldCookiePacket));
         await Assert.That(_session.State).IsEqualTo(LoginState.Authenticated);
+    }
+
+    [Test]
+    public async Task InitiateEnterWorld_MirrorServer_UsesParentIdForCompletion(CancellationToken cancellationToken)
+    {
+        var parentGsId = new GameServerId(10);
+        var mirrorGsId = new GameServerId(11);
+        var gameController = new MirrorGameControllerFake();
+        var parentServer = new GameServer(parentGsId, "ParentServer", "127.0.0.1", 1234)
+        {
+            Connection = new InternalConnection(Mock.Of<ISession>().Object)
+        };
+        var mirrorServer = new GameServer(mirrorGsId, "MirrorServer", "127.0.0.2", 4321)
+        {
+            Connection = new InternalConnection(Mock.Of<ISession>().Object)
+        };
+        gameController.AddGameServer(parentGsId, parentServer);
+        gameController.AddGameServer(mirrorGsId, mirrorServer);
+        gameController.AddMirror(mirrorGsId, parentGsId);
+
+        var session = CreateSession(gameController);
+        var flow = CreateMockFlow(new AuthFlowResult.Success(s_testAccountId, "testuser"));
+        await session.AuthenticateAsync(flow.Object, cancellationToken);
+        _sentPackets.Clear();
+
+        await session.InitiateEnterWorldAsync(mirrorGsId, cancellationToken);
+        session.CompleteEnterWorldRequest(parentGsId, 0);
+        await session.EnterWorldBackgroundTask!;
+
+        await Assert.That(_sentPackets.Count).IsEqualTo(1);
+        await Assert.That(_sentPackets[0].GetType()).IsEqualTo(typeof(ACWorldCookiePacket));
+        await Assert.That(session.State).IsEqualTo(LoginState.Authenticated);
+        await Assert.That(ReadWorldCookiePort(_sentPackets[0])).IsEqualTo((ushort)4321);
+    }
+
+    private static ushort ReadWorldCookiePort(LoginPacket packet)
+    {
+        var stream = packet.Encode();
+        stream.ReadUInt16();
+        stream.ReadUInt16();
+        stream.ReadUInt32();
+        stream.ReadUInt32();
+        return stream.ReadUInt16();
     }
 
     [Test]

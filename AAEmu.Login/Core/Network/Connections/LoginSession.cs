@@ -27,6 +27,7 @@ public sealed class LoginSession(
     private CancellationTokenSource? _enterWorldCts;
     private TaskCompletionSource<EnterWorldResult>? _enterWorldTcs;
     private GameServerId? _pendingGsId;
+    private GameServerId? _pendingCookieGsId;
     private Task? _enterWorldBackgroundTask;
 
     internal Task? EnterWorldBackgroundTask => _enterWorldBackgroundTask;
@@ -205,7 +206,18 @@ public sealed class LoginSession(
             }
 
             _state = LoginState.EnteringWorld;
-            _pendingGsId = gsId;
+
+            var expectedGsId = gsId;
+            if (gameController.TryGetParentId(gsId, out var parentGsId))
+            {
+                logger.LogDebug(
+                    "EnterWorld request for mirror game server {MirrorGsId} resolved to parent {ParentGsId} for connection {ConnectionId}",
+                    gsId, parentGsId, Connection.Id);
+                expectedGsId = parentGsId;
+            }
+
+            _pendingGsId = expectedGsId;
+            _pendingCookieGsId = gsId;
 
             _enterWorldCts = CancellationTokenSource.CreateLinkedTokenSource(
                 Connection.ConnectionClosed, cancellationToken);
@@ -311,7 +323,8 @@ public sealed class LoginSession(
 
             if (success)
             {
-                server = gameController.GetGameServer(gsId);
+                var cookieGsId = _pendingCookieGsId ?? gsId;
+                server = gameController.GetGameServer(cookieGsId);
             }
 
             _enterWorldTcs?.TrySetResult(new EnterWorldResult(success, server, result));
@@ -351,5 +364,6 @@ public sealed class LoginSession(
         _enterWorldCts = null;
         _enterWorldTcs = null;
         _pendingGsId = null;
+        _pendingCookieGsId = null;
     }
 }

@@ -2,7 +2,7 @@
 
 public static class PPOffsets
 {
-    // All opcodes here are updated for version client_12_r208022
+    // All opcodes here are updated for version 3.5.3.0 r350000 AAClassic.
     public const ushort ChangeStatePacket = 0x000;
     public const ushort FinishStatePacket = 0x001;
     public const ushort FlushMsgsPacket = 0x002;

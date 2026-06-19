@@ -248,6 +248,25 @@ public class GameControllerTests
     }
 
     [Test]
+    public void RouteEnterWorldResponse_MirrorServer_UsesParentGameServerId()
+    {
+        var sut = CreateSut(MakeConfig(
+            (s_gsId1.Value, "World1", "127.0.0.1", 1234, false),
+            (s_gsId2.Value, "Mirror", "127.0.0.2", 1234, false)));
+        sut.Load();
+
+        var sessionMock = Mock.Of<ILoginSession>();
+        var connectionMock = Mock.Of<ILoginConnection>();
+        connectionMock.Session.Returns(sessionMock.Object);
+        _connectionTable.GetConnection(s_connectionId).Returns(connectionMock.Object);
+
+        sut.Add(s_gsId1, [s_gsId2], CreateConnection());
+        sut.RouteEnterWorldResponse(s_connectionId, s_gsId2, 42);
+
+        sessionMock.CompleteEnterWorldRequest(s_gsId1, 42).WasCalled(Times.Once);
+    }
+
+    [Test]
     public async Task GetWorldListAsync_NoServersLoaded_ReturnsEmptyResult()
     {
         var sut = CreateSut(MakeConfig());

@@ -2,7 +2,7 @@
 
 public static class CSOffsets
 {
-    // All opcodes here are updated for version client_12_r208022
+    // All opcodes here are updated for version 3.5.3.0 r350000 AAClassic.
     // World
     public const ushort X2EnterWorldPacket = 0x000;
     public const ushort CSAesXorKeyPacket = 0x094; // Encryption key exchange packet
