@@ -65,7 +65,7 @@ public class HousingManager(
     /// <param name="values"></param>
     /// <param name="accountId"></param>
     /// <returns></returns>
-    public int GetByAccountId(Dictionary<uint, House> values, uint accountId)
+    public int GetByAccountId(Dictionary<uint, House> values, ulong accountId)
     {
         foreach (var (id, house) in _houses)
             if (house.AccountId == accountId)
@@ -723,7 +723,7 @@ public class HousingManager(
     /// <param name="hostileTaxRate"></param>
     /// <param name="oneWeekTaxCount"></param>
     /// <returns></returns>
-    public bool CalculateBuildingTaxInfo(uint accountId, HousingTemplate newHouseTemplate, bool buildingNewHouse, out int totalTaxToPay, out int heavyHouseCount, out int normalHouseCount, out int hostileTaxRate, out int oneWeekTaxCount)
+    public bool CalculateBuildingTaxInfo(ulong accountId, HousingTemplate newHouseTemplate, bool buildingNewHouse, out int totalTaxToPay, out int heavyHouseCount, out int normalHouseCount, out int hostileTaxRate, out int oneWeekTaxCount)
     {
         totalTaxToPay = 0;
         heavyHouseCount = 0;
@@ -1454,9 +1454,7 @@ public class HousingManager(
         UpdateTaxInfo(house); // send tax due mails etc. if needed ...
 
         // TODO: broadcast changes
-        house.BroadcastPacket(
-            new SCHouseSoldPacket(house.TlId, previousOwner, character.Id, character.AccountId, character.Name,
-                house.Name), false);
+        house.BroadcastPacket(new SCHouseSoldPacket(house.TlId, previousOwner, character.Id, character.AccountId, character.Name, house.Name), false);
 
         SetForSaleMarkers(house, false);
 

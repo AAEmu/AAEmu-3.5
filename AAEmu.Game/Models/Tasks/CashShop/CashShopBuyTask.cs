@@ -168,10 +168,7 @@ public class CashShopBuyTask(byte buyMode, Character buyer, Character targetPlay
             if (shopItem.LimitedType != CashShopLimitType.None)
             {
                 // If there is a limit type set, grab previous sales of this ShopItem (any SKU attached)
-                var oldSales = CashShopManager.Instance.GetSalesForShopItem(
-                    buyer.AccountId,
-                    shopItem.LimitedType == CashShopLimitType.Character ? buyer.Id : 0,
-                    shopItem.ShopId);
+                var oldSales = CashShopManager.Instance.GetSalesForShopItem(buyer.AccountId, shopItem.LimitedType == CashShopLimitType.Character ? buyer.Id : 0, shopItem.ShopId);
 
                 // Calculate old amount bought
                 var oldSalesCount = 0u;

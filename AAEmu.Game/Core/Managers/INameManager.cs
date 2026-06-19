@@ -1,4 +1,4 @@
-using AAEmu.Game.Models.StaticValues;
+﻿using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Managers;
 
@@ -6,9 +6,9 @@ public interface INameManager : ILoadable
 {
     string GetCharacterName(uint characterId);
     uint GetCharacterId(string normalizedCharacterName);
-    uint GetCharacterAccount(uint characterId);
+    ulong GetCharacterAccount(uint characterId);
     CharacterCreateError ValidateCharacterName(string name);
-    void AddCharacter(uint characterId, string name, uint accountId);
+    void AddCharacter(uint characterId, string name, ulong accountId);
     void RemoveCharacterId(uint characterId);
     bool NoNamesRegistered();
 }

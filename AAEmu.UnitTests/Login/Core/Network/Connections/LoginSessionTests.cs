@@ -287,7 +287,7 @@ public class LoginSessionTests
     }
 
     [Test]
-    public async Task InitiateEnterWorld_MirrorServer_UsesParentIdForCompletion(CancellationToken cancellationToken)
+    public async Task InitiateEnterWorld_MirrorServer_ResolvesToParent(CancellationToken cancellationToken)
     {
         var parentGsId = new GameServerId(10);
         var mirrorGsId = new GameServerId(11);
@@ -316,7 +316,9 @@ public class LoginSessionTests
         await Assert.That(_sentPackets.Count).IsEqualTo(1);
         await Assert.That(_sentPackets[0].GetType()).IsEqualTo(typeof(ACWorldCookiePacket));
         await Assert.That(session.State).IsEqualTo(LoginState.Authenticated);
-        await Assert.That(ReadWorldCookiePort(_sentPackets[0])).IsEqualTo((ushort)4321);
+        // In the 3.5 flow the game server replies with its own (parent) id,
+        // so the client receives the parent server's address/port.
+        await Assert.That(ReadWorldCookiePort(_sentPackets[0])).IsEqualTo((ushort)1234);
     }
 
     private static ushort ReadWorldCookiePort(LoginPacket packet)

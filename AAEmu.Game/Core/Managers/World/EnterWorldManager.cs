@@ -28,19 +28,19 @@ public class EnterWorldManager(
     /// <summary>
     /// List of connected accounts (connection token, accountId)
     /// </summary>
-    private readonly Dictionary<uint, uint> _accounts = [];
+    private readonly Dictionary<uint, ulong> _accounts = [];
 
     /// <summary>
     /// Adds an account to the connection list and notifies the login server the client is connected
     /// </summary>
     /// <param name="accountId"></param>
     /// <param name="connectionId"></param>
-    public void AddAccount(uint accountId, uint connectionId)
+    public void AddAccount(ulong accountId, uint connectionId)
     {
         var connection = LoginNetwork.Instance.GetConnection();
         var gsId = AppConfiguration.Instance.Id;
 
-        if (accountManager.Contains(accountId))
+        if (accountManager.Contains((uint)accountId))
             connection.SendPacket(new GLPlayerEnterPacket(connectionId, gsId, 1));
         else
         {
@@ -56,7 +56,7 @@ public class EnterWorldManager(
     /// <param name="connection"></param>
     /// <param name="accountId"></param>
     /// <param name="token"></param>
-    public void Login(GameConnection connection, uint accountId, uint token)
+    public void Login(GameConnection connection, ulong accountId, uint token)
     {
         if (_accounts.TryGetValue(token, out var account))
         {
@@ -64,7 +64,7 @@ public class EnterWorldManager(
             {
                 _accounts.Remove(token);
 
-                connection.AccountId = accountId;
+                connection.AccountId = (uint)accountId;
                 connection.State = GameState.Lobby;
 
                 accountManager.Add(connection);

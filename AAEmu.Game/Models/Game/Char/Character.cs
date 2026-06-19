@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Data;
 using System.Drawing;
 
@@ -48,7 +48,7 @@ public partial class Character : Unit, ICharacter
     public List<IDisposable> Subscribers { get; set; }
     public override CharacterEvents Events { get; } = new();
     //public uint Id { get; set; } // moved to BaseUnit
-    public uint AccountId { get; set; }
+    public ulong AccountId { get; set; }
     public Race Race { get; set; }
     public Gender Gender { get; set; }
     /// <summary>
@@ -2114,7 +2114,7 @@ public partial class Character : Unit, ICharacter
 
     #region Database
 
-    public static Character Load(MySqlConnection connection, uint characterId, uint accountId)
+    public static Character Load(MySqlConnection connection, uint characterId, ulong accountId)
     {
         var accountDetails = AccountManager.Instance.GetAccountDetails(accountId);
         Character character = null;

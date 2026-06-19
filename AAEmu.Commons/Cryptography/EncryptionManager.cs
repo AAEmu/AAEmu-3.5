@@ -21,7 +21,7 @@ namespace AAEmu.Commons.Cryptography
     {
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private static readonly int DwKeySize = 1024;
-        private Dictionary<uint, ConnectionKeychain> ConnectionKeys { get; set; } //Dictionary of valid keys bound to account Id and connection Id
+        private Dictionary<ulong, ConnectionKeychain> ConnectionKeys { get; set; } //Dictionary of valid keys bound to account Id and connection Id
         public static bool needNewkey2;
         public static bool needNewkey1;
         private static string XorKeyValueFilePath;
@@ -29,11 +29,11 @@ namespace AAEmu.Commons.Cryptography
 
         public void Load()
          {
-             ConnectionKeys = new Dictionary<uint, ConnectionKeychain>();
+             ConnectionKeys = new Dictionary<ulong, ConnectionKeychain>();
              Logger.Info("Loaded Encryption Manager.");
          }
 
-         private ConnectionKeychain GetOrCreateConnectionKeys(uint connectionId, uint accountId)
+         private ConnectionKeychain GetOrCreateConnectionKeys(uint connectionId, ulong accountId)
          {
              if (ConnectionKeys.TryGetValue(accountId, out var keys) && keys.ConnectionId == connectionId)
              {
@@ -42,7 +42,7 @@ namespace AAEmu.Commons.Cryptography
              return GenerateRsaKeyPair(connectionId, accountId);
          }
 
-         private ConnectionKeychain GenerateRsaKeyPair(uint connectionId, uint accountId)
+         private ConnectionKeychain GenerateRsaKeyPair(uint connectionId, ulong accountId)
          {
              ConnectionKeys.Remove(accountId);
              var rsaKeyPair = new RSACryptoServiceProvider();
@@ -112,7 +112,7 @@ namespace AAEmu.Commons.Cryptography
              }
          }
 
-         public byte GetSCMessageCount(uint connectionId, uint accountId)
+         public byte GetSCMessageCount(uint connectionId, ulong accountId)
          {
              var keys = GetOrCreateConnectionKeys(connectionId, accountId);
              var mc = keys.SCMessageCount;
@@ -120,7 +120,7 @@ namespace AAEmu.Commons.Cryptography
              return mc;
          }
 
-         public void IncSCMsgCount(uint connectionId, uint accountId)
+         public void IncSCMsgCount(uint connectionId, ulong accountId)
          {
              var keys = GetOrCreateConnectionKeys(connectionId, accountId);
              keys.SCMessageCount++;
@@ -206,7 +206,7 @@ namespace AAEmu.Commons.Cryptography
          // здесь распаковка пакетов от клиента 0005
          // для дешифрации следующих пакетов iv = шифрованный предыдущий пакет
          //------------------------------
-         public byte[] Decode(byte[] data, uint connectionId, uint accountId)
+         public byte[] Decode(byte[] data, uint connectionId, ulong accountId)
          {
              var keys = GetOrCreateConnectionKeys(connectionId, accountId);
              var iv = keys.IV;

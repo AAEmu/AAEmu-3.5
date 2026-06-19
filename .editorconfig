@@ -219,6 +219,15 @@ csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_before_members_in_anonymous_types = true
 csharp_new_line_between_query_expression_clauses = true
 
+# Настройки форматирования
+csharp_new_line_before_open_brace = methods, types, control_blocks, accessors, anonymous_types, lambda_expression_body, object_collection_array_initializers, properties, events, indexer_declarations
+# Установите следующее правило для аргументов вызова метода
+csharp_new_line_before_method_call_open_parentheses = none
+# Или более конкретно:
+csharp_new_line_before_method_call_open_parentheses_when_multiline = false
+# Некоторые версии анализатора могут использовать:
+dotnet_new_line_before_method_call_open_parentheses = false
+
 # Spacing
 csharp_space_after_cast = false
 csharp_space_after_colon_in_inheritance_clause = true
