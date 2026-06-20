@@ -1,5 +1,6 @@
-using AAEmu.Game.Models.Game.Items;
+﻿using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Templates;
+using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.UnitTests.Game.Models.Game.Items;
 
@@ -256,70 +257,70 @@ public class ItemTests
     public async Task DawnStone_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.DawnStone).IsEqualTo(327u);
+        await Assert.That((uint)ItemConstants.DawnStone).IsEqualTo(327u);
     }
 
     [Test]
     public async Task Coins_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.Coins).IsEqualTo(500u);
+        await Assert.That((uint)ItemConstants.Coins).IsEqualTo(500u);
     }
 
     [Test]
     public async Task TaxCertificate_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.TaxCertificate).IsEqualTo(31891u);
+        await Assert.That((uint)ItemConstants.TaxCertificate).IsEqualTo(31891u);
     }
 
     [Test]
     public async Task BoundTaxCertificate_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.BoundTaxCertificate).IsEqualTo(31892u);
+        await Assert.That((uint)ItemConstants.BoundTaxCertificate).IsEqualTo(31892u);
     }
 
     [Test]
     public async Task AppraisalCertificate_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.AppraisalCertificate).IsEqualTo(28085u);
+        await Assert.That((uint)ItemConstants.AppraisalCertificate).IsEqualTo(28085u);
     }
 
     [Test]
     public async Task CrestStamp_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.CrestStamp).IsEqualTo(17662u);
+        await Assert.That((uint)ItemConstants.CrestStamp).IsEqualTo(17662u);
     }
 
     [Test]
     public async Task CrestInk_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.CrestInk).IsEqualTo(17663u);
+        await Assert.That((uint)ItemConstants.CrestInk).IsEqualTo(17663u);
     }
 
     [Test]
     public async Task SheetMusic_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.SheetMusic).IsEqualTo(28051u);
+        await Assert.That((uint)ItemConstants.SheetMusic).IsEqualTo(28051u);
     }
 
     [Test]
     public async Task SalonCertificate_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.SalonCertificate).IsEqualTo(30811u);
+        await Assert.That((uint)ItemConstants.SalonCertificate).IsEqualTo(30811u);
     }
 
     [Test]
     public async Task TreasureMapWithCoordinates_ReturnsCorrectId()
     {
         // Act & Assert
-        await Assert.That(Item.TreasureMapWithCoordinates).IsEqualTo(24581u);
+        await Assert.That((uint)ItemConstants.TreasureMapWithCoordinates).IsEqualTo(24581u);
     }
 
     #endregion

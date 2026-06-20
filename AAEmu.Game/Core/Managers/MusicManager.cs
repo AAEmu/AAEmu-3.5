@@ -6,6 +6,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Music;
+using AAEmu.Game.Models.Game.Skills;
 using NLog;
 
 namespace AAEmu.Game.Core.Managers;
@@ -93,7 +94,7 @@ public class MusicManager(IMusicIdManager musicIdManager, IItemManager itemManag
     public bool CreateSheetMusic(Character player, Item sourceItem)
     {
         // Check if a valid owned item
-        if (sourceItem == null || sourceItem._holdingContainer.OwnerId != player.Id)
+        if (sourceItem == null || sourceItem.HoldingContainer.OwnerId != player.Id)
         {
             Logger.Warn("Player {0} ({1}) does not own the used source item", player.Name, player.Id);
             return false;
@@ -117,7 +118,7 @@ public class MusicManager(IMusicIdManager musicIdManager, IItemManager itemManag
         // Save to DB
         if (Save(sud))
         {
-            var sheet = (MusicSheetItem)itemManager.Create(Item.SheetMusic, 1, 0, true);
+            var sheet = (MusicSheetItem)itemManager.Create((uint)ItemConstants.SheetMusic, 1, 0, true);
             sheet.OwnerId = player.Id;
             sheet.MadeUnitId = player.Id;
             sheet.SongId = sud.Id;

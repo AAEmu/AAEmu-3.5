@@ -3196,7 +3196,7 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
             var item = itemManager.GetItemByItemId(attachedItemId);
             if (item != null)
             {
-                item._holdingContainer = null;
+                item.HoldingContainer = null;
                 itemManager.ReleaseId(item.Id);
             }
         }

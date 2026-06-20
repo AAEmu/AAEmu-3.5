@@ -5,6 +5,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
+using AAEmu.Game.Models.Game.Gimmicks;
 using AAEmu.Game.Models.Game.Housing;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.NPChar;
@@ -22,8 +23,6 @@ public class SCUnitStatePacket : GamePacket
     // ReSharper disable once NotAccessedField.Local
     private ModelPostureType _modelPostureType;
 #pragma warning restore IDE0052 // Remove unread private members
-
-    // private byte _attachPoint;
 
     public SCUnitStatePacket(Unit unit) : base(SCOffsets.SCUnitStatePacket, 5)
     {
@@ -71,11 +70,14 @@ public class SCUnitStatePacket : GamePacket
         #region NetUnit
         stream.WriteBc(_unit.ObjId);
         stream.Write(_unit.Name);
-        stream.Write((byte)_baseUnitType);
+
 
         // Cache character
         var character = _unit as Character;
         var npc = _unit as Npc;
+
+        #region BaseUnitType
+        stream.Write((byte)_baseUnitType);
 
         switch (_baseUnitType)
         {
@@ -124,6 +126,8 @@ public class SCUnitStatePacket : GamePacket
                 break;
         }
 
+        #endregion BaseUnitType
+
         if (_unit.OwnerId > 0) // master
         {
             var name = NameManager.Instance.GetCharacterName(_unit.OwnerId);
@@ -143,15 +147,13 @@ public class SCUnitStatePacket : GamePacket
         stream.WritePosition(_unit.Transform.Local.Position);
         stream.Write(_unit.Scale);
         stream.Write(_unit.Level);
-        stream.Write(_unit.HierLevel); // hierarchy level for 3.0.3.0
+        stream.Write(_unit.HeirLevel); // hierarchy level for 3.0.3.0
         for (var i = 0; i < 4; i++)
             stream.Write((sbyte)-1); // slot for 3.0.3.0
 
         stream.Write(_unit.ModelId); // modelRef
 
         #region Inventory_Equip
-        // Inventory_Equip(stream, _unit, _baseUnitType); // Equip character
-        
         #region CharacterInfo_3EB0
 
         Inventory_Equip3(stream, _unit); // Equip character
@@ -159,7 +161,8 @@ public class SCUnitStatePacket : GamePacket
         #endregion CharacterInfo_3EB0
         #endregion Inventory_Equip
 
-        stream.Write(_unit.ModelParams);
+        stream.Write(_unit.ModelParams); // CustomModel_3570
+
         stream.WriteBc(0);
         stream.Write(_unit.Hp * 100); // preciseHealth
         stream.Write(_unit.Mp * 100); // preciseMana
@@ -167,24 +170,28 @@ public class SCUnitStatePacket : GamePacket
         #region AttachPoint1
         switch (_unit)
         {
+            case Gimmick _:
+            case Portal _:
             case Character _:
             case Npc _:
-                stream.Write((byte)AttachPointKind.System); // point
+            case House _:
+            case Mate _:
+            case Shipyard _:
+                stream.Write((byte)AttachPointKind.System);   // point
                 break;
             case Slave unit:
                 stream.Write(unit.AttachPointId);
                 if (unit.AttachPointId > -1)
                     stream.WriteBc(unit.OwnerObjId);
                 break;
-            case House _:
-            case Mate _:
-            case Shipyard _:
-                stream.Write((byte)AttachPointKind.System);   // point
-                break;
             case Transfer unit:
-                stream.Write((byte)unit.AttachPointId);  // point
-                if (unit.AttachPointId != AttachPointKind.System)
+                if (unit.BondingObjId != 0)
+                {
+                    stream.Write((byte)unit.AttachPointId);  // point
                     stream.WriteBc(unit.BondingObjId); // point to the owner where to attach
+                }
+                else
+                    stream.Write((byte)AttachPointKind.System);   // point
                 break;
         }
         #endregion AttachPoint1
@@ -195,7 +202,7 @@ public class SCUnitStatePacket : GamePacket
             case Character unit:
                 if (unit.Bonding == null)
                 {
-                    stream.Write((sbyte)-1); // point
+                    stream.Write((byte)AttachPointKind.System);   // point
                 }
                 else
                 {
@@ -203,23 +210,24 @@ public class SCUnitStatePacket : GamePacket
                 }
                 break;
             case Npc _:
-                stream.Write((sbyte)-1); // point
+            case House _:
+            case Mate _:
+            case Shipyard _:
+            case Transfer _:
+                stream.Write((byte)AttachPointKind.System);   // point
                 break;
             case Slave unit:
                 if (unit.BondingObjId > 0)
                 {
                     stream.WriteBc(unit.BondingObjId);
+                    stream.Write(0);  // space
+                    stream.Write(0);  // spot
+                    stream.Write(0);  // type
                 }
                 else
                 {
-                    stream.Write((sbyte)-1);
+                    stream.Write((byte)AttachPointKind.System);   // point
                 }
-                break;
-            case House _:
-            case Mate _:
-            case Shipyard _:
-            case Transfer _:
-                stream.Write((sbyte)-1); // point
                 break;
         }
         #endregion AttachPoint2

@@ -7,6 +7,7 @@ using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units;
 
 using NLog;
@@ -308,7 +309,7 @@ public class ItemContainer
             return false;
         }
 
-        var sourceContainer = item._holdingContainer;
+        var sourceContainer = item.HoldingContainer;
         var sourceSlot = (byte)item.Slot;
         var sourceSlotType = item.SlotType;
 
@@ -375,7 +376,7 @@ public class ItemContainer
         {
             item.SlotType = ContainerType;
             item.Slot = newSlot;
-            item._holdingContainer = this;
+            item.HoldingContainer = this;
             item.OwnerId = OwnerId;
 
             Items.Insert(0, item); // insert at front for easy buyback handling
@@ -473,15 +474,15 @@ public class ItemContainer
             Owner?.SendPacket(sync);
         }
 
-        var res = item._holdingContainer.Items.Remove(item);
+        var res = item.HoldingContainer.Items.Remove(item);
         if (res && task != ItemTaskType.Invalid)
         {
-            item._holdingContainer?.Owner?.SendPacket(new SCItemTaskSuccessPacket(task, [new ItemRemoveSlot(item)], []));
+            item.HoldingContainer?.Owner?.SendPacket(new SCItemTaskSuccessPacket(task, [new ItemRemoveSlot(item)], []));
         }
 
         if (res && releaseIdAsWell)
         {
-            item._holdingContainer = null;
+            item.HoldingContainer = null;
             ItemManager.Instance.ReleaseId(item.Id);
         }
 
@@ -770,7 +771,7 @@ public class ItemContainer
         }
 
         // Special handling for money
-        if (templateId == Item.Coins)
+        if (templateId == (int)ItemConstants.Coins)
         {
             return CalculateSpaceLeftForMoney(template.MaxCount);
         }
@@ -804,7 +805,7 @@ public class ItemContainer
 
     private bool SpaceLeftForMoney(Item itemToAdd, out List<Item> currentItems, out int spaceLeftForItem)
     {
-        if (itemToAdd.TemplateId == Item.Coins)
+        if (itemToAdd.TemplateId == (int)ItemConstants.Coins)
         {
             currentItems = [itemToAdd];
             spaceLeftForItem = CalculateSpaceLeftForMoney(itemToAdd.Template.MaxCount);

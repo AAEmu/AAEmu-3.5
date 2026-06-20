@@ -10,6 +10,7 @@ using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Loots;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.NPChar;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Team;
 using AAEmu.Game.Models.Game.Units;
 using NLog;
@@ -570,7 +571,7 @@ public class LootingContainer(IBaseUnit owner)
         var fullOldItemId = itemEntry.Item.Id;
 
         // var objId = (uint)(lootDropItem.Id >> 32);
-        if (itemEntry.Item.TemplateId == Item.Coins)
+        if (itemEntry.Item.TemplateId == (int)ItemConstants.Coins)
         {
             player.AddMoney(SlotType.Inventory, itemEntry.Item.Count);
         }

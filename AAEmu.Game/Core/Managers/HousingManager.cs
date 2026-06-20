@@ -495,8 +495,8 @@ public class HousingManager(
         {
             // Pay in Tax Certificate
 
-            var userTaxCount = connection.ActiveChar.Inventory.GetItemsCount(SlotType.Inventory, Item.TaxCertificate);
-            var userBoundTaxCount = connection.ActiveChar.Inventory.GetItemsCount(SlotType.Inventory, Item.BoundTaxCertificate);
+            var userTaxCount = connection.ActiveChar.Inventory.GetItemsCount((uint)SlotType.Inventory, (int)ItemConstants.TaxCertificate);
+            var userBoundTaxCount = connection.ActiveChar.Inventory.GetItemsCount((uint)SlotType.Inventory, (int)ItemConstants.BoundTaxCertificate);
             var totalUserTaxCount = userTaxCount + userBoundTaxCount;
             var totalCertsCost = (int)Math.Ceiling(totalTaxAmountDue / 10000f);
 
@@ -515,7 +515,7 @@ public class HousingManager(
                 {
                     if (c > userBoundTaxCount)
                         c = userBoundTaxCount;
-                    connection.ActiveChar.Inventory.Bag.ConsumeItem(ItemTaskType.HouseCreation, Item.BoundTaxCertificate, c, null);
+                    connection.ActiveChar.Inventory.Bag.ConsumeItem(ItemTaskType.HouseCreation, (uint)ItemConstants.BoundTaxCertificate, c, null);
                     consumedCerts -= c;
                 }
                 c = consumedCerts;
@@ -523,7 +523,7 @@ public class HousingManager(
                 {
                     if (c > userTaxCount)
                         c = userTaxCount;
-                    connection.ActiveChar.Inventory.Bag.ConsumeItem(ItemTaskType.HouseCreation, Item.TaxCertificate, c, null);
+                    connection.ActiveChar.Inventory.Bag.ConsumeItem(ItemTaskType.HouseCreation, (uint)ItemConstants.TaxCertificate, c, null);
                     consumedCerts -= c;
                 }
 
@@ -911,7 +911,7 @@ public class HousingManager(
             {
                 if (FeaturesManager.Fsets.Check(Models.Game.Features.Feature.taxItem))
                 {
-                    var taxItem = itemManager.Create(Item.BoundTaxCertificate, (int)(house.Template.Taxation.Tax / 5000), 0);
+                    var taxItem = itemManager.Create((uint)ItemConstants.BoundTaxCertificate, (int)(house.Template.Taxation.Tax / 5000), 0);
                     taxItem.OwnerId = house.OwnerId;
                     taxItem.SlotType = SlotType.Mail;
                     returnedItems.Add(taxItem);
@@ -997,7 +997,7 @@ public class HousingManager(
                     // Just delete the doodad and attached item if no new owner
                     // Delete the attached item
                     if (f.ItemId != 0)
-                        thisDoodadsItem._holdingContainer?.ConsumeItem(ItemTaskType.Invalid,
+                        thisDoodadsItem.HoldingContainer?.ConsumeItem(ItemTaskType.Invalid,
                             thisDoodadsItem.TemplateId, thisDoodadsItem.Count, thisDoodadsItem);
 
                     // Is furniture, but doesn't restore, destroy it
@@ -1245,7 +1245,7 @@ public class HousingManager(
         if (seller != null)
         {
             var certAmount = CalculateSaleCertifcates(house, price);
-            if (seller.Inventory.Bag.ConsumeItem(ItemTaskType.BuyHouse, Item.AppraisalCertificate, certAmount, null) != certAmount)
+            if (seller.Inventory.Bag.ConsumeItem(ItemTaskType.BuyHouse, (uint)ItemConstants.AppraisalCertificate, certAmount, null) != certAmount)
             {
                 seller.SendErrorMessage(ErrorMessageType.HouseCannotSellAsNotEnoughSeal);
                 return false;
@@ -1282,7 +1282,7 @@ public class HousingManager(
         if (certAmount > 0 && returnCertificates && owner != null)
         {
             if (owner.Inventory.MailAttachments.AcquireDefaultItemEx(ItemTaskType.Invalid,
-                Item.AppraisalCertificate, certAmount, -1, out var addedItems, out _, 0))
+                (uint)ItemConstants.AppraisalCertificate, certAmount, -1, out var addedItems, out _, 0))
             {
                 // Mail container is set up to never update existing items, so we can discard that result
                 var mail = new BaseMail
@@ -1297,7 +1297,7 @@ public class HousingManager(
                     Title = "title(" + zoneManager.GetZoneByKey(house.Transform.ZoneId)?.GroupId.ToString() + ",'" + house.Name + "')",
                     Body =
                     {
-                        Text = "body('" + house.Name + "', " + Item.AppraisalCertificate.ToString() + ", " + certAmount.ToString() + ")"
+                        Text = "body('" + house.Name + "', " + ((uint)ItemConstants.AppraisalCertificate).ToString() + ", " + certAmount.ToString() + ")"
                     }
                 };
                 mail.Body.Attachments.AddRange(addedItems);

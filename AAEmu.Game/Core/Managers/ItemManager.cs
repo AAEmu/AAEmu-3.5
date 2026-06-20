@@ -15,6 +15,7 @@ using AAEmu.Game.Models.Game.Items.Containers;
 using AAEmu.Game.Models.Game.Items.Loots;
 using AAEmu.Game.Models.Game.Items.Procs;
 using AAEmu.Game.Models.Game.Items.Templates;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
@@ -787,7 +788,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             BaseEquipment = reader.GetBoolean("base_equipment", true),
                             RechargeBuffId = reader.GetUInt32("recharge_buff_id", 0),
                             ChargeLifetime = reader.GetInt32("charge_lifetime", 0),
-                            ChargeCount = reader.GetInt32("charge_count", 0),
+                            ChargeCount = reader.GetInt16("charge_count"),
                             ItemLookConvert = GetWearableItemLookConvert(slotTypeId),
                             EquipItemSetId = reader.GetUInt32("eiset_id", 0),
                             DefaultDyeItemId = GetDyeableItemDefaultDyeId(id)
@@ -818,7 +819,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             BaseEquipment = reader.GetBoolean("base_equipment", true),
                             RechargeBuffId = reader.GetUInt32("recharge_buff_id", 0),
                             ChargeLifetime = reader.GetInt32("charge_lifetime", 0),
-                            ChargeCount = reader.GetInt32("charge_count", 0),
+                            ChargeCount = reader.GetInt16("charge_count"),
                             ItemLookConvert = GetHoldableItemLookConvert(holdableId),
                             EquipItemSetId = reader.GetUInt32("eiset_id", 0)
                         };
@@ -850,7 +851,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             DurabilityMultiplier = reader.GetInt32("durability_multiplier"),
                             RechargeBuffId = reader.GetUInt32("recharge_buff_id", 0),
                             ChargeLifetime = reader.GetInt32("charge_lifetime", 0),
-                            ChargeCount = reader.GetInt32("charge_count", 0),
+                            ChargeCount = reader.GetInt16("charge_count"),
                             EquipItemSetId = reader.GetUInt32("eiset_id", 0)
                         };
                         _templates.Add(template.Id, template);
@@ -969,16 +970,16 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
             }
 
             // TODO: HACK-FIX FOR CREST INK/STAMP/MUSIC
-            var crestInkItemTemplate = new UccTemplate { Id = Item.CrestInk };
+            var crestInkItemTemplate = new UccTemplate { Id = (uint)ItemConstants.CrestInk };
             _templates.Add(crestInkItemTemplate.Id, crestInkItemTemplate);
 
-            var crestStampItemTemplate = new UccTemplate { Id = Item.CrestStamp };
+            var crestStampItemTemplate = new UccTemplate { Id = (uint)ItemConstants.CrestStamp };
             _templates.Add(crestStampItemTemplate.Id, crestStampItemTemplate);
 
-            var sheetMusicItemTemplate = new MusicSheetTemplate { Id = Item.SheetMusic };
+            var sheetMusicItemTemplate = new MusicSheetTemplate { Id = (uint)ItemConstants.SheetMusic };
             _templates.Add(sheetMusicItemTemplate.Id, sheetMusicItemTemplate);
 
-            var treasureMapItemTemplate = new TreasureMapTemplate { Id = Item.TreasureMapWithCoordinates };
+            var treasureMapItemTemplate = new TreasureMapTemplate { Id = (uint)ItemConstants.TreasureMapWithCoordinates };
             _templates.Add(treasureMapItemTemplate.Id, treasureMapItemTemplate);
 
             using (var command = connection.CreateCommand())
@@ -1528,9 +1529,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             continue;
 
                         // Try to re-attain the slot type by getting the owning container's type
-                        if (item._holdingContainer != null)
+                        if (item.HoldingContainer != null)
                         {
-                            item.SlotType = GetContainerSlotTypeByContainerId(item._holdingContainer.ContainerId);
+                            item.SlotType = GetContainerSlotTypeByContainerId(item.HoldingContainer.ContainerId);
                         }
 
                         // If the slot type changed, give a warning, otherwise skip this save
@@ -1568,7 +1569,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     command.Parameters.AddWithValue("@id", item.Id);
                     command.Parameters.AddWithValue("@type", item.GetType().ToString());
                     command.Parameters.AddWithValue("@template_id", item.TemplateId);
-                    command.Parameters.AddWithValue("@container_id", item._holdingContainer?.ContainerId ?? 0);
+                    command.Parameters.AddWithValue("@container_id", item.HoldingContainer?.ContainerId ?? 0);
                     command.Parameters.AddWithValue("@slot_type", (int)item.SlotType);
                     command.Parameters.AddWithValue("@slot", item.Slot);
                     command.Parameters.AddWithValue("@count", item.Count);
@@ -1602,7 +1603,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     catch (Exception ex)
                     {
                         // Create a manual SQL string with the data provided
-                        var sqlString = $"REPLACE INTO items (id, type, template_id, container_id, slot_type, slot, count, details, lifespan_mins, made_unit_id, unsecure_time, unpack_time, owner, created_at, grade, flags, ucc, expire_time, expire_online_minutes, charge_time, charge_count) VALUES ({item.Id}, {item.GetType()}, {item.TemplateId}, {item._holdingContainer?.ContainerId ?? 0}, {item.SlotType}, {item.Slot}, {item.Count}, {details.GetBytes()}, {item.LifespanMins}, {item.MadeUnitId}, {item.UnsecureTime}, {item.UnpackTime}, {item.CreateTime}, {item.OwnerId}, {item.Grade}, {(byte)item.ItemFlags}, {item.UccId}, {item.ExpirationTime}, {item.ExpirationOnlineMinutesLeft}, {item.ChargeStartTime}, {item.ChargeCount})";
+                        var sqlString = $"REPLACE INTO items (id, type, template_id, container_id, slot_type, slot, count, details, lifespan_mins, made_unit_id, unsecure_time, unpack_time, owner, created_at, grade, flags, ucc, expire_time, expire_online_minutes, charge_time, charge_count) VALUES ({item.Id}, {item.GetType()}, {item.TemplateId}, {item.HoldingContainer?.ContainerId ?? 0}, {item.SlotType}, {item.Slot}, {item.Count}, {details.GetBytes()}, {item.LifespanMins}, {item.MadeUnitId}, {item.UnsecureTime}, {item.UnpackTime}, {item.CreateTime}, {item.OwnerId}, {item.Grade}, {(byte)item.ItemFlags}, {item.UccId}, {item.ExpirationTime}, {item.ExpirationOnlineMinutesLeft}, {item.ChargeStartTime}, {item.ChargeCount})";
 
                         Logger.Error($"Error: {ex.Message}\nSQL Query: {sqlString}\n");
                     }
@@ -1830,7 +1831,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     item.ExpirationTime = reader.IsDBNull("expire_time") ? DateTime.MinValue : reader.GetDateTime("expire_time");
                     item.ExpirationOnlineMinutesLeft = reader.GetDouble("expire_online_minutes");
                     item.ChargeStartTime = reader.IsDBNull("charge_time") ? DateTime.MinValue : reader.GetDateTime("charge_time");
-                    item.ChargeCount = reader.GetInt32("charge_count");
+                    item.ChargeCount = reader.GetInt16("charge_count");
 
                     // Add it to the global pool
                     if (!_allItems.TryAdd(item.Id, item))

@@ -17,4 +17,11 @@ public class CharacterTemplate
     public List<uint> Buffs { get; set; } = [];
     public byte NumInventorySlot { get; set; }
     public short NumBankSlot { get; set; }
+
+    public CharacterTemplate()
+    {
+        SpawnPosition = new WorldSpawnPosition();
+        Items = new uint[7];
+        Buffs = [];
+    }
 }

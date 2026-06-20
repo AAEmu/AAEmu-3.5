@@ -5,6 +5,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Mails;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Trading;
 using AAEmu.Game.Models.Tasks.Specialty;
 using AAEmu.Game.Utils;
@@ -279,7 +280,7 @@ public class SpecialtyManager : Singleton<SpecialtyManager>, ISpecialtyManager
         }
         else
         {
-            itemTypeToDeliver = Item.Coins;
+            itemTypeToDeliver = (uint)ItemConstants.Coins;
         }
 
         // TODO: implement a global fsets

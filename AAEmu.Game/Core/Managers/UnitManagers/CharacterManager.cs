@@ -471,17 +471,19 @@ public class CharacterManager(
 
         var character = new Character(customModel)
         {
-            Id = characterId, TemplateId = characterId, AccountId = connection.AccountId, Name = name,
+            Id = characterId,
+            TemplateId = characterId,
+            AccountId = connection.AccountId,
+            Name = name,
             Race = race,
             Gender = gender
         };
         character.Transform.ApplyWorldSpawnPosition(template.SpawnPosition);
         character.Level = level;
+        character.HeirLevel = 0;
         character.Faction = factionManager.GetFaction(template.FactionId);
         character.FactionName = "";
         character.AccessLevel = useAccessLevel;
-        // character.LaborPower = (short)AppConfiguration.Instance.Labor.Default;
-        // character.LaborPowerModified = DateTime.UtcNow;
         character.InitializeLaborCache(accountDetails.Labor, accountDetails.LastUpdated); // Initialize Labor cache, so we don't need to query the DB every time we need to read it
         character.NumInventorySlots = template.NumInventorySlot;
         character.NumBankSlots = template.NumBankSlot;
@@ -514,6 +516,7 @@ public class CharacterManager(
         SetEquipItemTemplate(character.Inventory, items.Items.Ranged, EquipmentItemSlot.Ranged, items.Items.RangedGrade);
         SetEquipItemTemplate(character.Inventory, items.Items.Musical, EquipmentItemSlot.Musical, items.Items.MusicalGrade);
         SetEquipItemTemplate(character.Inventory, items.Items.Cosplay, EquipmentItemSlot.Cosplay, items.Items.CosplayGrade);
+        SetEquipItemTemplate(character.Inventory, items.Items.Stabilizer, EquipmentItemSlot.Stabilizer, items.Items.StabilizerGrade);
         for (var i = 0; i < 7; i++)
         {
             if (bodyItems[i] == 0 && template.Items[i] > 0)
@@ -893,7 +896,7 @@ public class CharacterManager(
     {
         // TODO: Add support for future X-day Salon Certificate items
 
-        if (character.Inventory.GetItemsCount(SlotType.Inventory, Item.SalonCertificate) <= 0)
+        if (character.Inventory.GetItemsCount(SlotType.Inventory, (int)ItemConstants.SalonCertificate) <= 0)
             return;
 
         var oldHair = character.Equipment.GetItemBySlot((byte)EquipmentItemSlot.Hair);
@@ -902,7 +905,7 @@ public class CharacterManager(
         if (oldHair != null && oldHair.TemplateId != hairModel)
         {
             // Remove old hair item
-            oldHair._holdingContainer.RemoveItem(ItemTaskType.Invalid, oldHair, true);
+            oldHair.HoldingContainer.RemoveItem(ItemTaskType.Invalid, oldHair, true);
             // Create new hair item
             if (!character.Equipment.AcquireDefaultItemEx(ItemTaskType.Invalid, hairModel, 1, -1,
                     out var newItemsList, out var _, character.Id, (int)EquipmentItemSlot.Hair))
@@ -919,7 +922,7 @@ public class CharacterManager(
 
         character.BroadcastPacket(new SCCharacterGenderAndModelModifiedPacket(character), true);
 
-        if (character.Inventory.Bag.ConsumeItem(ItemTaskType.EditCosmetic, Item.SalonCertificate, 1, null) <= 0)
+        if (character.Inventory.Bag.ConsumeItem(ItemTaskType.EditCosmetic, (uint)ItemConstants.SalonCertificate, 1, null) <= 0)
             Logger.Error($"Could not consume salon certificate for player {character.Name} ({character.Id})!");
 
         // The client will do a salon leave request after it gets the SCCharacterGenderAndModelModifiedPacket

@@ -70,6 +70,20 @@ public partial class Character : Unit, ICharacter
             AccountManager.Instance.UpdateLabor(AccountId, value);
         }
     }
+    /// <summary>
+    /// Cached representation of Account Labor
+    /// </summary>
+    public short LocalLaborPower
+    {
+        get => _localLaborPower;
+        set
+        {
+            if (_localLaborPower == value)
+                return;
+            _localLaborPower = value;
+            AccountManager.Instance.UpdateLabor(AccountId, value);
+        }
+    }
 
     /// <summary>
     /// Last time labor got updated
@@ -157,6 +171,7 @@ public partial class Character : Unit, ICharacter
     public int RecoverableExp { get; set; }
     public DateTime Created { get; set; } // время создания персонажа
     public DateTime Updated { get; set; } // время внесения изменений
+    public byte ForceNameChange { get; set; }
 
     public uint ReturnDistrictId { get; set; }
     public uint ResurrectionDistrictId { get; set; }
@@ -166,7 +181,7 @@ public partial class Character : Unit, ICharacter
 
     public CharacterVisualOptions VisualOptions { get; set; }
 
-    public const int MaxActionSlots = 85;
+    public const int MaxActionSlots = 133; // 85 in 1.2, 121 in 3.0.3.0, 133 in 3.5.0.3
     public ActionSlot[] Slots { get; set; }
     public Inventory Inventory { get; set; }
     public byte NumInventorySlots { get; set; }
@@ -226,6 +241,7 @@ public partial class Character : Unit, ICharacter
     private bool _inParty;
     private bool _isOnline;
     private short _laborPower;
+    private short _localLaborPower;
     private DateTime _laborPowerModified;
 
     /// <summary>
@@ -2695,24 +2711,26 @@ public partial class Character : Unit, ICharacter
 
     public PacketStream Write(PacketStream stream)
     {
-        stream.Write(Id);
-        stream.Write(Name);
-        stream.Write((byte)Race);
-        stream.Write((byte)Gender);
-        stream.Write(Level);
-        stream.Write(Hp);
-        stream.Write(Mp);
-        stream.Write(Transform.ZoneId);
-        stream.Write((uint)Faction.Id);
-        stream.Write(FactionName);
-        stream.Write((uint)(Expedition?.Id ?? 0));
-        stream.Write(Family);
+        #region Character_List_Packet_6980
+        stream.Write(Id);           // id
+        stream.Write(Name);         // name
+        stream.Write((byte)Race);   // CharRace
+        stream.Write((byte)Gender); // CharGender
+        stream.Write(Level);        // level
+        stream.Write(HeirExp);      // heirExp add for 3.5.0.3 : uint in 3.5, long in 5.7
+        stream.Write(Hp);           // health
+        stream.Write(Mp);           // mana
+        stream.Write(Transform.ZoneId); // zid
+        stream.Write((uint)Faction.Id); // type
+        stream.Write(FactionName);      // factionName
+        stream.Write((uint)(Expedition?.Id ?? 0)); // type
+        stream.Write(Family);          // family
 
-        #region CharacterInfo_3EB0
+        #region CharacterInfo_6140
 
         Inventory_Equip(stream);
 
-        #endregion CharacterInfo_3EB0
+        #endregion CharacterInfo_6140
 
         stream.Write((byte)Ability1);
         stream.Write((byte)Ability2);
@@ -2722,37 +2740,41 @@ public partial class Character : Unit, ICharacter
         stream.Write(Helpers.ConvertLongY(Transform.Local.Position.Y));
         stream.Write(Transform.Local.Position.Z);
 
+        #region CustomModel
         stream.Write(ModelParams);
-        stream.Write(LaborPower);
-        stream.Write(LaborPowerModified);
-        stream.Write((short)0); // add in 3042 localLaborPower
-        stream.Write(DeadCount);
-        stream.Write(DeadTime);
-        stream.Write(RezWaitDuration);
-        stream.Write(RezTime);
-        stream.Write(RezPenaltyDuration);
-        stream.Write(LeaveTime); // lastWorldLeaveTime
-        stream.Write(Money);      // moneyAmount
-        stream.Write(0L);         // moneyAmount
-        stream.Write(CrimePoint); // current crime points (/50) short in 3+ , int in 1.2
+        #endregion CustomModel
+
+        stream.Write(LaborPower);         // laborPower
+        stream.Write(LaborPowerModified); // lastLaborPowerModified
+        stream.Write(LocalLaborPower);    // localLaborPower  add in 3042 localLaborPower, moved in 5.0
+        stream.Write(DeadCount);          // deadCount
+        stream.Write(DeadTime);           // deadTime
+        stream.Write(RezWaitDuration);    // rezWaitDuration
+        stream.Write(RezTime);            // rezTime
+        stream.Write(RezPenaltyDuration); // rezPenaltyDuration
+        stream.Write(LeaveTime);   // lastWorldLeaveTime
+        stream.Write(Money);       // moneyAmount
+        stream.Write(0L);          // moneyAmount
+        stream.Write(CrimePoint);  // current crime points (/50) short in 3+ , int in 1.2, short in 5.0
         stream.Write(CrimeRecord); // total infamy 
-        stream.Write(CrimeScore); // crimeScore for 1.2
-        stream.Write(DeleteRequestTime);
-        stream.Write(TransferRequestTime);
-        stream.Write(DeleteTime); // deleteDelay
-        stream.Write(ConsumedLaborPower);
-        stream.Write(BmPoint); // loyalty tokens
-        stream.Write(Money2);  // moneyAmount
-        stream.Write(0L);      // moneyAmount
-        stream.Write(AutoUseAAPoint);
-        stream.Write(PrevPoint);
-        stream.Write(Point);
-        stream.Write(Gift);
-        stream.Write(Updated);
-        stream.Write((byte)0); // forceNameChange ?
+        stream.Write(CrimeScore);  // crimeScore for 1.2
+        stream.Write(DeleteRequestTime); // deleteRequestedTime
+        stream.Write(TransferRequestTime); // transferRequestedTime
+        stream.Write(DeleteTime);     // deleteDelay
+        stream.Write(ConsumedLaborPower); // consumedLp
+        stream.Write(BmPoint);            // moved in 5.0
+        stream.Write(Money2);         // moneyAmount
+        stream.Write(0L);             // moneyAmount
+        stream.Write(AutoUseAAPoint); // TODO in x2game byte not bool
+        stream.Write(PrevPoint);      // prevPoint
+        stream.Write(Point);          // point
+        stream.Write(Gift);           // gift
+        stream.Write(Updated);        // updated
+        stream.Write(ForceNameChange);// forceNameChange
         stream.Write(HighAbilityRsc); // highAbilityRsc for 3.0.3.0
 
         return stream;
+        #endregion Character_List_Packet_6980
     }
 
     private void Inventory_Equip(PacketStream stream)

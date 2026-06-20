@@ -110,7 +110,7 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
     {
         if (character == null)
             return null;
-        if (!character.Inventory.GetAllItemsByTemplate([SlotType.Inventory], Item.TreasureMapWithCoordinates, -1, out var maps, out _))
+        if (!character.Inventory.GetAllItemsByTemplate([SlotType.Inventory], (int)ItemConstants.TreasureMapWithCoordinates, -1, out var maps, out _))
             return null;
         foreach (var map in maps)
         {
@@ -142,7 +142,7 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
             var treasureMap = GetTreasureMapWithCoordinatesNearbyItem(ownerUnit as Character, 5.0);
             if (treasureMap == null)
             {
-                return new UnitReqsValidationResult(SkillResultKeys.skill_urk_own_item, 0, Item.TreasureMapWithCoordinates);
+                return new UnitReqsValidationResult(SkillResultKeys.skill_urk_own_item, 0, (uint)ItemConstants.TreasureMapWithCoordinates);
             }
         }
 

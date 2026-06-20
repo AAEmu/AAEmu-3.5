@@ -11,6 +11,7 @@ using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Mails;
 using AAEmu.Game.Models.Game.Quests;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Tasks.Mails;
 using MySql.Data.MySqlClient;
 using NLog;
@@ -107,7 +108,7 @@ public class MailManager(IMailIdManager mailIdManager, INameManager nameManager,
                 try
                 {
                     var item = mail.Body.Attachments[i];
-                    item._holdingContainer.RemoveItem(ItemTaskType.Invalid, item, true);
+                    item.HoldingContainer.RemoveItem(ItemTaskType.Invalid, item, true);
                 }
                 catch (Exception ex)
                 {
@@ -401,8 +402,8 @@ public class MailManager(IMailIdManager mailIdManager, INameManager nameManager,
         {
             // use Tax Certificates as payment
             // TODO: grab these values from DB somewhere ?
-            var userTaxCount = character.Inventory.GetItemsCount(SlotType.Inventory, Item.TaxCertificate);
-            var userBoundTaxCount = character.Inventory.GetItemsCount(SlotType.Inventory, Item.BoundTaxCertificate);
+            var userTaxCount = character.Inventory.GetItemsCount(SlotType.Inventory, (int)ItemConstants.TaxCertificate);
+            var userBoundTaxCount = character.Inventory.GetItemsCount(SlotType.Inventory, (int)ItemConstants.BoundTaxCertificate);
             var totatUserTaxCount = userTaxCount + userBoundTaxCount;
             var consumedCerts = (int)Math.Ceiling(mail.Body.BillingAmount / 10000f);
 
@@ -420,7 +421,7 @@ public class MailManager(IMailIdManager mailIdManager, INameManager nameManager,
                 {
                     if (c > userBoundTaxCount)
                         c = userBoundTaxCount;
-                    character.Inventory.Bag.ConsumeItem(Models.Game.Items.Actions.ItemTaskType.Mail, Item.BoundTaxCertificate, c, null);
+                    character.Inventory.Bag.ConsumeItem(Models.Game.Items.Actions.ItemTaskType.Mail, (uint)ItemConstants.BoundTaxCertificate, c, null);
                     consumedCerts -= c;
                 }
                 c = consumedCerts;
@@ -428,7 +429,7 @@ public class MailManager(IMailIdManager mailIdManager, INameManager nameManager,
                 {
                     if (c > userTaxCount)
                         c = userTaxCount;
-                    character.Inventory.Bag.ConsumeItem(Models.Game.Items.Actions.ItemTaskType.Mail, Item.TaxCertificate, c, null);
+                    character.Inventory.Bag.ConsumeItem(Models.Game.Items.Actions.ItemTaskType.Mail, (uint)ItemConstants.TaxCertificate, c, null);
                     consumedCerts -= c;
                 }
 

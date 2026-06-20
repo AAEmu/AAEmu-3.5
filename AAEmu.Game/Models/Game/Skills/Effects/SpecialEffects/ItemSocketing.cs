@@ -64,7 +64,7 @@ public class ItemSocketing : SpecialEffectAction
 
         byte result = 0;
         var installed = false;
-        if (gemItem.TemplateId != Item.DawnStone)
+        if (gemItem.TemplateId != (uint)ItemConstants.DawnStone)
         {
             // Add LunaGem
             var gemCount = 0u;

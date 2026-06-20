@@ -4,6 +4,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj;
 using AAEmu.Game.Models.Game.Items.Actions;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units;
 using NLog;
 
@@ -154,7 +155,7 @@ public class LootPack
                     grade = GetGradeFromDistribution(lootGradeDistributionId);
 
                 // Multiply gold as needed
-                if (selectedPack.ItemId == Item.Coins)
+                if (selectedPack.ItemId == (uint)ItemConstants.Coins)
                     lootCount = (int)Math.Round(lootCount * (lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier));
 
                 items.Add((selectedPack.ItemId, lootCount, grade));
@@ -307,7 +308,7 @@ public class LootPack
                     // Roll amount
                     var countToAddNow = Random.Shared.Next(loot.MinAmount, loot.MaxAmount + 1);
                     // Item Coin
-                    if (loot.ItemId == Item.Coins)
+                    if (loot.ItemId == (uint)ItemConstants.Coins)
                         countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier);
                     // Choose grade
                     var generatedGrade = inheritedGrade ?? loot.GradeId;
@@ -413,7 +414,7 @@ public class LootPack
                         // Roll amount
                         var countToAddNow = Random.Shared.Next(loot.MinAmount, loot.MaxAmount + 1);
                         // Check for gold multiplier
-                        if (loot.ItemId == Item.Coins)
+                        if (loot.ItemId == (uint)ItemConstants.Coins)
                             countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate);
                         var generatedGrade = loot.GradeId;
                         if (group?.ItemGradeDistributionId > 0)
@@ -432,7 +433,7 @@ public class LootPack
                     // Roll amount
                     var countToAdd = Random.Shared.Next(loots[rngItem].MinAmount, loots[rngItem].MaxAmount + 1);
                     // Check for gold multiplier
-                    if (loots[rngItem].ItemId == Item.Coins)
+                    if (loots[rngItem].ItemId == (uint)ItemConstants.Coins)
                         countToAdd = (int)Math.Round(countToAdd * lootGoldRate);
                     var generatedGrade = loots[rngItem].GradeId;
                     if (group?.ItemGradeDistributionId > 0)
@@ -451,7 +452,7 @@ public class LootPack
                         // Roll amount
                         var countToAddNow = Random.Shared.Next(loot.MinAmount, loot.MaxAmount + 1);
                         // Check for gold multiplier
-                        if (loot.ItemId == Item.Coins)
+                        if (loot.ItemId == (uint)ItemConstants.Coins)
                             countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate);
                         var generatedGrade = loot.GradeId;
                         if (group?.ItemGradeDistributionId > 0)
@@ -520,7 +521,7 @@ public class LootPack
         // First check for room
         foreach (var (itemTemplateId, count, _, _) in generatedList)
         {
-            if (itemTemplateId == Item.Coins)
+            if (itemTemplateId == (uint)ItemConstants.Coins)
                 continue;
             var freeSpace = character.Inventory.Bag.SpaceLeftForItem(itemTemplateId);
             if (freeSpace < count)
@@ -538,7 +539,7 @@ public class LootPack
         // Distribute the items (and coins)
         foreach (var (itemTemplateId, count, grade, _) in generatedList)
         {
-            if (itemTemplateId == Item.Coins)
+            if (itemTemplateId == (uint)ItemConstants.Coins)
             {
                 coinCount += count;
                 //Coins can drop from multiple groups on the same item, collating.

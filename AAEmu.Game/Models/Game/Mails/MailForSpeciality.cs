@@ -1,6 +1,7 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items;
+using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Models.Game.Mails;
 
@@ -117,7 +118,7 @@ public class MailForSpeciality : BaseMail
         var payout = (int)(_itemCountBase * _tradedRate / 100f) + _itemCountBonus;
         var payoutWithInterest = (int)(payout * (100 + _interestRate) / 100f);
 
-        if (_itemToSend == Item.Coins)
+        if (_itemToSend == (uint)ItemConstants.Coins)
         {
             // Body.Text = "Placeholder coins delivery text body";
             AttachMoney(_itemCountSeller);
@@ -190,7 +191,7 @@ public class MailForSpeciality : BaseMail
         var payoutWithInterest = (int)(payout * (100 + _interestRate) / 100f);
 
         Title = TradeDeliveryTitleCrafter;
-        if (_itemToSend == Item.Coins)
+        if (_itemToSend == (uint)ItemConstants.Coins)
         {
             // Body.Text = "Placeholder coins delivery for crafter text body";
             AttachMoney(_itemCountCrafter);

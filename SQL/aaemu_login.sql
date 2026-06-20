@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS `aaemu_login`;
-USE `aaemu_login`;
+CREATE DATABASE IF NOT EXISTS `aaemu_login_3500aac`;
+USE `aaemu_login_3500aac`;
 -- ----------------------------------------------------------------------------------------------
 -- Make sure to remove the above two lines if you want use your own DB/Schema names during import
 -- This script is idempotent. It can be run multiple times without causing errors, and does not
