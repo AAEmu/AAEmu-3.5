@@ -1,4 +1,4 @@
-namespace AAEmu.Game.Models.Game.Indun;
+﻿namespace AAEmu.Game.Models.Game.Indun;
 
 public class IndunZone
 {
@@ -10,10 +10,6 @@ public class IndunZone
     /// Dungeon nam
     /// </summary>
     public string Name { get; init; }
-    /// <summary>
-    /// Dungeon comments
-    /// </summary>
-    public string Comment { get; init; }
     /// <summary>
     /// Minimum character level required to enter this dungeon
     /// </summary>
@@ -54,6 +50,8 @@ public class IndunZone
     /// Does this dungeon have a channel select
     /// </summary>
     public bool SelectChannel { get; init; }
+    public bool ExpPenalty { get; init; }
+    public bool Duel { get; init; }
 
     /// <summary>
     /// Maximum number of times a player can entry this instance (0 = can't enter).

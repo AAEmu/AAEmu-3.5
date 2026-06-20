@@ -24,8 +24,8 @@ public class GimmickGameData : Singleton<GimmickGameData>, IGameDataLoader
     {
         return _templates.GetValueOrDefault(id);
     }
-    
-    public void Load(SqliteConnection connection)
+
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _templates = [];
 

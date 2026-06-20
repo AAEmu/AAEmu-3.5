@@ -123,7 +123,7 @@ public class CharacterManager(
                         template.ResurrectionDistrictId = reader.GetUInt32("default_resurrection_district_id");
                         using (var command2 = connection.CreateCommand())
                         {
-                            command2.CommandText = "SELECT * FROM item_body_parts WHERE model_id=@model_id ORDER BY id";
+                            command2.CommandText = "SELECT * FROM item_body_parts WHERE model_id=@model_id";
                             command2.Parameters.AddWithValue("model_id", template.ModelId);
                             command2.Prepare();
                             using (var reader2 = new SQLiteWrapperReader(command2.ExecuteReader()))
@@ -132,14 +132,21 @@ public class CharacterManager(
                                 {
                                     var itemId = reader2.GetUInt32("item_id", 0);
                                     var slot = reader2.GetInt32("slot_type_id") - 23;
-                                    template.Items[slot] = itemId;
+                                    if (slot >= 0 && slot < template.Items.Length)
+                                    {
+                                        template.Items[slot] = itemId;
+                                    }
+                                    else
+                                    {
+                                        Logger.Warn($"Invalid slot {slot + 23} in item_body_parts for model_id {template.ModelId}");
+                                    }
                                 }
                             }
                         }
 
                         var templateId = (byte)(16 * (byte)template.Gender + (byte)template.Race);
-                        _templates.Add(templateId, template);
-                        temp.Add(id, templateId);
+                        _templates.TryAdd(templateId, template);
+                        temp.TryAdd(id, templateId);
                     }
                 }
             }
@@ -374,14 +381,12 @@ public class CharacterManager(
                     var step = 0;
                     while (reader.Read())
                     {
-                        var template = new ExpandExpertLimit
-                        {
-                            Id = reader.GetUInt32("id"),
-                            ExpandCount = reader.GetByte("expand_count"),
-                            LifePoint = reader.GetInt32("life_point"),
-                            ItemId = reader.GetUInt32("item_id", 0),
-                            ItemCount = reader.GetInt32("item_count")
-                        };
+                        var template = new ExpandExpertLimit();
+                        //template.Id = reader.GetUInt32("id"); // there is no such field in the database for version 3.0.3.0
+                        template.ExpandCount = reader.GetByte("expand_count");
+                        template.LifePoint = reader.GetInt32("life_point");
+                        template.ItemId = reader.GetUInt32("item_id", 0);
+                        template.ItemCount = reader.GetInt32("item_count");
                         _expandExpertLimits.Add(step++, template);
                     }
                 }

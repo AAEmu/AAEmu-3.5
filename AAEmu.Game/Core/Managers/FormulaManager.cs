@@ -140,7 +140,7 @@ public class FormulaManager : Singleton<FormulaManager>, IFormulaManager
                     {
                         var formula = new WearableFormula
                         {
-                            Id = reader.GetUInt32("id"),
+                            //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
                             Type = (WearableFormulaType)reader.GetByte("kind_id"),
                             TextFormula = reader.GetString("formula")
                         };

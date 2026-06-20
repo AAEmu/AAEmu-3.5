@@ -12,7 +12,7 @@ public class TowerDefGameData : Singleton<TowerDefGameData>, IGameDataLoader
     private Dictionary<uint, TowerDef> _towerDefs;
     private Dictionary<uint, TowerDefProg> _towerDefProgs;
 
-    public void Load(SqliteConnection connection)
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _towerDefs = [];
         _towerDefProgs = [];

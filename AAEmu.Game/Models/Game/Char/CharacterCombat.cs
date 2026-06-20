@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.UnitManagers;
@@ -260,7 +260,7 @@ public partial class Character
                 continue;
 
             var template = buff.Template;
-            if (template.Stun || template.Root || template.Sleep || template.Silence || template.Cripled)
+            if (template.Stun || template.Root || template.Sleep || template.Silence || template.Crippled)
                 assists.Add(ccCaster.Id);
         }
 

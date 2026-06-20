@@ -1,12 +1,15 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Formulas;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
+using AAEmu.Game.Models.Game.Items.ItemEnchants;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Units;
+using ItemGradeEnchantingSupport = AAEmu.Game.Models.Game.Items.ItemGradeEnchantingSupport;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
@@ -157,29 +160,30 @@ public class GradeEnchant : SpecialEffectAction
         }
     }
 
-    private static GradeEnchantResult RollRegrade(GradeTemplate gradeTemplate, Item item, bool isLucky, bool useCharm,
-        ItemGradeEnchantingSupport charmInfo)
+    private static GradeEnchantResult RollRegrade(GradeTemplate gradeTemplate, Item item, bool isLucky, bool useCharm, ItemGradeEnchantingSupport charmInfo)
     {
         var successRoll = Random.Shared.Next(0, 10000);
         var breakRoll = Random.Shared.Next(0, 10000);
         var downgradeRoll = Random.Shared.Next(0, 10000);
         var greatSuccessRoll = Random.Shared.Next(0, 10000);
+        int itemEnchantRatioGroupId = 0; // TODO : Get real group id based on item type
+        var ratio = ItemGameData.Instance.GetItemEnchantRatio(item.Grade, itemEnchantRatioGroupId);
 
         // TODO : Refactor
         var successChance = useCharm
-            ? GetCharmChance(gradeTemplate.EnchantSuccessRatio, charmInfo.AddSuccessRatio, charmInfo.AddSuccessMul)
-            : gradeTemplate.EnchantSuccessRatio;
+            ? GetCharmChance(ratio.GradeEnchantSuccessRatio, charmInfo.AddSuccessRatio, charmInfo.AddSuccessMul)
+            : ratio.GradeEnchantSuccessRatio;
         var greatSuccessChance = useCharm
-            ? GetCharmChance(gradeTemplate.EnchantGreatSuccessRatio, charmInfo.AddGreatSuccessRatio,
+            ? GetCharmChance(ratio.GradeEnchantGreatSuccessRatio, charmInfo.AddGreatSuccessRatio,
                 charmInfo.AddGreatSuccessMul)
-            : gradeTemplate.EnchantGreatSuccessRatio;
+            : ratio.GradeEnchantGreatSuccessRatio;
         var breakChance = useCharm
-            ? GetCharmChance(gradeTemplate.EnchantBreakRatio, charmInfo.AddBreakRatio, charmInfo.AddBreakMul)
-            : gradeTemplate.EnchantBreakRatio;
+            ? GetCharmChance(ratio.GradeEnchantBreakRatio, charmInfo.AddBreakRatio, charmInfo.AddBreakMul)
+            : ratio.GradeEnchantBreakRatio;
         var downgradeChance = useCharm
-            ? GetCharmChance(gradeTemplate.EnchantDowngradeRatio, charmInfo.AddDowngradeRatio,
+            ? GetCharmChance(ratio.GradeEnchantDowngradeRatio, charmInfo.AddDowngradeRatio,
                 charmInfo.AddDowngradeMul)
-            : gradeTemplate.EnchantDowngradeRatio;
+            : ratio.GradeEnchantDowngradeRatio;
 
         if (successRoll < successChance)
         {
@@ -202,7 +206,7 @@ public class GradeEnchant : SpecialEffectAction
 
         if (downgradeRoll < downgradeChance)
         {
-            var newGrade = (byte)Random.Shared.Next(gradeTemplate.EnchantDowngradeMin, gradeTemplate.EnchantDowngradeMax);
+            var newGrade = (byte)Random.Shared.Next(ratio.GradeEnchantDowngradeMin, ratio.GradeEnchantDowngradeMax);
             if (newGrade < 0)
             {
                 return GradeEnchantResult.Fail;
@@ -241,7 +245,7 @@ public class GradeEnchant : SpecialEffectAction
 
         var enchantingCost = ItemManager.Instance.GetEquipSlotEnchantingCost(slotTypeId);
 
-        var itemGrade = gradeTemplate.EnchantCost;
+        var itemGrade = 0; // TODO : Get real item grade
         var itemLevel = item.Template.Level;
         var equipSlotEnchantCost = enchantingCost.Cost;
 

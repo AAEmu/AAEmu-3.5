@@ -1,14 +1,13 @@
-﻿using AAEmu.Game.Core.Managers;
+﻿using AAEmu.Commons.Utils.DB;
+using AAEmu.Game.Core.Managers;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
-using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.StaticValues;
-using AAEmu.Commons.Utils.DB;
 using MySql.Data.MySqlClient;
 using NLog;
 
@@ -865,7 +864,7 @@ public class Buffs : IBuffs
             return false;
 
         // Only save buffs with SaveRuleId > 0
-        if (buff.Template.SaveRuleId == BuffSaveRuleType.DontSave)
+        if (buff.Template.SaveRuleId == (uint)BuffSaveRuleType.DontSave)
             return false;
 
         // Passive buffs are restored via the skill system
@@ -888,12 +887,12 @@ public class Buffs : IBuffs
 
         // Rule 2: Premium/Crafting (Cash-Shop, Mastery, Proficiency) → always save
         // Rule 3: Special (Inn/Sleep, Battlefield, Cosmetics) → always save
-        if (buff.Template.SaveRuleId >= BuffSaveRuleType.CharacterPersistent)
+        if (buff.Template.SaveRuleId >= (uint)BuffSaveRuleType.CharacterPersistent)
             return true;
 
         // Rule 1: Standard buffs — only save beneficial buffs with ≥60s duration.
         // Filters out short combat debuffs (stuns, bleeds, knockdowns).
-        if (buff.Template.SaveRuleId == BuffSaveRuleType.Normal)
+        if (buff.Template.SaveRuleId == (uint)BuffSaveRuleType.Normal)
         {
             // Don't save debuffs (combat effects should not persist through logout)
             if (buff.Template.Kind == BuffKind.Bad)
@@ -1008,15 +1007,15 @@ public class Buffs : IBuffs
                 while (reader.Read())
                 {
                     buffRows.Add((
-                        buffId:   reader.GetUInt32("buff_id"),
+                        buffId: reader.GetUInt32("buff_id"),
                         casterId: reader.GetUInt32("caster_id"),
-                        skillId:  reader.GetUInt32("skill_id"),
-                        abLevel:  reader.GetUInt32("ab_level"),
+                        skillId: reader.GetUInt32("skill_id"),
+                        abLevel: reader.GetUInt32("ab_level"),
                         duration: reader.GetInt32("duration"),
                         timeLeft: reader.GetInt32("time_left"),
-                        charge:   reader.GetInt32("charge"),
+                        charge: reader.GetInt32("charge"),
                         realTime: reader.GetBoolean("real_time"),
-                        savedAt:  reader.GetDateTime("saved_at")
+                        savedAt: reader.GetDateTime("saved_at")
                     ));
                 }
 
@@ -1066,9 +1065,9 @@ public class Buffs : IBuffs
                     var buff = new Buff(character, character, casterObj,
                         buffTemplate, null, DateTime.UtcNow)
                     {
-                        AbLevel  = row.abLevel,
+                        AbLevel = row.abLevel,
                         Duration = remainingMs,
-                        Charge   = row.charge > 0 ? row.charge : buffTemplate.InitMinCharge
+                        Charge = row.charge > 0 ? row.charge : buffTemplate.InitMinCharge
                     };
 
                     AddBuff(buff, forcedDuration: remainingMs);
@@ -1115,8 +1114,7 @@ public class Buffs : IBuffs
 
             try
             {
-                TaskManager.Instance.RemoveTasks(task =>
-                {
+                TaskManager.Instance.RemoveTasks(task => {
                     if (task is AAEmu.Game.Models.Tasks.Skills.DispelTask dt
                         && dt.Effect.Target is Buff b)
                         return b == buff;

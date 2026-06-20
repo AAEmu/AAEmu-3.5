@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Packets.G2C;
@@ -160,7 +160,7 @@ public class FloatingSkillController : SkillController
         }
 
         if (SourceBuffId == 0 && Owner.Buffs.HasEffectsMatchingCondition(e =>
-                e.Template.Stun || e.Template.Sleep || e.Template.Knockdown))
+                e.Template.Stun || e.Template.Sleep || e.Template.KnockDown))
         {
             Logger.Debug("FloatingSC.Tick: owner={0} CC'd (no source buff), ending", Owner.ObjId);
             End();

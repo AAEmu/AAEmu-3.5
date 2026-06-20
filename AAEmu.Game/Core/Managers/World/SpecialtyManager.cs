@@ -101,15 +101,17 @@ public class SpecialtyManager : Singleton<SpecialtyManager>, ISpecialtyManager
                 {
                     while (reader.Read())
                     {
-                        var template = new SpecialtyNpc
-                        {
-                            Id = reader.GetUInt32("id"),
-                            Name = reader.GetString("name"),
-                            NpcId = reader.GetUInt32("npc_id"),
-                            SpecialtyBundleId = reader.GetUInt32("specialty_bundle_id")
-                        };
+                        var template = new SpecialtyNpc();
+                        //template.Id = reader.GetUInt32("id"); // there is no such field in the database for version 3.0.3.0
+                        //template.Name = reader.GetString("name"); // there is no such field in the database for version 3.0.3.0
+                        template.NpcId = reader.GetUInt32("npc_id");
+                        template.SpecialtyBundleId = reader.GetUInt32("specialty_bundle_id");
 
-                        _specialtyNpc.Add(template.NpcId, template);
+                        // TODO есть повторы
+                        // NpcId    SpecialtyBundleId
+                        // 15086	25
+                        // 15086	8000009
+                        _specialtyNpc.TryAdd(template.NpcId, template);
                     }
                 }
             }

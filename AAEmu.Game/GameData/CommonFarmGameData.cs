@@ -15,7 +15,7 @@ public class CommonFarmGameData : Singleton<CommonFarmGameData>, IGameDataLoader
     private Dictionary<uint, FarmGroupDoodads> _farmGroupDoodads;
     private Dictionary<uint, DoodadGroups> _doodadGroups;
 
-    public void Load(SqliteConnection connection)
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _farmGroup = [];
         _farmGroupDoodads = [];

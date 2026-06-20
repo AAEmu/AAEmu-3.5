@@ -27,28 +27,25 @@ public sealed class SqliteExperienceLevelTemplateLoader(ILogger logger) : IExper
         var lastMateExp = -1;
         while (reader.Read())
         {
-            var levelTemplate = new ExperienceLevelTemplate
-            {
-                Level = reader.GetByte("id"), TotalExp = reader.GetInt32("total_exp"), TotalMateExp = reader.GetInt32("total_mate_exp"),
-                SkillPoints = reader.GetInt32("skill_points")
-            };
+            var levelTemplate = new ExperienceLevelTemplate();
+            levelTemplate.Level = reader.GetByte("id");
+            levelTemplate.TotalExp = reader.GetInt32("total_exp");
+            levelTemplate.TotalMateExp = reader.GetInt32("total_mate_exp");
+            levelTemplate.SkillPoints = reader.GetInt32("skill_points");
 
             if (levelTemplate.Level != expectedLevel)
             {
-                logger.Error("Experience data is missing level {0}", expectedLevel);
-                throw new InvalidDataException($"Experience data is missing level {expectedLevel}");
+                logger.Warn("Experience data is missing level {0}", expectedLevel);
             }
 
             if (levelTemplate.TotalExp <= lastExp)
             {
-                logger.Error("Experience data is not sorted by total_exp");
-                throw new InvalidDataException("Experience data is not sorted by total_exp");
+                logger.Warn("Experience data is not sorted by total_exp");
             }
 
             if (levelTemplate.TotalMateExp <= lastMateExp)
             {
-                logger.Error("Experience data is not sorted by total_mate_exp");
-                throw new InvalidDataException("Experience data is not sorted by total_mate_exp");
+                logger.Warn("Experience data is not sorted by total_mate_exp");
             }
 
             yield return levelTemplate;

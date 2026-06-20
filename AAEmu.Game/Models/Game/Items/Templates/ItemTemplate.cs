@@ -29,7 +29,7 @@ public class ItemTemplate
     public int HonorPrice { get; set; }
     public int ExpAbsLifetime { get; set; }
     public int ExpOnlineLifetime { get; set; }
-    public DateTime ExpDate { get; set; }
+    public double ExpDate { get; set; }
     public int LevelRequirement { get; set; }
     public int AuctionCategoryA { get; set; }
     public int AuctionCategoryB { get; set; }
@@ -40,10 +40,13 @@ public class ItemTemplate
     public int LivingPointPrice { get; set; }
     public byte CharGender { get; set; }
     public uint SpecialtyZoneId { get; set; }
-    public AuctionSettings AuctionSettings { get; set; } = new(0, 0, 0/*, 0, true*/); // Инициализация AuctionSettings
+    public AuctionSettings AuctionSettings { get; set; }
 
     // Helpers
     public string searchString { get; set; }
 
-    /*, 0, true*/
+    public ItemTemplate()
+    {
+        AuctionSettings = new AuctionSettings(0, 0, 0, 0, true); // Инициализация AuctionSettings
+    }
 }

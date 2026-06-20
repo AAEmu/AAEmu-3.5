@@ -7,6 +7,12 @@ namespace AAEmu.Game.Models.Game.Skills.Plots;
 public class PlotEventTemplate
 {
     public uint Id { get; set; }
+    public bool AoeDiminishing { get; set; }
+    public string Name { get; set; }
+    public bool OnlyDieUnit { get; set; }
+    public bool OnlyMyPet { get; set; }
+    public bool OnlyMySlave { get; set; }
+    public bool OnlyPetOwner { get; set; }
     public uint PlotId { get; set; }
     public int Position { get; set; }
     public uint SourceUpdateMethodId { get; set; }
@@ -21,13 +27,12 @@ public class PlotEventTemplate
     public int TargetUpdateMethodParam8 { get; set; }
     public int TargetUpdateMethodParam9 { get; set; }
     public int Tickets { get; set; }
-    public bool AoeDiminishing { get; set; }
     public LinkedList<PlotEventCondition> Conditions { get; set; } = [];
     public LinkedList<PlotAoeCondition> AoeConditions { get; set; } = [];
     public LinkedList<PlotEventEffect> Effects { get; set; } = [];
     public LinkedList<PlotNextEvent> NextEvents { get; set; } = [];
 
-    private bool _computedHasSpecialEffects = false;
+    private bool _computedHasSpecialEffects;
     private bool _hasSpecialEffects;
 
     // TODO : Find better way of doing this. Tried doing it in the PlotManager, but SkillManager had not loaded at the time. Could use an event on SkillManager load like it is done for trade packs iirc.

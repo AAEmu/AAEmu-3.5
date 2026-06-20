@@ -779,7 +779,7 @@ public static class SCOffsets
     public const ushort SCSkillUpgradedPacket = 0xfff;
     public const ushort SCTrialCancledPacket = 0xfff;
     public const ushort SCExpeditionRoleChangedPacket = 0xfff;
-    public const ushort SCFactionListPacket = 0xfff; // SCSystemFactionListPacket
+    public const ushort SCFactionListPacket = 0x296; // SCSystemFactionListPacket
     public const ushort SCItemUccDataChangedPacket = 0xfff; // SCItemUccChangedPacket
     public const ushort SCCofferContentsUpdatePacket = 0xfff; // SCCofferContentsPacket
     public const ushort SCResultRestrictCheckPacket = 0x281;

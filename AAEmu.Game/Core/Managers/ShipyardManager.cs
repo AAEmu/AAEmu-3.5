@@ -31,7 +31,7 @@ public class ShipyardManager(ITaskManager taskManager, IObjectIdManager objectId
 
     private void ShipyardTickStart()
     {
-        Logger.Warn("ShipyardUpdateInfoTick: Started");
+        Logger.Info("ShipyardUpdateInfoTick: Started");
 
         var shipyardTickStartTask = new ShipyardTickTask();
         taskManager.Schedule(shipyardTickStartTask, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));

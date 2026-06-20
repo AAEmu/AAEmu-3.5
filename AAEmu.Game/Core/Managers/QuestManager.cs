@@ -493,7 +493,7 @@ public partial class QuestManager(ITaskManager taskManager, IZoneManager zoneMan
                 RestartOnFail = reader.GetBoolean("restart_on_fail", true),
                 ChapterIdx = reader.GetUInt32("chapter_idx", 0),
                 QuestIdx = reader.GetUInt32("quest_idx", 0),
-                MilestoneId = reader.GetUInt32("milestone_id", 0),
+                //MilestoneId = reader.GetUInt32("milestone_id", 0), // there is no such field in the database for version 3.0.3.0
                 LetItDone = reader.GetBoolean("let_it_done", true),
                 DetailId = (QuestDetail)reader.GetUInt32("detail_id"),
                 ZoneId = reader.GetUInt32("zone_id"),

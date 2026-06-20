@@ -675,6 +675,9 @@ public class ItemContainer
             }
         }
 
+        // DateTime.UtcNow кэшируется один раз (устранены вызовы внутри цикла)
+        var now = DateTime.UtcNow;
+        var defaultWorldId = (byte)WorldManager.DefaultWorldTemplateId;
         var syncPackets = new List<GamePacket>();
         while (amountToAdd > 0)
         {
@@ -690,9 +693,7 @@ public class ItemContainer
             if (crafterId > 0 && newItem.Template.MaxCount == 1)
             {
                 newItem.MadeUnitId = crafterId;
-                newItem.WorldId =
-                    (byte)WorldManager
-                        .DefaultWorldTemplateId; // TODO: proper world id handling, this should actually be the ServerId
+                newItem.WorldId = defaultWorldId;
             }
 
             amountToAdd -= addAmount;
@@ -705,7 +706,7 @@ public class ItemContainer
             // Timers
             if (newItem.Template.ExpAbsLifetime > 0)
             {
-                syncPackets.Add(ItemManager.SetItemExpirationTime(newItem, DateTime.UtcNow.AddMinutes(newItem.Template.ExpAbsLifetime)));
+                syncPackets.Add(ItemManager.SetItemExpirationTime(newItem, now.AddMinutes(newItem.Template.ExpAbsLifetime)));
             }
 
             if (newItem.Template.ExpOnlineLifetime > 0)
@@ -713,9 +714,9 @@ public class ItemContainer
                 syncPackets.Add(ItemManager.SetItemOnlineExpirationTime(newItem, newItem.Template.ExpOnlineLifetime));
             }
 
-            if (newItem.Template.ExpDate > DateTime.MinValue)
+            if (newItem.Template.ExpDate > 0)
             {
-                syncPackets.Add(ItemManager.SetItemExpirationTime(newItem, newItem.Template.ExpDate));
+                syncPackets.Add(ItemManager.SetItemExpirationTime(newItem, now.AddMinutes(newItem.Template.ExpDate)));
             }
 
             if (newItem is EquipItem equipItem && newItem.Template is EquipItemTemplate equipItemTemplate)

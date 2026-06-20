@@ -80,12 +80,13 @@ public class FactionManager(ILocalizationManager localizationManager) : Singleto
                             Id2 = (FactionsEnum)reader.GetUInt32("faction2_id"),
                             State = (RelationState)reader.GetByte("state_id")
                         };
+
                         _relations.Add(relation);
 
-                        var faction = _systemFactions[relation.Id];
-                        faction.Relations.Add(relation.Id2, relation);
-                        faction = _systemFactions[relation.Id2];
-                        faction.Relations.Add(relation.Id, relation);
+                        var faction1 = _systemFactions[relation.Id];
+                        var faction2 = _systemFactions[relation.Id2];
+                        faction1.Relations.TryAdd(relation.Id2, relation);
+                        faction2.Relations.TryAdd(relation.Id, relation);
                     }
                 }
             }
@@ -103,12 +104,9 @@ public class FactionManager(ILocalizationManager localizationManager) : Singleto
         else
         {
             var factions = _systemFactions.Values.ToArray();
-            for (var i = 0; i < factions.Length; i += 20)
-            {
-                var temp = new SystemFaction[factions.Length - i <= 20 ? factions.Length - i : 20];
-                Array.Copy(factions, i, temp, 0, temp.Length);
-                character.SendPacket(new SCFactionListPacket(temp));
-            }
+            var dividedArrays = Helpers.SplitArray(factions, 20); // Разделяем массив на массивы по 20 значений
+            foreach (var systemFaction in dividedArrays)
+                character.SendPacket(new SCFactionListPacket(systemFaction));
         }
     }
 
@@ -119,12 +117,9 @@ public class FactionManager(ILocalizationManager localizationManager) : Singleto
         else
         {
             var factions = _relations.ToArray();
-            for (var i = 0; i < factions.Length; i += 200)
-            {
-                var temp = new FactionRelation[factions.Length - i <= 200 ? factions.Length - i : 200];
-                Array.Copy(factions, i, temp, 0, temp.Length);
-                character.SendPacket(new SCFactionRelationListPacket(temp));
-            }
+            var dividedArrays = Helpers.SplitArray(factions, 200); // Разделяем массив на массивы по 200 значений
+            foreach (var fr in dividedArrays)
+                character.SendPacket(new SCFactionRelationListPacket(fr));
         }
     }
 }

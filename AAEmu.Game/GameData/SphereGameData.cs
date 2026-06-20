@@ -28,7 +28,7 @@ public class SphereGameData : Singleton<SphereGameData>, IGameDataLoader
     private Dictionary<uint, SphereAcceptQuests> _sphereAcceptQuests;
     private Dictionary<uint, SphereAcceptQuestQuests> _sphereAcceptQuestQuests;
 
-    public void Load(SqliteConnection connection)
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _spheres = [];
         _sphereQuests = [];
@@ -63,9 +63,9 @@ public class SphereGameData : Singleton<SphereGameData>, IGameDataLoader
                         CategoryId = reader.GetUInt32("category_id"),
                         OrUnitReqs = reader.GetBoolean("or_unit_reqs"),
                         IsPersonalMsg = reader.GetBoolean("is_personal_msg"),
-                        MilestoneId = reader.GetUInt32("milestone_id"),
-                        NameTr = reader.GetBoolean("name_tr"),
-                        TeamMsgTr = reader.GetBoolean("team_msg_tr")
+                        //MilestoneId = reader.GetUInt32("milestone_id"), // there is no such field in the database for version 3.0.3.0
+                        //NameTr = reader.GetBoolean("name_tr"), // there is no such field in the database for version 3.0.3.0
+                        //TeamMsgTr = reader.GetBoolean("team_msg_tr") // there is no such field in the database for version 3.0.3.0
                     };
 
                     _spheres.Add(template.Id, template);

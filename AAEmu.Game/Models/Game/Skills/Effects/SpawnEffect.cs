@@ -9,11 +9,15 @@ namespace AAEmu.Game.Models.Game.Skills.Effects;
 
 public class SpawnEffect : EffectTemplate
 {
+    // update to 3.5.0.3
     public BaseUnitType OwnerTypeId { get; set; }
     public uint SubType { get; set; }
     public uint PosDirId { get; set; }
-    public float PosAngle { get; set; }
-    public float PosDistance { get; set; }
+    //public float PosAngle { get; set; } // there is no such field in the database for version 3.0.3.0
+    public float PosAngleMax { get; set; }
+    public float PosAngleMin { get; set; }
+    public float PosDistanceMax { get; set; }
+    public float PosDistanceMin { get; set; }
     public uint OriDirId { get; set; }
     public float OriAngle { get; set; }
     public bool UseSummonerFaction { get; set; }
@@ -29,6 +33,16 @@ public class SpawnEffect : EffectTemplate
         CompressedGamePackets packetBuilder = null)
     {
         Logger.Trace($"SpawnEffect: OwnerTypeId={OwnerTypeId}, SubType={SubType}, UseSummonerFaction={UseSummonerFaction}, LifeTime={LifeTime}");
+
+        var PosAngle = (float)(PosAngleMin + (PosAngleMax - PosAngleMin) * Random.Shared.NextDouble());
+
+        if (PosDistanceMin == 0 || PosDistanceMax == 0)
+        {
+            PosDistanceMin = 2;
+            PosDistanceMax = 3;
+        }
+
+        var PosDistance = (float)(PosDistanceMin + (PosDistanceMax - PosDistanceMin) * Random.Shared.NextDouble());
 
         switch (OwnerTypeId)
         {

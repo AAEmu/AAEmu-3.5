@@ -1,6 +1,7 @@
 ﻿using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.GameData.Framework;
+using AAEmu.Game.Models.Game.Items.ItemEnchants;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Utils.DB;
 using Microsoft.Data.Sqlite;
@@ -20,7 +21,7 @@ public class ItemGameData : Singleton<ItemGameData>, IGameDataLoader
         return null;
     }
 
-    public void Load(SqliteConnection connection)
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _itemGradeBuffs = [];
 
@@ -49,5 +50,10 @@ public class ItemGameData : Singleton<ItemGameData>, IGameDataLoader
     public void PostLoad()
     {
 
+    }
+
+    public ItemEnchantRatio GetItemEnchantRatio(byte itemGrade, int itemEnchantRatioGroupId)
+    {
+        throw new NotImplementedException();
     }
 }

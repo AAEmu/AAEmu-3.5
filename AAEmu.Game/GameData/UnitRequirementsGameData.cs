@@ -29,7 +29,7 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
     /// </summary>
     private Dictionary<string, List<UnitReqs>> _unitReqsByOwnerType { get; set; }
 
-    public void Load(SqliteConnection connection)
+    public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _unitReqs = [];
         _unitReqsByOwnerType = [];
@@ -45,7 +45,9 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
         {
             var t = new UnitReqs
             {
-                Id = reader.GetUInt32("id"), OwnerId = reader.GetUInt32("owner_id"), OwnerType = reader.GetString("owner_type"),
+                //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
+                OwnerId = reader.GetUInt32("owner_id"),
+                OwnerType = reader.GetString("owner_type"),
                 KindType = (UnitReqsKindType)reader.GetUInt32("kind_id"),
                 Value1 = reader.GetUInt32("value1"),
                 Value2 = reader.GetUInt32("value2")

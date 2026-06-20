@@ -550,12 +550,9 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         if (_expeditions.Values.Count > 0)
         {
             var expeditions = _expeditions.Values.ToArray();
-            for (var i = 0; i < expeditions.Length; i += 20)
-            {
-                var temp = new SystemFaction[expeditions.Length - i <= 20 ? expeditions.Length - i : 20];
-                Array.Copy(expeditions, i, temp, 0, temp.Length);
-                character.SendPacket(new SCFactionListPacket(temp));
-            }
+            var dividedArrays = Helpers.SplitArray(expeditions, 20); // Разделяем массив на массивы по 20 значений
+            foreach (SystemFaction[] expedition in dividedArrays)
+                character.SendPacket(new SCFactionListPacket(expedition));
         }
 
         character.SendPacket(new SCExpeditionRolePolicyListPacket([]));

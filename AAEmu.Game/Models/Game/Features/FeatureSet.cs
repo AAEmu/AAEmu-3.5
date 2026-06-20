@@ -5,9 +5,10 @@ namespace AAEmu.Game.Models.Game.Features;
 
 public class FeatureSet
 {
-    //default fsets
-    //private byte[] _fset = { 0x7F, 0x37, 0x34, 0x0F, 0x79, 0x08, 0x7D, 0xCB, 0x37, 0x65, 0x03 };
+    // default fsets
+    // private byte[] _fset = [ 0x7F, 0x37, 0x34, 0x0F, 0x79, 0x08, 0x7D, 0xCB, 0x37, 0x65, 0x03 ];
     // for 1.2 - private readonly byte[] _fset = [0x11, 0x37, 0x0F, 0x0F, 0x79, 0x69, 0xb3, 0x8d, 0x32, 0x0c, 0x1a];
+    // 3.5.0.3 AAClassic
     private readonly byte[] _fset = [
         0x7F, 0x37, 0x1E, 0x32, 0x79, 0x09,
         0x7D, 0xCB, 0x37, 0x4C, 0x03, 0xD6, 0xE4, 0xC6, 0x74, 0x1E, 0x02, 0xE4, 0xED, 0x4F, 0xBB, 0xDD,
@@ -19,6 +20,7 @@ public class FeatureSet
 
     public FeatureSet()
     {
+        Set(Feature.dwarfWarborn, true);
         //You can set some values here or alter the default fset
 
         // Initialization of fset moved to FeatureManager
@@ -49,7 +51,7 @@ public class FeatureSet
     public bool Check(Feature feature)
     {
 
-        (var byteIndex, var bitIndex) = GetIndexes(feature);
+        var (byteIndex, bitIndex) = GetIndexes(feature);
 
         try
         {
@@ -60,7 +62,7 @@ public class FeatureSet
 
     public bool Set(Feature feature, bool enabled)
     {
-        (var byteIndex, var bitIndex) = GetIndexes(feature);
+        var (byteIndex, bitIndex) = GetIndexes(feature);
 
         try
         {

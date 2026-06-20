@@ -6,13 +6,15 @@ namespace AAEmu.Game.Models.Game.Skills.Plots;
 
 public class PlotEventCondition
 {
+    public int Id { get; set; }
     public PlotCondition Condition { get; set; }
+    public uint ConditionId { get; set; }
+    public PlotEventTemplate Event { get; set; }
+    public uint EventId { get; set; }
+    public bool NotifyFailure { get; set; }
     public int Position { get; set; }
     public PlotEffectSource SourceId { get; set; }
     public PlotEffectTarget TargetId { get; set; }
-    //public bool NotifyFailure { get; set; }
-
-    // TODO 1.2 // public bool NotifyFailure { get; set; }
 
     public bool CheckCondition(PlotState state, PlotTargetInfo targetInfo)
     {
@@ -20,7 +22,7 @@ public class PlotEventCondition
             return true;
 
         //if (NotifyFailure)
-        ;//Maybe do something here?
+        //Maybe do something here?
 
         return false;
 

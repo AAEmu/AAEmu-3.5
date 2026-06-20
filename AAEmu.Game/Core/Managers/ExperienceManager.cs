@@ -17,6 +17,7 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     private readonly List<int> _expByLevel = [];
     /// <summary>Sorted list of total mate experience amounts from lowest level to highest level, indexed by zero-based mate level (level 1 is index 0).</summary>
     private readonly List<int> _mateExpByLevel = [];
+    private Dictionary<byte, ExperienceHeirLevelTemplate> _heirLevels = new();
 
     // TODO: Put this in the configuration files
     /// <summary>Artificial level cap for players. If database contains more levels than this, they will be ignored.</summary>
@@ -28,11 +29,14 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     /// Gets the maximum level for players.
     /// </summary>
     public byte MaxPlayerLevel { get; private set; }
+    public static byte MaxPlayerHeirLevel => 7; // 7 in 3+, 34 in 5+
 
     /// <summary>
     /// Gets the maximum level for mates (mounts, pets).
     /// </summary>
     public byte MaxMateLevel { get; private set; }
+
+    #region Level
 
     /// <summary>
     /// Gets the total experience required to reach the given level.
@@ -152,6 +156,7 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     /// <returns>The total number of skill points for the given level, or 0 if the level is invalid.</returns>
     public int GetSkillPointsForLevel(byte level)
         => GetTemplateForLevel(level)?.SkillPoints ?? 0;
+    #endregion Level
 
     /// <summary>
     /// Loads the experience level templates from the default loader (Sqlite).

@@ -16,8 +16,10 @@ public class PlotCondition
 {
     protected static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
     public uint Id { get; set; }
-    public bool NotCondition { get; set; }
     public PlotConditionType Kind { get; set; }
+    public int KindId { get; set; }
+    public bool NotCondition { get; set; }
+    public bool OrUnitReqs { get; set; }
     public int Param1 { get; set; }
     public int Param2 { get; set; }
     public int Param3 { get; set; }
@@ -39,7 +41,6 @@ public class PlotCondition
             PlotConditionType.Level => ConditionLevel(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Relation => ConditionRelation(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Direction => ConditionDirection(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
-            // 4 does not exist or is unused
             PlotConditionType.BuffTag => ConditionBuffTag(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.WeaponEquipStatus => ConditionWeaponEquipStatus(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Chance => ConditionChance(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
@@ -53,6 +54,9 @@ public class PlotCondition
             PlotConditionType.Stealth => ConditionStealth(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Visible => ConditionVisible(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.ABLevel => ConditionAbLevel(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
+            PlotConditionType.CastingUseable => ConditionCastingUseable(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
+            PlotConditionType.HighAbilityResource => ConditionHighAbilityResource(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
+            PlotConditionType.UnitReqs => ConditionUnitReqs(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             _ => true
         };
 
@@ -230,7 +234,7 @@ public class PlotCondition
         var variableValue = casterUnit.ActivePlotState.Variables[variableIndex];
         // There is a high chance this is not implemented correctly ...
         // If refactoring. See SpecialEffect -> SetVariable as well
-        
+
         return CompareWithOperator(variableValue, operation, compareValue);
     }
 
@@ -282,22 +286,40 @@ public class PlotCondition
     {
         if (target != null)
         {
-            return target.Buffs.CheckBuffTag((uint)TagsEnum.Stealth) == false && target.IsVisible;    
+            return target.Buffs.CheckBuffTag((uint)TagsEnum.Stealth) == false && target.IsVisible;
         }
         return false;
     }
-    private static bool ConditionAbLevel(BaseUnit caster, SkillCaster casterCaster, BaseUnit target,
-        SkillCastTarget targetCaster, SkillObject skillObject, int abilityType, int minimumLevel, int maximumLevel)
+
+    // 17
+    private static bool ConditionAbLevel(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int abilityType, int minimumLevel, int maximumLevel)
     {
         if (caster is Character character)
         {
             var ability = character.Abilities.Abilities[(AbilityType)abilityType];
             int abLevel = ExperienceManager.Instance.GetLevelFromExp(ability.Exp, out _);
+
             return abLevel >= minimumLevel && abLevel <= maximumLevel;
         }
-        
-        // Should this ever not be a character using this condition?
+
+        //Should this ever not be a character using this condition?
         return false;
+    }
+
+    // 18
+    private bool ConditionCastingUseable(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
+    {
+        return true; // TODO придумать, что тут надо сделать
+    }
+    // 19
+    private bool ConditionHighAbilityResource(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
+    {
+        return true; // TODO придумать, что тут надо сделать
+    }
+    // 20
+    private bool ConditionUnitReqs(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
+    {
+        return true; // TODO придумать, что тут надо сделать
     }
 
     /// <summary>

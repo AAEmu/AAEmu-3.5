@@ -1167,7 +1167,7 @@ public partial class Npc : Unit
                 e.Template.Stun
                 || e.Template.Sleep
                 || e.Template.Root
-                || e.Template.Knockdown
+                || e.Template.KnockDown
                 || e.Template.Fastened)
             || Ai.Owner.IsDead)
         {

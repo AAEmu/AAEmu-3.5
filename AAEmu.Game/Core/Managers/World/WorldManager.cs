@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using System.Xml;
@@ -316,9 +316,10 @@ public class WorldManager(
         #endregion
 
         #region LoadServerDB
+        using (var connection2 = SQLite.CreateConnection("Data", "compact.server.table.sqlite3"))
         using (var connection = SQLite.CreateConnection())
         {
-            using (var command = connection.CreateCommand())
+            using (var command = connection2.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM wi_group_wis";
                 command.Prepare();

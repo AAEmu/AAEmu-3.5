@@ -18,6 +18,7 @@ public class NpcTemplate
     public NpcTemplateType NpcTemplateId { get; set; }
     public uint ModelId { get; set; }
     public FactionsEnum FactionId { get; set; }
+    public uint HeirLevel { get; set; }
     public bool SkillTrainer { get; set; }
     public int AiFileId { get; set; }
     public bool Merchant { get; set; }

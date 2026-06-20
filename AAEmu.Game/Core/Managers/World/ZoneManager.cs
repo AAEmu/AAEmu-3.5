@@ -76,7 +76,9 @@ public class ZoneManager(IWorldManager worldManager) : Singleton<ZoneManager>, I
                     {
                         var template = new Zone
                         {
-                            Id = reader.GetUInt32("id"), Name = (string)reader.GetValue("name"), ZoneKey = reader.GetUInt32("zone_key"),
+                            Id = reader.GetUInt32("id"),
+                            Name = (string)reader.GetValue("name"),
+                            ZoneKey = reader.GetUInt32("zone_key"),
                             GroupId = reader.GetUInt32("group_id", 0),
                             Closed = reader.GetBoolean("closed", true),
                             FactionId = (FactionsEnum)reader.GetUInt32("faction_id", 0),
@@ -263,6 +265,13 @@ public class ZoneManager(IWorldManager worldManager) : Singleton<ZoneManager>, I
             doodad.Transform.ZoneId = zoneId;
         }
         var zone = GetZoneByKey(doodad.Transform.ZoneId);
+
+        // If zone lookup failed, assume no matching climate
+        if (zone == null)
+        {
+            // Optionally: log debug about missing zone id
+            return false;
+        }
 
         // Get the climates list for this zone
         var zoneClimates = GetClimatesByZone(zone);

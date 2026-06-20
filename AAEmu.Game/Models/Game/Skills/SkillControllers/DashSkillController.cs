@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Packets.G2C;
@@ -109,7 +109,7 @@ public class DashSkillController : SkillController
 
             if (Owner.Buffs.HasEffectsMatchingCondition(e =>
                     e.Template.Stun || e.Template.Sleep || e.Template.Root
-                    || e.Template.Knockdown || e.Template.Fastened)
+                    || e.Template.KnockDown || e.Template.Fastened)
                 || Owner.IsDead)
             {
                 End();

@@ -8,7 +8,7 @@ public class SCFactionListPacket : GamePacket
 {
     private readonly SystemFaction[] _factions;
 
-    public SCFactionListPacket() : base(0x007, 1)
+    public SCFactionListPacket() : base(SCOffsets.SCFactionListPacket, 5)
     {
         _factions = [];
     }
