@@ -2103,7 +2103,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
         var item = GetItemByItemId(itemId);
         if (item == null)
             return false;
-        if (item.SlotType != slotType || item.Slot != slot)
+        if ((item.SlotType != slotType) || (item.Slot != slot))
         {
             Logger.Warn($"UnwrapItem: Requested item position does not match up for {itemId} of user {character.Name}");
             return false;
@@ -2112,9 +2112,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
         item.SetFlag(ItemFlag.Unpacked);
         if (item.Template.BindType == ItemBindType.BindOnUnpack)
             item.SetFlag(ItemFlag.SoulBound);
-        var updateItemTask = new ItemUpdateSecurity(item, (byte)item.ItemFlags, item.HasFlag(ItemFlag.Secure), item.HasFlag(ItemFlag.Secure), item.ItemFlags.HasFlag(ItemFlag.Unpacked));
+        var updateItemTask = new ItemUpdateSecurity(item, (byte)item.ItemFlags, 0, item.HasFlag(ItemFlag.Secure), item.HasFlag(ItemFlag.Secure), item.ItemFlags.HasFlag(ItemFlag.Unpacked));
         character.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.ItemTaskThistimeUnpack, updateItemTask, []));
-        if (item.Template is EquipItemTemplate { ChargeLifetime: > 0 })
+        if ((item.Template is EquipItemTemplate { ChargeLifetime: > 0 }))
             character.SendPacket(new SCSyncItemLifespanPacket(true, item.Id, item.TemplateId, item.UnpackTime));
         return true;
     }

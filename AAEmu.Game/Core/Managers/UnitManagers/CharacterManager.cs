@@ -44,7 +44,7 @@ public class CharacterManager(
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     private readonly Dictionary<byte, CharacterTemplate> _templates = [];
-    private readonly Dictionary<byte, AbilityItems> _abilityItems = [];
+    private readonly Dictionary<AbilityType, AbilityItems> _abilityItems = [];
     private readonly Dictionary<int, List<Expand>> _expands = [];
     private readonly Dictionary<uint, AppellationTemplate> _appellations = [];
     private readonly Dictionary<uint, ActabilityTemplate> _actabilities = [];
@@ -175,7 +175,7 @@ public class CharacterManager(
                 {
                     while (reader.Read())
                     {
-                        var ability = reader.GetByte("ability_id");
+                        var ability = (AbilityType)reader.GetByte("ability_id");
                         var item = new AbilitySupplyItem
                         {
                             Id = reader.GetUInt32("item_id"),
@@ -184,7 +184,7 @@ public class CharacterManager(
                         };
 
                         if (!_abilityItems.ContainsKey(ability))
-                            _abilityItems.Add(ability, new AbilityItems());
+                            _abilityItems.Add(ability, new AbilityItems { Items = new EquipItemsTemplate() });
                         _abilityItems[ability].Supplies.Add(item);
                     }
                 }
@@ -198,7 +198,7 @@ public class CharacterManager(
                 {
                     while (reader.Read())
                     {
-                        var ability = reader.GetByte("ability_id");
+                        var ability = (AbilityType)reader.GetByte("ability_id");
                         var template = new AbilityItems { Ability = ability, Items = new EquipItemsTemplate() };
                         var clothPack = reader.GetUInt32("newbie_cloth_pack_id", 0);
                         var weaponPack = reader.GetUInt32("newbie_weapon_pack_id", 0);
@@ -266,7 +266,16 @@ public class CharacterManager(
                             }
                         }
 
-                        _abilityItems.Add(template.Ability, template);
+                        if (_abilityItems.ContainsKey(template.Ability))
+                        {
+                            // Merge loaded equip template into existing entry (keep any previously loaded Supplies)
+                            var existing = _abilityItems[template.Ability];
+                            existing.Items = template.Items ?? new EquipItemsTemplate();
+                        }
+                        else
+                        {
+                            _abilityItems.Add(template.Ability, template);
+                        }
                     }
                 }
             }
@@ -504,7 +513,7 @@ public class CharacterManager(
         for (var i = 0; i < character.Slots.Length; i++)
             character.Slots[i] = new ActionSlot();
 
-        var items = _abilityItems[(byte)ability1];
+        var items = _abilityItems[ability1];
         SetEquipItemTemplate(character.Inventory, items.Items.Headgear, EquipmentItemSlot.Head, items.Items.HeadgearGrade);
         SetEquipItemTemplate(character.Inventory, items.Items.Necklace, EquipmentItemSlot.Neck, items.Items.NecklaceGrade);
         SetEquipItemTemplate(character.Inventory, items.Items.Shirt, EquipmentItemSlot.Chest, items.Items.ShirtGrade);

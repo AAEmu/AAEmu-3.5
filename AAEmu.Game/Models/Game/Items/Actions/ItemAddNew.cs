@@ -8,8 +8,9 @@ public class ItemAddNew : ItemTask
 
     public ItemAddNew(Item item)
     {
-        _item = item;
         _type = ItemAction.ChangeOwner; // 15
+        _item = item;
+        _tLogt = SetTlogT(_type, SlotType.Inventory); // установим tLogt по значению ItemAction
     }
 
     public override PacketStream Write(PacketStream stream)
@@ -18,7 +19,8 @@ public class ItemAddNew : ItemTask
 
         stream.Write((byte)_item.SlotType);
         stream.Write((byte)_item.Slot);
-        WriteDetails(stream, _item);
+
+        _item.Write(stream);
 
         return stream;
     }

@@ -139,7 +139,7 @@ public class GradeEnchant : SpecialEffectAction
         else
         {
             // No Poof
-            character.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.GradeEnchant, [new ItemGradeChange(item, item.Grade)], []));
+            //character.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.GradeEnchant, [new ItemGradeChange(item, item.Grade)], []));
         }
 
         // Consume

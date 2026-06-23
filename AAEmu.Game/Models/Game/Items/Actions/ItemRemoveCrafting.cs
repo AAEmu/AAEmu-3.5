@@ -8,14 +8,15 @@ public class ItemRemoveCrafting : ItemTask
 
     public ItemRemoveCrafting(ulong id)
     {
-        _id = id;
         _type = ItemAction.RemoveCrafting; // 12
+        _id = id;
+        _tLogt = SetTlogT(_type, SlotType.Inventory); // установим tLogt по значению ItemAction
     }
 
     public override PacketStream Write(PacketStream stream)
     {
         base.Write(stream);
-        stream.Write(_id);
+        stream.Write(_id); // id
         return stream;
     }
 }

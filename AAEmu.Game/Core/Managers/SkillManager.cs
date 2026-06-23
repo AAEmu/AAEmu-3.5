@@ -100,7 +100,10 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
 
     public List<SkillTemplate> GetStartAbilitySkills(AbilityType ability)
     {
-        return _startAbilitySkills[ability];
+        if (_startAbilitySkills != null && _startAbilitySkills.TryGetValue(ability, out var skills))
+            return skills;
+
+        return [];
     }
 
     public List<DefaultSkill> GetDefaultSkills()
@@ -1970,18 +1973,28 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             }
         }
 
-        foreach (var skillTemplate in _skills.Values.Where(x => x.AutoLearn))
+        // Version 3.5.0.3 does not expose need_learn, so derive the groups from ability id.
+        foreach (var skillTemplate in _skills.Values)
         {
-            if (!skillTemplate.NeedLearn && skillTemplate.AbilityId == 0 &&
-                !_defaultSkills.ContainsKey(skillTemplate.Id))
-                _commonSkills.Add(skillTemplate.Id);
-            if (!skillTemplate.NeedLearn || skillTemplate.AbilityId == 0 || skillTemplate.AbilityLevel > 1 ||
-                !skillTemplate.Show)
+            if (!skillTemplate.AutoLearn)
+                continue;
+
+            if (skillTemplate.AbilityId == AbilityType.General)
+            {
+                if (!_defaultSkills.ContainsKey(skillTemplate.Id))
+                    _commonSkills.Add(skillTemplate.Id);
+                continue;
+            }
+
+            if (skillTemplate.AbilityId == AbilityType.None || skillTemplate.AbilityLevel > 1 || !skillTemplate.Show)
                 continue;
             var ability = skillTemplate.AbilityId;
-            if (!_startAbilitySkills.ContainsKey(ability))
-                _startAbilitySkills.Add(ability, []);
-            _startAbilitySkills[ability].Add(skillTemplate);
+            if (!_startAbilitySkills.TryGetValue(ability, out var abilitySkills))
+            {
+                abilitySkills = [];
+                _startAbilitySkills.Add(ability, abilitySkills);
+            }
+            abilitySkills.Add(skillTemplate);
         }
 
         _loaded = true;

@@ -10,12 +10,13 @@ public class AAPointUpdate : ItemTask
     {
         _type = ItemAction.ChangeAaPoint; // 16
         _amount = amount;
+        _tLogt = SetTlogT(_type, SlotType.Inventory); // установим tLogt по значению ItemAction
     }
 
     public override PacketStream Write(PacketStream stream)
     {
         base.Write(stream);
-        stream.Write(_amount);
+        stream.Write(_amount); // amount
         return stream;
     }
 }

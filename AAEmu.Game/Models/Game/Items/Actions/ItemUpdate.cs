@@ -8,8 +8,9 @@ public class ItemUpdate : ItemTask
 
     public ItemUpdate(Item item)
     {
-        _type = ItemAction.UpdateDetail;
+        _type = ItemAction.UpdateDetail; // 9
         _item = item;
+        _tLogt = SetTlogT(_type, SlotType.Inventory); // set tLogt by ItemAction value
     }
 
     public override PacketStream Write(PacketStream stream)
@@ -18,14 +19,17 @@ public class ItemUpdate : ItemTask
 
         stream.Write((byte)_item.SlotType);
         stream.Write((byte)_item.Slot);
-
         stream.Write(_item.Id);
+
         var details = new PacketStream();
         details.Write((byte)_item.DetailType);
-        _item.WriteDetails(details);
+
+        _item.WriteAdditionalDetails(details);
+
         stream.Write((short)128);
         stream.Write(details, false);
         stream.Write(new byte[128 - details.Count]);
+
         return stream;
     }
 }

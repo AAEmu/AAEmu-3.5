@@ -4,32 +4,30 @@ namespace AAEmu.Game.Models.Game.Items.Actions;
 
 public class ItemUpdateBits : ItemTask
 {
-    private readonly ulong _itemId;
-    private readonly SlotType _slotType;
-    private readonly byte _slot;
-    private readonly byte _bits;
-    //private readonly byte _oldBits;
+    private readonly Item _item;
 
     public ItemUpdateBits(Item item)
     {
-        _itemId = item.Id;
-        _slotType = item.SlotType;
-        _slot = (byte)item.Slot;
-        _bits = (byte)item.ItemFlags;
         _type = ItemAction.SetFlagsBits; // 10
+        _item = item;
+        //_itemId = item.Id;
+        //_slotType = item.SlotType;
+        //_slot = (byte)item.Slot;
+        //_bits = (byte)item.ItemFlags;
         // 10 image
         // 20 unwrapp
         //_oldBits = oldBits;
+        _tLogt = SetTlogT(_type, SlotType.Inventory); // установим tLogt по значению ItemAction
     }
 
     public override PacketStream Write(PacketStream stream)
     {
         base.Write(stream);
-        stream.Write((byte)_slotType);
-        stream.Write(_slot);
-        stream.Write(_itemId);
-        stream.Write(_bits);
-        stream.Write((ulong)0);
+        stream.Write((byte)_item.SlotType);  // type
+        stream.Write((byte)_item.Slot);      // index
+        stream.Write(_item.Id);              // id
+        stream.Write((byte)_item.ItemFlags); // bits
+        stream.Write(_item.ChargeTime);     // soulBindChargeTime
         return stream;
     }
 }

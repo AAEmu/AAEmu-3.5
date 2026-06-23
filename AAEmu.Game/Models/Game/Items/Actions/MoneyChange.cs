@@ -8,14 +8,16 @@ public class MoneyChange : ItemTask
 
     public MoneyChange(int amount)
     {
-        _type = ItemAction.ChangeMoneyAmount;
+        _type = ItemAction.ChangeMoneyAmount; // 1
         _amount = amount;
+        _tLogt = SetTlogT(_type, SlotType.Inventory, _amount > 0); // установим tLogt по значению ItemAction
+
     }
 
     public override PacketStream Write(PacketStream stream)
     {
         base.Write(stream);
-        stream.Write(_amount);
+        stream.Write(_amount); // amount
         return stream;
     }
 }

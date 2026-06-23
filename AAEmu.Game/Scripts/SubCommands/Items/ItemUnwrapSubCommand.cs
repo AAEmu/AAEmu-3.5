@@ -62,10 +62,8 @@ public class ItemUnwrapSubCommand : SubCommandBase
             item.SetFlag(ItemFlag.SoulBound);
         }
 
-        var updateItemTask = new ItemUpdateSecurity(item, (byte)item.ItemFlags, item.HasFlag(ItemFlag.Secure),
-            item.HasFlag(ItemFlag.Secure), item.ItemFlags.HasFlag(ItemFlag.Unpacked));
-        character.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.ItemTaskThistimeUnpack, updateItemTask,
-            []));
+        //var updateItemTask = new ItemUpdateSecurity(item, (byte)item.ItemFlags, item.HasFlag(ItemFlag.Secure), item.HasFlag(ItemFlag.Secure), item.ItemFlags.HasFlag(ItemFlag.Unpacked));
+        //character.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.ItemTaskThistimeUnpack, updateItemTask, []));
         if (equipItemTemplate.ChargeLifetime > 0)
         {
             character.SendPacket(new SCSyncItemLifespanPacket(true, item.Id, item.TemplateId, item.UnpackTime));

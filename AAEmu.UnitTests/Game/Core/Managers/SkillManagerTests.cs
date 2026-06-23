@@ -360,6 +360,62 @@ public class SkillManagerTests
 
     #endregion
 
+    #region GetStartAbilitySkills Tests
+
+    [Test]
+    public async Task GetStartAbilitySkills_ReturnsSkills_WhenAbilityExists()
+    {
+        // Arrange
+        var mockAnimation = Mock.Of<IAnimationManager>();
+        var mockPlot = Mock.Of<IPlotManager>();
+        var manager = new SkillManager(mockAnimation.Object, mockPlot.Object);
+
+        var startSkill = new SkillTemplate
+        {
+            Id = 1,
+            AutoLearn = true,
+            AbilityId = AbilityType.Fight
+        };
+
+        var startAbilitySkillsField = typeof(SkillManager).GetField("_startAbilitySkills",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var startAbilitySkills = new Dictionary<AbilityType, List<SkillTemplate>>
+        {
+            { AbilityType.Fight, new List<SkillTemplate> { startSkill } }
+        };
+        startAbilitySkillsField?.SetValue(manager, startAbilitySkills);
+
+        // Act
+        var result = manager.GetStartAbilitySkills(AbilityType.Fight);
+
+        // Assert
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result).HasSingleItem();
+        await Assert.That(result[0].Id).IsEqualTo(1u);
+    }
+
+    [Test]
+    public async Task GetStartAbilitySkills_ReturnsEmptyList_WhenAbilityIsMissing()
+    {
+        // Arrange
+        var mockAnimation = Mock.Of<IAnimationManager>();
+        var mockPlot = Mock.Of<IPlotManager>();
+        var manager = new SkillManager(mockAnimation.Object, mockPlot.Object);
+
+        var startAbilitySkillsField = typeof(SkillManager).GetField("_startAbilitySkills",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        startAbilitySkillsField?.SetValue(manager, new Dictionary<AbilityType, List<SkillTemplate>>());
+
+        // Act
+        var result = manager.GetStartAbilitySkills(AbilityType.Fight);
+
+        // Assert
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result).IsEmpty();
+    }
+
+    #endregion
+
     #region GetModifiersByOwnerId Tests
 
     [Test]
