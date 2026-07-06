@@ -14,6 +14,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers.World;
 
+/// <summary>
+/// Менеджер специальной торговли, загружающий данные из таблиц
+/// <c>specialties</c>, <c>specialty_bundle_items</c> и <c>specialty_npcs</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class SpecialtyManager : Singleton<SpecialtyManager>, ISpecialtyManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -60,7 +64,7 @@ public class SpecialtyManager : Singleton<SpecialtyManager>, ISpecialtyManager
                             ColZoneGroupId = reader.GetUInt32("col_zone_group_id"),
                             Ratio = reader.GetUInt32("ratio"),
                             Profit = reader.GetUInt32("profit"),
-                            VendorExist = reader.GetBoolean("id", true)
+                            VendorExist = reader.GetBoolean("vendor_exist", true)
                         };
                         _specialties.Add(template.Id, template);
                     }
@@ -101,11 +105,11 @@ public class SpecialtyManager : Singleton<SpecialtyManager>, ISpecialtyManager
                 {
                     while (reader.Read())
                     {
-                        var template = new SpecialtyNpc();
-                        //template.Id = reader.GetUInt32("id"); // there is no such field in the database for version 3.0.3.0
-                        //template.Name = reader.GetString("name"); // there is no such field in the database for version 3.0.3.0
-                        template.NpcId = reader.GetUInt32("npc_id");
-                        template.SpecialtyBundleId = reader.GetUInt32("specialty_bundle_id");
+                        var template = new SpecialtyNpc
+                        {
+                            NpcId = reader.GetUInt32("npc_id"),
+                            SpecialtyBundleId = reader.GetUInt32("specialty_bundle_id")
+                        };
 
                         // TODO есть повторы
                         // NpcId    SpecialtyBundleId
