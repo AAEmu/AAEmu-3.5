@@ -20,6 +20,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Loads and caches skill, buff and effect templates from compact.sqlite3
+/// and exposes lookup APIs used by the game server.
+/// </summary>
 public class SkillManager(IAnimationManager animationManager, IPlotManager plotManager) : Singleton<SkillManager>, ISkillManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -570,8 +574,14 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         // updated to 3.5.0.3
                         var id = reader.GetUInt32("skill_id");
+                        if (!_skills.TryGetValue(id, out var skillTemplate))
+                        {
+                            Logger.Warn("Default skill {0} references unknown skill id {1}; skipping.", reader.GetUInt32("id"), id);
+                            continue;
+                        }
+
                         var skill = new DefaultSkill();
-                        skill.Template = _skills[id];
+                        skill.Template = skillTemplate;
 
                         skill.Id = reader.GetInt32("id");
                         skill.AddToSlot = reader.GetBoolean("add_to_slot", true);
@@ -1677,8 +1687,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.OwnerTypeId = (BaseUnitType)reader.GetUInt32("owner_type_id");
                         template.SubType = reader.GetUInt32("sub_type");
                         template.PosDirId = reader.GetUInt32("pos_dir_id");
-                        //template.PosAngle = reader.GetFloat("pos_angle"); // there is no such field in the database for version 3.0.3.0
-                        template.PosAngleMax = reader.GetFloat("pos_angle_max"); // added
+                        // PosAngle is stale; the DB only provides pos_angle_min / pos_angle_max.
+                        template.PosAngleMax = reader.GetFloat("pos_angle_max");
                         template.PosAngleMin = reader.GetFloat("pos_angle_min"); // added
                         template.PosDistanceMax = reader.GetFloat("pos_distance_max"); // added
                         template.PosDistanceMin = reader.GetFloat("pos_distance_min"); // added
@@ -1710,6 +1720,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             LifeTime = reader.GetFloat("life_time"),
                             DespawnOnCreatorDeath = reader.GetBoolean("despawn_on_creator_death", true),
                             UseSummonerAggroTarget = reader.GetBoolean("use_summoner_aggro_target", true),
+                            UseSummonerFaction = reader.GetBoolean("use_summoner_faction", true),
                             ActivationState = reader.GetBoolean("activation_state", true)
                         };
                         _effects["NpcSpawnerSpawnEffect"].Add(template.Id, template);
@@ -1725,7 +1736,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                 {
                     while (reader.Read())
                     {
-                        var template = new NpcSpawnerDespawnEffect { Id = reader.GetUInt32("id"), SpawnerId = reader.GetUInt32("spawner_id") };
+                        var template = new NpcSpawnerDespawnEffect { Id = reader.GetUInt32("id"), SpawnerId = reader.GetUInt32("spawner_id", 0) };
                         _effects["NpcSpawnerDespawnEffect"].Add(template.Id, template);
                     }
                 }
@@ -1886,7 +1897,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         // update to 3.5.0.3
                         var skillId = reader.GetUInt32("skill_id");
-                        if (!_skills.ContainsKey(skillId))
+                        if (!_skills.TryGetValue(skillId, out var skill))
                             continue;
 
                         var template = new SkillEffect();
@@ -1895,9 +1906,19 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         //for easier debugging
                         template.EffectId = effectId;
 
-                        var type = _types[effectId];
-                        if (_effects.TryGetValue(type.Type, out var value) && value.TryGetValue(type.ActualId, out var value1))
-                            template.Template = value1;
+                        if (!_types.TryGetValue(effectId, out var type))
+                        {
+                            Logger.Warn("Skill effect {0} references unknown effect type id {1}; skipping.", reader.GetUInt32("id"), effectId);
+                            continue;
+                        }
+
+                        if (!_effects.TryGetValue(type.Type, out var value) || !value.TryGetValue(type.ActualId, out var effectTemplate))
+                        {
+                            Logger.Warn("Skill effect {0} references missing effect {1} id {2}; skipping.", reader.GetUInt32("id"), type.Type, type.ActualId);
+                            continue;
+                        }
+
+                        template.Template = effectTemplate;
 
                         template.Id = reader.GetUInt32("id");
                         template.AlwaysHit = reader.GetBoolean("always_hit", true);
@@ -1933,7 +1954,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.TargetNpcTagId = reader.GetUInt32("target_npc_tag_id", 0);
                         template.Weight = reader.GetInt32("weight");
 
-                        _skills[skillId].Effects.Add(template);
+                        skill.Effects.Add(template);
                     }
                 }
             }
@@ -1971,7 +1992,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         // update to 3.5.0.3
                         var template = new SkillModifier();
-                        //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
+                        // Id is stale; skill_modifiers has no id column.
                         template.OwnerId = reader.GetUInt32("owner_id");
                         template.OwnerType = reader.GetString("owner_type");
                         template.TagId = reader.GetUInt32("tag_id", 0);

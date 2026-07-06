@@ -2,8 +2,8 @@
 
 public class SkillReagent
 {
-    public uint Id;
-    public uint SkillId;
-    public uint ItemId;
-    public int Amount;
+    public uint Id { get; set; }
+    public uint SkillId { get; set; }
+    public uint ItemId { get; set; }
+    public int Amount { get; set; }
 }

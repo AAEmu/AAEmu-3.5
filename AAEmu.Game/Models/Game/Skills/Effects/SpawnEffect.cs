@@ -13,7 +13,7 @@ public class SpawnEffect : EffectTemplate
     public BaseUnitType OwnerTypeId { get; set; }
     public uint SubType { get; set; }
     public uint PosDirId { get; set; }
-    //public float PosAngle { get; set; } // there is no such field in the database for version 3.0.3.0
+    public float PosAngle { get; set; } // TODO: no DB column, stale (use PosAngleMin/PosAngleMax)
     public float PosAngleMax { get; set; }
     public float PosAngleMin { get; set; }
     public float PosDistanceMax { get; set; }

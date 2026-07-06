@@ -163,7 +163,7 @@ public class BuffTemplate
     // -------------------------------------------------------------------------
     // Иммунитеты
     // -------------------------------------------------------------------------
-    public uint ImmuneBuffTagId { get; set; }
+    public uint ImmuneBuffTagId { get; set; } // TODO: no DB column, stale
     public uint ImmuneDamage { get; set; }
     public bool ImmuneExceptCreator { get; set; }
     public uint ImmuneExceptCreatorRelationId { get; set; }
@@ -294,7 +294,7 @@ public class BuffTemplate
     public bool DisarmamentOffHand { get; set; }
     public bool DisarmamentRanged { get; set; }
     public bool DisarmamentMusical { get; set; }
-    public bool Taunt2 { get; set; } // TauntWithTopAggro alias if needed
+    public bool Taunt2 { get; set; } // TODO: no DB column, stale (TauntWithTopAggro alias if needed)
 
     // -------------------------------------------------------------------------
     // Коллекции

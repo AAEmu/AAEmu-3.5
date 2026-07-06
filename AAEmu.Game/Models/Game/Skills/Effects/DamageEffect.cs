@@ -25,7 +25,7 @@ public class DamageEffect : EffectTemplate
     public uint ChargedBuffId { get; set; }
     public float ChargedLevelMul { get; set; }
     public float ChargedMul { get; set; }
-    public bool CheckCrime { get; set; }
+    public bool CheckCrime { get; set; } // TODO: no DB column, stale
     public int CriticalBonus { get; set; }
     public int DamageTypeId { get; set; }
     public DamageType DamageType { get; set; }

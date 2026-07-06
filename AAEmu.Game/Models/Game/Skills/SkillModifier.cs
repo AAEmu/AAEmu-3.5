@@ -5,7 +5,7 @@ namespace AAEmu.Game.Models.Game.Skills;
 
 public class SkillModifier
 {
-    public uint Id { get; set; }
+    public uint Id { get; set; } // TODO: no DB column, stale
     public uint OwnerId { get; set; }
     public string OwnerType { get; set; } // unused - always "Buff"
     public uint TagId { get; set; }

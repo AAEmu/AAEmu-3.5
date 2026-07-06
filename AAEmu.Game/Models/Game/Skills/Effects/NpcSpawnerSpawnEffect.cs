@@ -14,6 +14,7 @@ public class NpcSpawnerSpawnEffect : EffectTemplate
     public float LifeTime { get; set; }
     public bool DespawnOnCreatorDeath { get; set; }
     public bool UseSummonerAggroTarget { get; set; }
+    public bool UseSummonerFaction { get; set; }
     public bool ActivationState { get; set; }
 
     public override bool OnActionTime => false;
