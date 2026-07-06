@@ -15,6 +15,7 @@
 - Documented `CraftManager` SQLite tables (`crafts`, `craft_products`, `craft_materials`, `craft_pack_crafts`), added `Docs/Managers/CraftManager.md` and unit tests verifying schema and class mappings.
 - Documented `CrimeManager` MySQL table (`crime`), added `Docs/Managers/CrimeManager.md` and unit tests for `CrimeEvent` column mapping.
 - Documented `DuelManager` (no DB tables, in-memory duel state), added `Docs/Managers/DuelManager.md`, listed duel packets from x2game 3.5.0.3, and added unit tests for manager constants.
+- Documented `EffectTaskManager` (no DB tables, effect task scheduler), added `Docs/Managers/EffectTaskManager.md` and unit tests.
 
 ## History
 
