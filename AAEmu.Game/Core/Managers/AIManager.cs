@@ -5,6 +5,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Управляет тиками NPC AI.
+/// Метод <c>Load()</c> отсутствует; данные не загружаются из compact.sqlite3 / compact.server.table.sqlite3.
+/// </summary>
 public class AIManager : Singleton<AIManager>, IAIManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
