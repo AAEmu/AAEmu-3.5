@@ -585,7 +585,6 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         var template = new Holdable
                         {
                             Id = reader.GetUInt32("id"),
-                            KindId = reader.GetUInt32("kind_id"),
                             Speed = reader.GetInt32("speed"),
                             ExtraDamagePierceFactor = reader.GetInt32("extra_damage_pierce_factor"),
                             ExtraDamageSlashFactor = reader.GetInt32("extra_damage_slash_factor"),

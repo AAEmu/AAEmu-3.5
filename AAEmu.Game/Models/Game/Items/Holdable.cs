@@ -8,7 +8,6 @@ public class Holdable
     private const uint DefaultFistAnimId = 2;
 
     public uint Id { get; set; }
-    public uint KindId { get; set; }
     public int Speed { get; set; }
     public int ExtraDamagePierceFactor { get; set; }
     public int ExtraDamageSlashFactor { get; set; }
