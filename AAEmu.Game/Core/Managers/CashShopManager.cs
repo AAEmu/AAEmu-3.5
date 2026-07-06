@@ -31,6 +31,17 @@ public class CashShopManager(IWorldManager worldManager, IAccountManager account
         }
     }
 
+    /// <summary>
+    /// Загружает данные внутриигрового магазина (ICS) из таблиц MySQL:
+    /// <c>ics_skus</c>, <c>ics_shop_items</c>, <c>ics_menu</c>.
+    /// </summary>
+    /// <remarks>
+    /// compact.sqlite3 / compact.server.table.sqlite3 не используются.
+    /// Обрабатываемые пакеты (x2game 3.5.0.3):
+    /// CSICSMenuListRequest_0x106, CSICSGoodsListRequest_0x0CE, CSICSBuyGoodRequest_0x0EC,
+    /// CSIcsMoneyRequest_0x0AB, SCICSMenuList_0x285, SCICSGoodList_0x274,
+    /// SCICSGoodDetail_0x0FF, SCICSCheckTime_0x0E0, SCICSBuyResult_0x093.
+    /// </remarks>
     public void Load()
     {
         SKUs.Clear();
