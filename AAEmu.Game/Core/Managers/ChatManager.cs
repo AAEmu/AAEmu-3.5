@@ -10,6 +10,11 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Управляет игровыми чат-каналами (фракция, нация, зона, группа, рейд, гильдия, семья).
+/// Метод <c>Load()</c> отсутствует; данные не загружаются из compact.sqlite3 / compact.server.table.sqlite3.
+/// Обработка сообщений выполняется вне этого менеджера (см. CSSendChatMessagePacket / SCChatMessagePacket).
+/// </summary>
 // ReSharper disable once ClassNeverInstantiated.Global
 public class ChatManager : Singleton<ChatManager>, IChatManager
 {
