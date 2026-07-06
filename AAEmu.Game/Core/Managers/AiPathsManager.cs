@@ -78,7 +78,10 @@ public class AiPathsManager : Singleton<AiPathsManager>, IAiPathsManager
     }
 
     /// <summary>
-    /// Caches all path files in the Data/Paths folder (subfolders not included)
+    /// Загружает AI-пути из текстовых файлов .path в папке Data/Path.
+    /// Источник данных: файлы Data/*.path (формат строки: action|x|y|z|param).
+    /// Таблицы compact.sqlite3: не используются.
+    /// Таблицы compact.server.table.sqlite3: не используются.
     /// </summary>
     public void Load()
     {
