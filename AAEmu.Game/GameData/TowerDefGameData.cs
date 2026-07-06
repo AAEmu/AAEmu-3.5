@@ -6,6 +6,9 @@ using Microsoft.Data.Sqlite;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads tower defense game data from the client and server SQLite databases.
+/// </summary>
 [GameData]
 public class TowerDefGameData : Singleton<TowerDefGameData>, IGameDataLoader
 {
@@ -97,7 +100,7 @@ public class TowerDefGameData : Singleton<TowerDefGameData>, IGameDataLoader
             }
         }
 
-        using (var command = connection.CreateCommand())
+        using (var command = connection2.CreateCommand())
         {
             command.CommandText = "SELECT * FROM tower_def_prog_kill_targets";
             command.Prepare();

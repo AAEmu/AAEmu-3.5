@@ -13,4 +13,5 @@ public class HousingDecoration
     public uint ActabilityUp { get; set; }
     public uint DecoActAbilityGroupId { get; set; }
     public bool AllowMeshOnGarden { get; set; }
+    public bool VerticalAligned { get; set; }
 }

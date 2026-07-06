@@ -4,9 +4,9 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj;
+using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Templates;
-using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Quests.Static;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Static;
@@ -14,10 +14,13 @@ using AAEmu.Game.Models.Game.Units.Static;
 
 namespace AAEmu.Game.Models.Game.Units;
 
+/// <summary>
+/// Requirement entry for skills, spheres, quest components and other owners.
+/// </summary>
 public class UnitReqs
 {
-    public uint Id { get; set; }
     public uint OwnerId { get; set; }
+
     /// <summary>
     /// Possible values: AchievementObjective, AiEvent, ItemArmor, ItemWeapon, QuestComponent, Skill, Sphere
     /// </summary>
@@ -25,6 +28,8 @@ public class UnitReqs
     public UnitReqsKindType KindType { get; set; }
     public uint Value1 { get; set; }
     public uint Value2 { get; set; }
+    public int Value3 { get; set; }
+    public bool DisplayMsg { get; set; }
 
     public UnitReqsValidationResult Validate(BaseUnit owner, BaseUnit target)
     {
@@ -257,7 +262,7 @@ public class UnitReqs
 
             case UnitReqsKindType.MotherFactionOnly:
                 // Is this the same as UnitReqsKindType.MotherFaction ? 
-                return Ret(SkillResultKeys.skill_urk_mother_faction_only, (uint)(unit?.Faction?.MotherId ?? 0) == Value1);
+                return RetWithValue(SkillResultKeys.skill_urk_mother_faction_only, Value1, (uint)(unit?.Faction?.MotherId ?? 0) == Value1);
 
             // case UnitReqsKindType.NationOwner:
 

@@ -15,6 +15,9 @@ using NLog;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads slave templates and related data from the client SQLite database and JSON attachment point files.
+/// </summary>
 [GameData]
 public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
 {
@@ -23,7 +26,7 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
     private readonly Dictionary<uint, SlaveTemplate> _slaveTemplates = []; // TODO: Move to global/static
     private Dictionary<uint, Dictionary<AttachPointKind, WorldSpawnPosition>> _attachPoints = [];
     private readonly Dictionary<uint, List<SlaveInitialItems>> _slaveInitialItems = []; // PackId and List<Slot/ItemData>
-    private readonly Dictionary<uint, SlaveMountSkills> _slaveMountSkills = [];
+    private readonly Dictionary<uint, List<SlaveMountSkills>> _slaveMountSkills = [];
     private readonly Dictionary<uint, uint> _repairableSlaves = []; // SlaveId, RepairEffectId
 
     public void Load(SqliteConnection connection, SqliteConnection connection2)
@@ -295,15 +298,20 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
             {
                 while (reader.Read())
                 {
+                    var slaveId = reader.GetUInt32("slave_id");
                     var template = new SlaveMountSkills
                     {
-                        //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
-                        SlaveId = reader.GetUInt32("slave_id"),
+                        SlaveId = slaveId,
                         MountSkillId = reader.GetUInt32("mount_skill_id")
                     };
 
-                    if (!_slaveMountSkills.TryAdd(template.Id, template))
-                        Logger.Warn($"Duplicate entry for slave_mount_skills");
+                    if (!_slaveMountSkills.TryGetValue(slaveId, out var skills))
+                    {
+                        skills = [];
+                        _slaveMountSkills.Add(slaveId, skills);
+                    }
+
+                    skills.Add(template);
                 }
             }
         }
@@ -416,26 +424,15 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
     }
 
     /// <summary>
-    /// Get mount skill associated with slaveMountSkillId
+    /// Gets a list of all mount skills for a given slave type.
     /// </summary>
-    /// <param name="slaveMountSkillId"></param>
-    /// <returns></returns>
-    public uint GetSlaveMountSkillFromId(uint slaveMountSkillId)
-    {
-        return _slaveMountSkills.TryGetValue(slaveMountSkillId, out var res) ? res.MountSkillId : 0;
-    }
-
-    /// <summary>
-    /// Gets a list of all mount skills for a given slave type
-    /// </summary>
-    /// <param name="slaveTemplateId"></param>
-    /// <returns></returns>
+    /// <param name="slaveTemplateId">Slave template id.</param>
+    /// <returns>List of mount skill ids.</returns>
     public List<uint> GetSlaveMountSkillList(uint slaveTemplateId)
     {
-        var res = new List<uint>();
-        foreach (var q in _slaveMountSkills.Values.Where(q => q.SlaveId == slaveTemplateId))
-            res.Add(q.MountSkillId);
-        return res;
+        return _slaveMountSkills.TryGetValue(slaveTemplateId, out var skills)
+            ? skills.Select(s => s.MountSkillId).ToList()
+            : [];
     }
 
     public List<SlaveInitialItems> GetSlaveInitialItemPack(uint templateId)

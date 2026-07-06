@@ -11,6 +11,9 @@ using NLog;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads housing templates, build steps and decoration definitions.
+/// </summary>
 [GameData]
 public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
 {
@@ -190,7 +193,8 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
                         DecoActAbilityGroupId = !reader.IsDBNull("deco_actability_group_id")
                                 ? reader.GetUInt32("deco_actability_group_id")
                                 : 0,
-                        AllowMeshOnGarden = reader.GetBoolean("allow_mesh_on_garden", true)
+                        AllowMeshOnGarden = reader.GetBoolean("allow_mesh_on_garden", true),
+                        VerticalAligned = reader.GetBoolean("vertical_aligned")
                     };
 
                     _housingDecorations.Add(template.Id, template);

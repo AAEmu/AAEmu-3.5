@@ -14,6 +14,9 @@ using Microsoft.Data.Sqlite;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads sphere definitions and their related quest, skill, sound, buff and chat bubble data.
+/// </summary>
 [GameData]
 public class SphereGameData : Singleton<SphereGameData>, IGameDataLoader
 {
@@ -201,8 +204,9 @@ public class SphereGameData : Singleton<SphereGameData>, IGameDataLoader
                     var template = new SphereBuffs
                     {
                         Id = reader.GetUInt32("id"),
-                        BuffId = reader.GetUInt32("buff_id")
-
+                        BuffId = reader.GetUInt32("buff_id"),
+                        AndPet = reader.GetBoolean("and_pet"),
+                        RemoveOnLeaveBuffId = reader.GetUInt32("remove_on_leave_buff_id")
                     };
 
                     _sphereBuffs.Add(template.Id, template);

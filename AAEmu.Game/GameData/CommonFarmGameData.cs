@@ -8,6 +8,9 @@ using Microsoft.Data.Sqlite;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads common farm group definitions and allowed doodad groups.
+/// </summary>
 [GameData]
 public class CommonFarmGameData : Singleton<CommonFarmGameData>, IGameDataLoader
 {
@@ -29,7 +32,13 @@ public class CommonFarmGameData : Singleton<CommonFarmGameData>, IGameDataLoader
             using var reader = new SQLiteWrapperReader(sqliteReader);
             while (reader.Read())
             {
-                var template = new FarmGroup { Id = reader.GetUInt32("id"), Count = reader.GetUInt32("count") };
+                var template = new FarmGroup
+                {
+                    Id = reader.GetUInt32("id"),
+                    Count = reader.GetUInt32("count"),
+                    Description = reader.GetString("description"),
+                    Name = reader.GetString("name")
+                };
 
                 _farmGroup.TryAdd(template.Id, template);
             }

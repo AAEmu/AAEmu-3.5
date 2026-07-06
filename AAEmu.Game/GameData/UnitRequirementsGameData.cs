@@ -13,16 +13,22 @@ using AAEmu.Game.Models.Spheres;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Utils.DB;
 using Microsoft.Data.Sqlite;
+using NLog;
 
 namespace AAEmu.Game.GameData;
 
+/// <summary>
+/// Loads unit requirements and exposes helpers to validate skills, spheres and quest components.
+/// </summary>
 [GameData]
 public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGameDataLoader
 {
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+
     /// <summary>
-    /// Id, unit_reqs
+    /// (owner_type, owner_id), unit_reqs
     /// </summary>
-    private Dictionary<uint, UnitReqs> _unitReqs { get; set; }
+    private Dictionary<(string OwnerType, uint OwnerId), UnitReqs> _unitReqs { get; set; }
 
     /// <summary>
     /// owner_type, owner_id, unit_reqs
@@ -45,15 +51,18 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
         {
             var t = new UnitReqs
             {
-                //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
                 OwnerId = reader.GetUInt32("owner_id"),
                 OwnerType = reader.GetString("owner_type"),
                 KindType = (UnitReqsKindType)reader.GetUInt32("kind_id"),
                 Value1 = reader.GetUInt32("value1"),
-                Value2 = reader.GetUInt32("value2")
+                Value2 = reader.GetUInt32("value2"),
+                Value3 = reader.GetInt32("value3", 0),
+                DisplayMsg = reader.GetBoolean("display_msg")
             };
 
-            _unitReqs.TryAdd(t.Id, t);
+            var key = (t.OwnerType, t.OwnerId);
+            if (!_unitReqs.TryAdd(key, t))
+                Logger.Warn($"Duplicate entry for unit_reqs with owner_type={t.OwnerType}, owner_id={t.OwnerId}");
             if (!_unitReqsByOwnerType.ContainsKey(t.OwnerType))
                 _unitReqsByOwnerType.TryAdd(t.OwnerType, []);
             _unitReqsByOwnerType[t.OwnerType].Add(t);
