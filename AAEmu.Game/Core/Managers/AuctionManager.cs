@@ -380,6 +380,21 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
         return newAuctionLot;
     }
 
+    /// <summary>
+    /// Загружает активные лоты аукциона из таблицы <c>auction_house</c> БД MySQL.
+    /// </summary>
+    /// <remarks>
+    /// Поля таблицы <c>auction_house</c>, используемые при загрузке:
+    /// <c>id</c>, <c>duration</c>, <c>item_id</c>, <c>post_date</c>, <c>end_time</c>,
+    /// <c>world_id</c>, <c>client_id</c>, <c>client_name</c>, <c>start_money</c>,
+    /// <c>direct_money</c>, <c>bid_world_id</c>, <c>bidder_id</c>, <c>bidder_name</c>,
+    /// <c>bid_money</c>, <c>extra</c>.
+    /// compact.sqlite3 / compact.server.table.sqlite3 не используются.
+    /// Обрабатываемые пакеты (x2game 3.5.0.3):
+    /// CSAuctionPost_0x136, CSAuctionSearch_0x033, CSAuctionMyBidList_0x0EA,
+    /// CSAuctionLowestPrice_0x15A, SCAuctionPosted_0x0E1, SCAuctionCanceled_0x0BB,
+    /// SCAuctionBid_0x264, SCAuctionSearched_0x219, SCAuctionLowestPrice_0x0EF.
+    /// </remarks>
     public void Load()
     {
         try

@@ -8,6 +8,7 @@
 - Added mappings for previously missing effect types, including `DoodadItemChangeEffect`, `HighAbilityResourceEffect`, `LevelUpEffect`, `MoveToLocationEffect`, `PlayLogEffect`, and `WorldMessageEffect`.
 - Added regression tests against the real SQLite data and updated the Russian testing progress documentation.
 - Documented `AnimationManager` data sources (`anims` table schema), added `Docs/Managers/AnimationManager.md`, and added unit tests verifying the `anims` schema and `Anim` class mapping.
+- Documented `AuctionManager` data source (`auction_house` MySQL table) and related auction packets, added `Docs/Managers/AuctionManager.md` and unit tests for `AuctionLot` column mapping.
 
 ## History
 
