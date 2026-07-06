@@ -2,11 +2,15 @@
 
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Models.Game;
+using AAEmu.Game.Utils.DB;
 
 using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Менеджер опыта и уровней, загружающий данные из таблиц <c>levels</c> и <c>heir_levels</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -17,7 +21,7 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     private readonly List<int> _expByLevel = [];
     /// <summary>Sorted list of total mate experience amounts from lowest level to highest level, indexed by zero-based mate level (level 1 is index 0).</summary>
     private readonly List<int> _mateExpByLevel = [];
-    private Dictionary<byte, ExperienceHeirLevelTemplate> _heirLevels = new();
+    private Dictionary<int, ExperienceHeirLevelTemplate> _heirLevels = [];
 
     // TODO: Put this in the configuration files
     /// <summary>Artificial level cap for players. If database contains more levels than this, they will be ignored.</summary>
@@ -86,8 +90,8 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     /// </summary>
     /// <param name="exp">The amount of experience.</param>
     /// <param name="mate"><c>true</c> to get the level for a mate (mount, pet); <c>false</c> to get the level for a player.</param>
-    /// <param name="minLevel">The minimum level of the unit to consider. Should usually be the current level of the unit.</param>
     /// <param name="overflow">The amount of experience that exceeds the level.</param>
+    /// <param name="minLevel">The minimum level of the unit to consider. Should usually be the current level of the unit.</param>
     /// <returns>The level that corresponds to the given experience amount, or the maximum level if the experience exceeds that of the maximum level.</returns>
     /// <remarks>The <paramref name="minLevel"/> parameter is an optimization to speed up locating the level for a given experience value, by excluding certain levels.</remarks>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="exp"/> is negative.</exception>
@@ -158,11 +162,75 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
         => GetTemplateForLevel(level)?.SkillPoints ?? 0;
     #endregion Level
 
+    #region Heir Levels
+
+    /// <summary>
+    /// Gets the heir level template for the given level.
+    /// </summary>
+    /// <param name="level">The heir level.</param>
+    /// <returns>The heir level template, or <c>null</c> if not found.</returns>
+    public ExperienceHeirLevelTemplate? GetHeirLevelTemplate(int level)
+    {
+        return _heirLevels.TryGetValue(level, out var template) ? template : null;
+    }
+
+    /// <summary>
+    /// Loads heir level templates from the <c>heir_levels</c> table.
+    /// </summary>
+    /// <remarks>
+    /// Схема таблицы <c>heir_levels</c> (проверена по compact.sqlite3):
+    /// <list type="bullet">
+    ///   <item><description><c>id</c> int PRIMARY KEY → <see cref="ExperienceHeirLevelTemplate.Id"/></description></item>
+    ///   <item><description><c>level</c> int → <see cref="ExperienceHeirLevelTemplate.Level"/></description></item>
+    ///   <item><description><c>req_item_count</c> int → <see cref="ExperienceHeirLevelTemplate.ReqItemCount"/></description></item>
+    ///   <item><description><c>req_item_id</c> int → <see cref="ExperienceHeirLevelTemplate.ReqItemId"/></description></item>
+    ///   <item><description><c>req_total_exp</c> int → <see cref="ExperienceHeirLevelTemplate.ReqTotalExp"/></description></item>
+    ///   <item><description><c>step</c> int → <see cref="ExperienceHeirLevelTemplate.Step"/></description></item>
+    /// </list>
+    /// </remarks>
+    private void LoadHeirLevels()
+    {
+        _heirLevels = [];
+
+        Logger.Info("Loading heir levels...");
+
+        using var connection = SQLite.CreateConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT * FROM heir_levels ORDER BY level ASC, step ASC";
+        command.Prepare();
+        using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+
+        while (reader.Read())
+        {
+            var template = new ExperienceHeirLevelTemplate
+            {
+                Id = reader.GetInt32("id"),
+                Level = reader.GetByte("level"),
+                ReqItemCount = reader.GetInt32("req_item_count"),
+                ReqItemId = reader.GetInt32("req_item_id"),
+                ReqTotalExp = reader.GetUInt32("req_total_exp"),
+                Step = reader.GetInt32("step")
+            };
+
+            if (!_heirLevels.TryAdd(template.Level, template))
+            {
+                Logger.Warn("Duplicate heir level {0} found, keeping first entry", template.Level);
+            }
+        }
+
+        Logger.Info($"Loaded {_heirLevels.Count} heir levels");
+    }
+
+    #endregion Heir Levels
+
     /// <summary>
     /// Loads the experience level templates from the default loader (Sqlite).
     /// </summary>
     public void Load()
-        => Load(new SqliteExperienceLevelTemplateLoader(Logger), PlayerLevelCap, MateLevelCap);
+    {
+        Load(new SqliteExperienceLevelTemplateLoader(Logger), PlayerLevelCap, MateLevelCap);
+        LoadHeirLevels();
+    }
 
     /// <summary>
     /// Loads the experience level templates from the given loader.
