@@ -28,6 +28,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Manages item templates, look-converts, enchanting costs, socket chances,
+/// and related static game data loaded from compact.sqlite3.
+/// </summary>
 public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManager, IContainerIdManager containerIdManager, ILocalizationManager localizationManager, ITaskManager taskManager, IWorldManager worldManager) : Singleton<ItemManager>, IItemManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -49,7 +53,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
     private Dictionary<uint, ItemGradeEnchantingSupport> _enchantingSupports;
 
     // Socketing
-    private Dictionary<uint, uint> _socketChance;
+    private Dictionary<uint, ItemSocketChance> _socketChance;
     private Dictionary<uint, List<BonusTemplate>> _itemUnitModifiers;
     private Dictionary<uint, ItemCapScale> _itemCapScales;
 
@@ -193,7 +197,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
     // note: This does "+1" because when we have 0 socket-ed gems, we want to get the chance for the next slot
     public uint GetSocketChance(uint numSockets)
     {
-        return _socketChance.ContainsKey(numSockets + 1) ? _socketChance[numSockets + 1] : 0;
+        return _socketChance.TryGetValue(numSockets + 1, out var chance) ? chance.CostRatio : 0;
     }
 
     public ItemCapScale GetItemCapScale(uint skillId)
@@ -491,6 +495,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         var template = new ItemLookConvert
                         {
                             Id = reader.GetUInt32("item_look_convert_id"),
+                            EntryId = reader.GetUInt32("id"),
                             RequiredItemId = reader.GetUInt32("item_id"),
                             RequiredItemCount = reader.GetInt32("item_count")
                         };
@@ -580,7 +585,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         var template = new Holdable
                         {
                             Id = reader.GetUInt32("id"),
-                            //KindId = reader.GetUInt32("kind_id"), // there is no such field in the database for version 3.0.3.0
+                            KindId = reader.GetUInt32("kind_id"),
                             Speed = reader.GetInt32("speed"),
                             ExtraDamagePierceFactor = reader.GetInt32("extra_damage_pierce_factor"),
                             ExtraDamageSlashFactor = reader.GetInt32("extra_damage_slash_factor"),
@@ -605,7 +610,15 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             AnimR2Id = reader.GetUInt32("anim_r2_id", 0),
                             AnimL2Id = reader.GetUInt32("anim_l2_id", 0),
                             AnimR3Id = reader.GetUInt32("anim_r3_id", 0),
-                            AnimL3Id = reader.GetUInt32("anim_l3_id", 0)
+                            AnimL3Id = reader.GetUInt32("anim_l3_id", 0),
+                            AnimL1Ratio = reader.GetInt32("anim_l1_ratio"),
+                            AnimL2Ratio = reader.GetInt32("anim_l2_ratio"),
+                            AnimR1Ratio = reader.GetInt32("anim_r1_ratio"),
+                            AnimR2Ratio = reader.GetInt32("anim_r2_ratio"),
+                            GearScoreMultiplier = reader.GetInt32("gear_score_multiplier"),
+                            Name = reader.GetString("name"),
+                            PoseId = reader.GetUInt32("pose_id"),
+                            SoundMaterialId = reader.GetUInt32("sound_material_id")
                         };
 
                         _holdables.Add(template.Id, template);
@@ -647,14 +660,15 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         var template = new WearableKind
                         {
                             TypeId = reader.GetUInt32("armor_type_id"),
-                            //ArmorRatio = reader.GetInt32("armor_ratio"), // there is no such field in the database for version 3.0.3.0
-                            //MagicResistanceRatio = reader.GetInt32("magic_resistance_ratio"), // there is no such field in the database for version 3.0.3.0
+                            //ArmorRatio = reader.GetInt32("armor_ratio"), // TODO: no DB column, stale
+                            //MagicResistanceRatio = reader.GetInt32("magic_resistance_ratio"), // TODO: no DB column, stale
                             FullBufId = reader.GetUInt32("full_buff_id"),
                             HalfBufId = reader.GetUInt32("half_buff_id"),
                             ExtraDamagePierce = reader.GetInt32("extra_damage_pierce"),
                             ExtraDamageSlash = reader.GetInt32("extra_damage_slash"),
                             ExtraDamageBlunt = reader.GetInt32("extra_damage_blunt"),
-                            DurabilityRatio = reader.GetFloat("durability_ratio")
+                            DurabilityRatio = reader.GetFloat("durability_ratio"),
+                            SoundMaterialId = reader.GetUInt32("sound_material_id")
                         };
                         _wearableKinds.Add(template.TypeId, template);
                     }
@@ -672,8 +686,10 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var template = new WearableSlot
                         {
+                            Id = reader.GetUInt32("id"),
                             SlotTypeId = reader.GetUInt32("slot_type_id"),
-                            Coverage = reader.GetInt32("coverage")
+                            Coverage = reader.GetInt32("coverage"),
+                            GearScoreMultiplier = reader.GetInt32("gear_score_multiplier")
                         };
                         _wearableSlots.Add(template.SlotTypeId, template);
                     }
@@ -706,7 +722,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var template = new AttributeModifiers
                         {
-                            Id = reader.GetUInt32("id"), // TODO ... alias
+                            Id = reader.GetUInt32("id"),
+                            Alias = reader.GetString("alias"),
                             StrWeight = reader.GetInt32("str_weight"),
                             DexWeight = reader.GetInt32("dex_weight"),
                             StaWeight = reader.GetInt32("sta_weight"),
@@ -736,6 +753,10 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             CooldownSec = reader.GetUInt32("cooldown_sec"),
                             Finisher = reader.GetBoolean("finisher", true),
                             ItemLevelBasedChanceBonus = reader.GetUInt32("item_level_based_chance_bonus"),
+                            Description = reader.GetString("description"),
+                            OrUnitReqs = reader.GetBoolean("or_unit_reqs"),
+                            TriggerSkillId = reader.GetUInt32("trigger_skill_id"),
+                            TriggerTagId = reader.GetUInt32("trigger_tag_id"),
                         };
 
                         _itemProcTemplates.Add(template.Id, template);
@@ -843,7 +864,19 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             ChargeLifetime = reader.GetInt32("charge_lifetime", 0),
                             ChargeCount = reader.GetInt16("charge_count"),
                             ItemLookConvert = GetHoldableItemLookConvert(holdableId),
-                            EquipItemSetId = reader.GetUInt32("eiset_id", 0)
+                            EquipItemSetId = reader.GetUInt32("eiset_id", 0),
+                            AssetId = reader.GetInt32("asset_id"),
+                            DrawnScale = reader.GetFloat("drawn_scale"),
+                            EnhancedItemMaterialId = reader.GetInt32("enhanced_item_material_id"),
+                            FixedVisualEffectId = reader.GetInt32("fixed_visual_effect_id"),
+                            ItemRndAttrCategoryId = reader.GetInt32("item_rnd_attr_category_id"),
+                            OrUnitReqs = reader.GetBoolean("or_unit_reqs"),
+                            RechargeRestrictItemId = reader.GetInt32("recharge_restrict_item_id"),
+                            RechargeRndAttrUnitModifierRestrictItemId = reader.GetInt32("recharge_rnd_attr_unit_modifier_restrict_item_id"),
+                            RndAttrUnitModifierLifetime = reader.GetInt32("rnd_attr_unit_modifier_lifetime"),
+                            SkinKindId = reader.GetInt32("skin_kind_id"),
+                            UseAsStat = reader.GetBoolean("useAsStat"),
+                            WornScale = reader.GetFloat("worn_scale")
                         };
                         _templates.Add(template.Id, template);
                     }
@@ -874,7 +907,12 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             RechargeBuffId = reader.GetUInt32("recharge_buff_id", 0),
                             ChargeLifetime = reader.GetInt32("charge_lifetime", 0),
                             ChargeCount = reader.GetInt16("charge_count"),
-                            EquipItemSetId = reader.GetUInt32("eiset_id", 0)
+                            EquipItemSetId = reader.GetUInt32("eiset_id", 0),
+                            ItemRndAttrCategoryId = reader.GetInt32("item_rnd_attr_category_id"),
+                            OrUnitReqs = reader.GetBoolean("or_unit_reqs"),
+                            RechargeRestrictItemId = reader.GetInt32("recharge_restrict_item_id"),
+                            RechargeRndAttrUnitModifierRestrictItemId = reader.GetInt32("recharge_rnd_attr_unit_modifier_restrict_item_id"),
+                            RndAttrUnitModifierLifetime = reader.GetInt32("rnd_attr_unit_modifier_lifetime")
                         };
                         _templates.Add(template.Id, template);
                     }
@@ -937,7 +975,27 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             ModelId = reader.GetUInt32("model_id"),
                             NpcOnly = reader.GetBoolean("npc_only", true),
                             SlotTypeId = reader.GetUInt32("slot_type_id"),
-                            //BeautyShopOnly = reader.GetBoolean("beautyshop_only", true) // there is no in the database for version 3.0.3.0
+                            AssetId = reader.GetUInt32("asset_id"),
+                            Asset1Id = reader.GetUInt32("asset_1_id"),
+                            Asset2Id = reader.GetUInt32("asset_2_id"),
+                            Asset3Id = reader.GetUInt32("asset_3_id"),
+                            Asset4Id = reader.GetUInt32("asset_4_id"),
+                            CustomTextureId = reader.GetUInt32("custom_texture_id"),
+                            CustomTexture1Id = reader.GetUInt32("custom_texture_1_id"),
+                            CustomTexture2Id = reader.GetUInt32("custom_texture_2_id"),
+                            CustomTexture3Id = reader.GetUInt32("custom_texture_3_id"),
+                            CustomTexture4Id = reader.GetUInt32("custom_texture_4_id"),
+                            FaceMask = reader.GetString("face_mask"),
+                            HairBase = reader.GetString("hair_base"),
+                            LeftEyeHeight = reader.GetInt32("left_eye_height"),
+                            LeftEyeWidth = reader.GetInt32("left_eye_width"),
+                            LeftEyeX = reader.GetInt32("left_eye_x"),
+                            LeftEyeY = reader.GetInt32("left_eye_y"),
+                            RightEyeHeight = reader.GetInt32("right_eye_height"),
+                            RightEyeWidth = reader.GetInt32("right_eye_width"),
+                            RightEyeX = reader.GetInt32("right_eye_x"),
+                            RightEyeY = reader.GetInt32("right_eye_y"),
+                            OddEye = reader.GetBoolean("odd_eye", true)
                         };
                         _templates.Add(template.Id, template);
                     }
@@ -958,7 +1016,12 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             Id = reader.GetUInt32("item_id"),
                             EquipSlotGroupId = reader.GetUInt32("equip_slot_group_id", 0),
                             EquipLevel = reader.GetByte("equip_level", 0),
-                            ItemGradeId = reader.GetByte("item_grade_id", 0)
+                            ItemGradeId = reader.GetByte("item_grade_id", 0),
+                            EisetId = reader.GetUInt32("eiset_id", 0),
+                            EquipItemTagId = reader.GetUInt32("equip_item_tag_id", 0),
+                            EquipItemId = reader.GetUInt32("equip_item_id", 0),
+                            GemVisualEffectId = reader.GetUInt32("gem_visual_effect_id", 0),
+                            IgnoreEquipItemTag = reader.GetBoolean("ignore_equip_item_tag")
                         };
                         _templates.Add(template.Id, template);
                     }
@@ -984,7 +1047,13 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             Asset2Id = reader.GetUInt32("asset2_id"),
                             NormalSpeciality = reader.GetBoolean("normal_specialty"),
                             UseAsStat = reader.GetBoolean("use_as_stat"),
-                            SkinKindId = reader.GetUInt32("skin_kind_id")
+                            SkinKindId = reader.GetUInt32("skin_kind_id"),
+                            FreshnessGroupId = reader.GetUInt32("freshness_group_id", 0),
+                            GliderAnimActionId = reader.GetUInt32("glider_anim_action_id", 0),
+                            GliderFastAnimActionId = reader.GetUInt32("glider_fast_anim_action_id", 0),
+                            GliderSlidingAnimActionId = reader.GetUInt32("glider_sliding_anim_action_id", 0),
+                            GliderSlowAnimActionId = reader.GetUInt32("glider_slow_anim_action_id", 0),
+                            StorageVisual = reader.GetString("storage_visual")
                         };
                         _templates.Add(template.Id, template);
                     }
@@ -1036,7 +1105,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         template.ExpAbsLifetime = reader.GetInt32("exp_abs_lifetime");
                         template.ExpOnlineLifetime = reader.GetInt32("exp_online_lifetime");
                         //template.ExpDate = !reader.IsDBNull("exp_date") ? reader.GetDateTime("exp_date") : DateTime.MinValue;
-                        template.ExpDate = reader.IsDBNull("exp_date") ? reader.GetInt32("exp_date") : 0;
+                        template.ExpDate = !reader.IsDBNull("exp_date") ? reader.GetInt32("exp_date") : 0;
                         template.SpecialtyZoneId = !reader.IsDBNull("specialty_zone_id") ? reader.GetUInt32("specialty_zone_id") : 0;
                         template.LevelRequirement = reader.GetInt32("level_requirement");
                         template.AuctionCategoryA = reader.IsDBNull("auction_a_category_id") ? 0 : reader.GetInt32("auction_a_category_id");
@@ -1072,7 +1141,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var template = new EquipSlotEnchantingCost
                         {
-                            //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
+                            //Id = reader.GetUInt32("id"), // TODO: no DB column, stale
                             SlotTypeId = reader.GetUInt32("slot_type_id"),
                             Cost = reader.GetInt32("cost")
                         };
@@ -1092,7 +1161,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var template = new ItemGradeEnchantingSupport
                         {
-                            //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
+                            //Id = reader.GetUInt32("id"), // TODO: no DB column, stale
                             ItemId = reader.GetUInt32("item_id"),
                             RequireGradeMin = reader.GetInt32("require_grade_min"),
                             RequireGradeMax = reader.GetInt32("require_grade_max"),
@@ -1104,6 +1173,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             AddBreakMul = reader.GetInt32("add_break_mul"),
                             AddDowngradeRatio = reader.GetInt32("add_downgrade_ratio"),
                             AddDowngradeMul = reader.GetInt32("add_downgrade_mul"),
+                            Icons = reader.GetInt32("icons"),
+                            ImplFlags = reader.GetInt32("impl_flags"),
                             AddGreatSuccessGrade = reader.GetInt32("add_great_success_grade")
                         };
 
@@ -1121,10 +1192,14 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                 {
                     while (reader.Read())
                     {
-                        var numSockets = reader.GetUInt32("id"); // num_sockets
-                        var chance = reader.GetUInt32("cost_ratio"); // success_ratio
+                        var template = new ItemSocketChance
+                        {
+                            Id = reader.GetUInt32("id"), // num_sockets
+                            FailBreak = reader.GetBoolean("fail_break"),
+                            CostRatio = reader.GetUInt32("cost_ratio") // success_ratio
+                        };
 
-                        _socketChance.TryAdd(numSockets, chance);
+                        _socketChance.TryAdd(template.Id, template);
                     }
                 }
             }
@@ -1140,7 +1215,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var template = new ItemCapScale
                         {
-                            //Id = reader.GetUInt32("id"), // there is no such field in the database for version 3.0.3.0
+                            Id = reader.GetUInt32("id"),
                             SkillId = reader.GetUInt32("skill_id"),
                             ScaleMin = reader.GetInt32("scale_min"),
                             ScaleMax = reader.GetInt32("scale_max")
@@ -1227,7 +1302,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         var template = new GradeDistributions
                         {
                             Id = reader.GetInt32("id"),
-                            //Name = reader.GetString("name"), // there is no such field in the database for version 3.0.3.0
+                            //Name = reader.GetString("name"), // TODO: no DB column, stale
                             Weight0 = reader.GetInt32("weight_0"),
                             Weight1 = reader.GetInt32("weight_1"),
                             Weight2 = reader.GetInt32("weight_2"),
@@ -1239,7 +1314,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                             Weight8 = reader.GetInt32("weight_8"),
                             Weight9 = reader.GetInt32("weight_9"),
                             Weight10 = reader.GetInt32("weight_10"),
-                            Weight11 = reader.GetInt32("weight_11")
+                            Weight11 = reader.GetInt32("weight_11"),
+                            Weight12 = reader.GetInt32("weight_12")
                         };
                         _itemGradeDistributions.Add(template.Id, template);
                     }
@@ -1365,9 +1441,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var armorGradeBuff = new ArmorGradeBuff
                         {
-                            Id = reader.GetByte("id"),
-                            //ArmorType = (ArmorType)reader.GetUInt32("armor_type_id"), // there is no such field in the database for version 3.0.3.0
-                            //ItemGrade = (ItemGrade)reader.GetUInt32("item_grade_id"), // there is no such field in the database for version 3.0.3.0
+                            Id = reader.GetUInt32("id"),
+                            ArmorType = (ArmorType)reader.GetUInt32("armor_type_id"),
+                            ItemGrade = (ItemGrade)reader.GetUInt32("item_grade_id"),
                             BuffId = reader.GetUInt32("buff_id")
                         };
 
@@ -1391,7 +1467,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                         {
                             Id = reader.GetUInt32("id"),
                             KindId = reader.GetUInt32("kind_id"),
-                            //Name = reader.GetString("name") // there is no such field in the database for version 3.0.3.0
+                            //Name = reader.GetString("name"), // TODO: no DB column, stale
+                            //Wear = reader.GetBoolean("wear") // TODO: no DB column, stale
                         };
 
                         if (!_itemSets.TryAdd(entry.Id, entry))

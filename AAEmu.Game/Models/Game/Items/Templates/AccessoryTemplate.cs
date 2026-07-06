@@ -7,4 +7,5 @@ public class AccessoryTemplate : EquipItemTemplate
     public Wearable WearableTemplate { get; set; }
     public WearableKind KindTemplate { get; set; }
     public WearableSlot SlotTemplate { get; set; }
+    public int RechargeRestrictItemId { get; set; }
 }

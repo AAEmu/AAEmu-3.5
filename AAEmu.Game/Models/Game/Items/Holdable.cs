@@ -28,6 +28,14 @@ public class Holdable
     public int RenewCategory { get; set; }
     public int ItemProcId { get; set; }
     public int StatMultiplier { get; set; }
+    public int AnimL1Ratio { get; set; }
+    public int AnimL2Ratio { get; set; }
+    public int AnimR1Ratio { get; set; }
+    public int AnimR2Ratio { get; set; }
+    public int GearScoreMultiplier { get; set; }
+    public string Name { get; set; }
+    public uint PoseId { get; set; }
+    public uint SoundMaterialId { get; set; }
 
     // Attack animation IDs per weapon — right hand (R) and left hand (L)
     public uint AnimR1Id { get; set; }

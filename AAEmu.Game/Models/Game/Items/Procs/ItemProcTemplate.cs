@@ -15,6 +15,10 @@ public class ItemProcTemplate
     public uint CooldownSec { get; set; }
     public bool Finisher { get; set; }
     public uint ItemLevelBasedChanceBonus { get; set; }
+    public string Description { get; set; }
+    public bool OrUnitReqs { get; set; }
+    public uint TriggerSkillId { get; set; }
+    public uint TriggerTagId { get; set; }
 
     public SkillTemplate SkillTemplate { get; set; }
 }

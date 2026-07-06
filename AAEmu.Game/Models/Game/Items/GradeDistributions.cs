@@ -16,4 +16,5 @@ public class GradeDistributions
     public int Weight9 { get; set; }
     public int Weight10 { get; set; }
     public int Weight11 { get; set; }
+    public int Weight12 { get; set; }
 }
