@@ -348,7 +348,10 @@ public class WorldManager(
                             Type = (AreaShapeType)reader.GetUInt32("kind_id"),
                             Value1 = reader.GetFloat("value1"),
                             Value2 = reader.GetFloat("value2"),
-                            Value3 = reader.GetFloat("value3")
+                            Value3 = reader.GetFloat("value3"),
+                            AdjustAngle = reader.GetBoolean("adjust_angle", true),
+                            AreaTargetKindId = reader.GetUInt32("area_target_kind_id"),
+                            CalcDistance = reader.GetBoolean("calc_distance", true)
                         };
                         _areaShapes.TryAdd(shape.Id, shape);
                     }
