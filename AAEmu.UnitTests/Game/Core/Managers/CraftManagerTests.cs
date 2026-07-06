@@ -7,10 +7,10 @@ public class CraftManagerTests
 {
     private static SqliteConnection CreateConnection()
     {
-        var databasePath = Path.Combine(
+        var databasePath = Path.GetFullPath(Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,
-            "..", "..", "..", "..", "..",
-            "AAEmu.Game", "Data", "compact.sqlite3");
+            "..", "..", "..", "..",
+            "AAEmu.Game", "Data", "compact.sqlite3"));
         var connection = new SqliteConnection($"Data Source={databasePath}");
         connection.Open();
         return connection;

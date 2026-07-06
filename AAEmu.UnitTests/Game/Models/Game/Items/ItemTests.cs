@@ -201,7 +201,7 @@ public class ItemTests
         item.ChargeCount = 10;
 
         // Assert
-        await Assert.That(item.ChargeCount).IsEqualTo(10);
+        await Assert.That(item.ChargeCount).IsEqualTo((short)10);
     }
 
     [Test]
