@@ -4,6 +4,16 @@ using NLog;
 
 namespace AAEmu.Game.Models.Game.Formulas;
 
+/// <summary>
+/// Базовый класс формулы из таблицы <c>formulas</c> БД <c>compact.sqlite3</c>.
+/// </summary>
+/// <remarks>
+/// Схема таблицы <c>formulas</c>:
+/// <list type="bullet">
+///   <item><description><c>id</c> int PRIMARY KEY → <see cref="Id"/></description></item>
+///   <item><description><c>formula</c> text → <see cref="TextFormula"/></description></item>
+/// </list>
+/// </remarks>
 public class Formula
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
