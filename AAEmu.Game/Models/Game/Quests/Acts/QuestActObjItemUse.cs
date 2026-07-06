@@ -11,6 +11,7 @@ internal class QuestActObjItemUse(QuestComponentTemplate parentComponent) : Ques
     public int HighlightDoodadPhase { get; set; }
     public bool UseAlias { get; set; }
     public uint QuestActObjAliasId { get; set; }
+    public uint Cinema { get; set; }
     public bool DropWhenDestroy { get; set; }
 
     /// <summary>

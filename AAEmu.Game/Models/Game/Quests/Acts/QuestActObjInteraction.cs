@@ -15,6 +15,7 @@ public class QuestActObjInteraction(QuestComponentTemplate parentComponent) : Qu
     public uint HighlightDoodadId { get; set; }
     public int HighlightDoodadPhase { get; set; }
     public uint QuestActObjAliasId { get; set; }
+    public uint QuestDoodadGroupId { get; set; }
     public uint Phase { get; set; } // phase here is same as the related WI effect's next_phase of the doodad for the quest
 
     /// <summary>

@@ -15,6 +15,8 @@ public class QuestActObjTalk(QuestComponentTemplate parentComponent) : QuestActT
     public uint ItemId { get; set; }
     public bool UseAlias { get; set; }
     public uint QuestActObjAliasId { get; set; }
+    public uint HighlightDoodadId { get; set; }
+    public int HighlightDoodadPhase { get; set; }
 
     /// <summary>
     /// Checks if target Npc has been talked to

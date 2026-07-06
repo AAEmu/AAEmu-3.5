@@ -5,14 +5,19 @@ namespace AAEmu.Game.Models.Game.Quests.Templates;
 public class QuestTemplate : IQuestTemplate
 {
     public uint Id { get; set; }
+    public string Name { get; set; }
     public bool Repeatable { get; set; }
     public byte Level { get; set; }
+    public byte MinLevel { get; set; }
+    public byte MaxLevel { get; set; }
     public bool Selective { get; set; }
     public bool Successive { get; set; }
     public bool RestartOnFail { get; set; }
     public uint ChapterIdx { get; set; }
     public uint QuestIdx { get; set; }
-    public uint MilestoneId { get; set; }
+    public int Priority { get; set; }
+    public byte Race { get; set; }
+    public uint MilestoneId { get; set; } // TODO: no DB column, stale
     public bool LetItDone { get; set; }
     public QuestDetail DetailId { get; set; }
     public uint ZoneId { get; set; }

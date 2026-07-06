@@ -13,6 +13,8 @@ public class QuestActObjSphere(QuestComponentTemplate parentComponent) : QuestAc
     public int HighlightDoodadPhase { get; set; }
     public bool UseAlias { get; set; }
     public uint QuestActObjAliasId { get; set; }
+    public uint Cinema { get; set; }
+    public string Name { get; set; }
 
     /// <summary>
     /// Checks if the player is inside the sphere

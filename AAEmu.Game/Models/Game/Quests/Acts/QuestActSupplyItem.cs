@@ -15,6 +15,7 @@ public class QuestActSupplyItem(QuestComponentTemplate parentComponent) : QuestA
     public bool Cleanup { get; set; }
     public bool DropWhenDestroy { get; set; }
     public bool DestroyWhenDrop { get; set; }
+    public bool TryEquip { get; set; }
 
     /// <summary>
     /// Gives item to the player, either directly equipped, bag or by mail (for non-backpack)

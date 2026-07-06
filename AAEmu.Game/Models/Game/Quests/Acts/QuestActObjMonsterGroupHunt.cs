@@ -11,6 +11,7 @@ public class QuestActObjMonsterGroupHunt(QuestComponentTemplate parentComponent)
     public uint QuestActObjAliasId { get; set; }
     public uint HighlightDoodadId { get; set; }
     public int HighlightDoodadPhase { get; set; }
+    public bool LongDist { get; set; }
 
     /// <summary>
     /// Checks if the amount of monsters in the given group has been met

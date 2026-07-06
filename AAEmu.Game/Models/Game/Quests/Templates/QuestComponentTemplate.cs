@@ -28,6 +28,9 @@ public class QuestComponentTemplate(QuestTemplate parentTemplate)
     public uint AiCommandSetId { get; set; }
     public bool OrUnitReqs { get; set; }
     public uint CinemaId { get; set; }
+    public uint SoundId { get; set; }
+    public uint SummaryVoiceId { get; set; }
+    public bool HideQuestMarker { get; set; }
     public uint BuffId { get; set; }
     public QuestTemplate ParentQuestTemplate { get; set; } = parentTemplate;
     public List<QuestActTemplate> ActTemplates { get; set; } = [];
