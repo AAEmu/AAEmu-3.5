@@ -331,7 +331,7 @@ public class CharacterManager(
 
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT id, buff_id FROM appellations";
+                command.CommandText = "SELECT * FROM appellations";
                 command.Prepare();
                 using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
                 {
