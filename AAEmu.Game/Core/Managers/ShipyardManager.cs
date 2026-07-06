@@ -15,6 +15,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Менеджер верфей, загружающий шаблоны верфей и этапы их строительства из таблиц
+/// <c>shipyards</c> и <c>shipyard_steps</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class ShipyardManager(ITaskManager taskManager, IObjectIdManager objectIdManager, IShipyardIdManager shipyardIdManager, IWorldManager worldManager, ITaxationsManager taxationsManager, ISkillManager skillManager) : Singleton<ShipyardManager>, IShipyardManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -306,7 +310,9 @@ public class ShipyardManager(ITaskManager taskManager, IObjectIdManager objectId
                             BuildRadius = reader.GetInt32("build_radius"),
                             TaxDuration = reader.GetInt32("tax_duration", 0),
                             OriginItemId = reader.GetUInt32("origin_item_id", 0),
-                            TaxationId = reader.GetInt32("taxation_id")
+                            TaxationId = reader.GetInt32("taxation_id"),
+                            CeremonyAnimKey = reader.GetString("ceremony_anim_key"),
+                            CeremonyModelId = reader.GetUInt32("ceremony_model_id")
                         };
                         _shipyardsTemplate.Add(template.Id, template);
                     }
