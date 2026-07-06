@@ -16,6 +16,7 @@
 - Documented `CrimeManager` MySQL table (`crime`), added `Docs/Managers/CrimeManager.md` and unit tests for `CrimeEvent` column mapping.
 - Documented `DuelManager` (no DB tables, in-memory duel state), added `Docs/Managers/DuelManager.md`, listed duel packets from x2game 3.5.0.3, and added unit tests for manager constants.
 - Documented `EffectTaskManager` (no DB tables, effect task scheduler), added `Docs/Managers/EffectTaskManager.md` and unit tests.
+- Documented `ExpeditionManager` MySQL tables (`expeditions`, `expedition_members`, `expedition_role_policies`), added `Docs/Managers/ExpeditionManager.md`, listed expedition packets from x2game-dev (10.0.2.13-cn), and added unit tests for `Expedition`/`ExpeditionMember`/`ExpeditionRolePolicy` column mapping.
 
 ## History
 

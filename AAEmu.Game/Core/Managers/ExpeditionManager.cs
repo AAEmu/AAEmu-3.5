@@ -52,6 +52,24 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         return expedition;
     }
 
+    /// <summary>
+    /// Загружает данные экспедиций (гильдий) из базы MySQL.
+    /// Источники данных:
+    /// <list type="bullet">
+    ///   <item><description>Таблица <c>expeditions</c> — список гильдий (id, mother, name, owner, owner_name, created_at).</description></item>
+    ///   <item><description>Таблица <c>expedition_members</c> — члены гильдии (character_id, expedition_id, name, level, role, last_leave_time, ability1, ability2, ability3, memo).</description></item>
+    ///   <item><description>Таблица <c>expedition_role_policies</c> — права ролей (expedition_id, role, name, dominion_declare, invite, expel, promote, dismiss, chat, manager_chat, siege_master, join_siege).</description></item>
+    /// </list>
+    /// Также использует <see cref="AppConfiguration.Expedition"/> для регулярного выражения названия и базовых политик ролей.
+    /// Связанные сетевые пакеты (имена и opcodes восстановлены из IDA Pro MCP, x2game-dev.dll):
+    /// <list type="bullet">
+    ///   <item><description>C2G: CSCreateExpeditionPacket (0x004), CSChangeExpeditionRolePolicyPacket (0x006), CSChangeExpeditionMemberRolePacket (0x007), CSChangeExpeditionOwnerPacket (0x008), CSReplyExpeditionInvitationPacket (0x00D).</description></item>
+    ///   <item><description>G2C: SCExpeditionListPacket (0x00A), SCExpeditionRolePolicyListPacket (0x00D), SCExpeditionRolePolicyChangedPacket (0x00E), SCExpeditionRoleChangedPacket (0x00F), SCExpeditionOwnerChangedPacket (0x010), SCExpeditionCreatedPacket (0x015), SCExpeditionDismissedPacket (0x017), SCExpeditionInvitationPacket (0x02D), SCExpeditionMemberListPacket (0x023), SCExpeditionMemberListEndPacket (0x024).</description></item>
+    ///   <item><description>WZ/Unit: WZFactionListPacket (0x013), WZFactionCreatedPacket (0x015), WZUnitExpeditionChangedPacket (0x01A), UnitExpeditionChangedPacket (0x02F), WZExpeditionWarStatePacket (0x01B).</description></item>
+    ///   <item><description>SCSetExpeditionProtectDatePacket (0x022) используется для защиты гильдии.</description></item>
+    /// </list>
+    /// Сверка структур пакетов с IDA Pro MCP (x2game_dump.dll, ArcheAge 3.5.0.3): именованные структуры пакетов в IDB не обнаружены, opcodes и имена взяты из x2game-dev.dll (10.0.2.13-cn).
+    /// </summary>
     public void Load()
     {
         _expeditions = [];
