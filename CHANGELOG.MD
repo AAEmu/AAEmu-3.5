@@ -12,6 +12,7 @@
 - Documented `CashShopManager` data sources (`ics_skus`, `ics_shop_items`, `ics_menu` MySQL tables) and ICS packets, added `Docs/Managers/CashShopManager.md` and unit tests for `IcsSku`/`IcsItem` column mapping.
 - Documented `ChatManager` (no DB tables, in-memory chat channels), added `Docs/Managers/ChatManager.md` and unit tests for `ChatChannel` properties.
 - Documented `CommandManager` (no DB tables, command scripts from `Scripts/Commands`), added `Docs/Managers/CommandManager.md` and unit tests for command prefix.
+- Documented `CraftManager` SQLite tables (`crafts`, `craft_products`, `craft_materials`, `craft_pack_crafts`), added `Docs/Managers/CraftManager.md` and unit tests verifying schema and class mappings.
 
 ## History
 

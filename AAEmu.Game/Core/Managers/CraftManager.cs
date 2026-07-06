@@ -11,6 +11,22 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
 
     private Dictionary<uint, Craft> _crafts;
 
+    /// <summary>
+    /// Загружает рецепты крафта из таблиц <c>crafts</c>, <c>craft_products</c>,
+    /// <c>craft_materials</c> и <c>craft_pack_crafts</c> БД <c>compact.sqlite3</c>.
+    /// </summary>
+    /// <remarks>
+    /// Используемые поля:
+    /// <list type="bullet">
+    ///   <item><description><c>crafts</c>: id, cast_delay, tool_id, skill_id, wi_id, req_doodad_id, need_bind, ac_id, actability_limit, show_upper_crafts, recommend_level, visible_order</description></item>
+    ///   <item><description><c>craft_products</c>: id, craft_id, item_id, amount, rate, show_lower_crafts, use_grade, item_grade_id</description></item>
+    ///   <item><description><c>craft_materials</c>: id, craft_id, item_id, amount, main_grade</description></item>
+    ///   <item><description><c>craft_pack_crafts</c>: craft_id</description></item>
+    /// </list>
+    /// Поля БД, не используемые в коде: crafts.desc, crafts.products_pack_id, crafts.title, crafts.use_only_actability;
+    /// craft_materials.require_grade, craft_materials.upper_grade.
+    /// Контейнер: <c>_crafts</c> (id → Craft).
+    /// </remarks>
     public void Load()
     {
         _crafts = [];
