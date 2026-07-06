@@ -5,6 +5,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Менеджер загрузки рецептов крафта из таблиц <c>crafts</c>, <c>craft_products</c>,
+/// <c>craft_materials</c> и <c>craft_pack_crafts</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class CraftManager : Singleton<CraftManager>, ICraftManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
@@ -16,15 +20,33 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
     /// <c>craft_materials</c> и <c>craft_pack_crafts</c> БД <c>compact.sqlite3</c>.
     /// </summary>
     /// <remarks>
-    /// Используемые поля:
+    /// Схемы таблиц (проверены по compact.sqlite3):
     /// <list type="bullet">
-    ///   <item><description><c>crafts</c>: id, cast_delay, tool_id, skill_id, wi_id, req_doodad_id, need_bind, ac_id, actability_limit, show_upper_crafts, recommend_level, visible_order</description></item>
-    ///   <item><description><c>craft_products</c>: id, craft_id, item_id, amount, rate, show_lower_crafts, use_grade, item_grade_id</description></item>
-    ///   <item><description><c>craft_materials</c>: id, craft_id, item_id, amount, main_grade</description></item>
-    ///   <item><description><c>craft_pack_crafts</c>: craft_id</description></item>
+    ///   <item>
+    ///     <description>
+    ///       <c>crafts</c>: id (PK), cast_delay, tool_id, skill_id, wi_id, req_doodad_id,
+    ///       need_bind, ac_id, actability_limit, show_upper_crafts, recommend_level,
+    ///       visible_order, desc, products_pack_id, title, use_only_actability
+    ///     </description>
+    ///   </item>
+    ///   <item>
+    ///     <description>
+    ///       <c>craft_products</c>: id (PK), craft_id, item_id, amount, rate,
+    ///       show_lower_crafts, use_grade, item_grade_id
+    ///     </description>
+    ///   </item>
+    ///   <item>
+    ///     <description>
+    ///       <c>craft_materials</c>: id (PK), craft_id, item_id, amount, main_grade,
+    ///       require_grade, upper_grade
+    ///     </description>
+    ///   </item>
+    ///   <item>
+    ///     <description>
+    ///       <c>craft_pack_crafts</c>: id (PK), craft_pack_id, craft_id
+    ///     </description>
+    ///   </item>
     /// </list>
-    /// Поля БД, не используемые в коде: crafts.desc, crafts.products_pack_id, crafts.title, crafts.use_only_actability;
-    /// craft_materials.require_grade, craft_materials.upper_grade.
     /// Контейнер: <c>_crafts</c> (id → Craft).
     /// </remarks>
     public void Load()
@@ -43,20 +65,25 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
                 {
                     while (reader.Read())
                     {
-                        var template = new Craft();
-                        template.Id = reader.GetUInt32("id");
-                        template.CastDelay = reader.GetInt32("cast_delay");
-                        template.ToolId = reader.GetUInt32("tool_id", 0);
-                        template.SkillId = reader.GetUInt32("skill_id", 0);
-                        template.WiId = reader.GetUInt32("wi_id");
-                        //template.MilestoneId = reader.GetUInt32("milestone_id", 0); // there is no such field in the database for version 3.0.3.0
-                        template.ReqDoodadId = reader.GetUInt32("req_doodad_id", 0);
-                        template.NeedBind = reader.GetBoolean("need_bind");
-                        template.AcId = reader.GetUInt32("ac_id", 0);
-                        template.ActabilityLimit = reader.GetInt32("actability_limit");
-                        template.ShowUpperCraft = reader.GetBoolean("show_upper_crafts");
-                        template.RecommendLevel = reader.GetInt32("recommend_level");
-                        template.VisibleOrder = reader.GetInt32("visible_order");
+                        var template = new Craft
+                        {
+                            Id = reader.GetUInt32("id"),
+                            CastDelay = reader.GetInt32("cast_delay"),
+                            ToolId = reader.GetUInt32("tool_id", 0),
+                            SkillId = reader.GetUInt32("skill_id", 0),
+                            WiId = reader.GetUInt32("wi_id"),
+                            ReqDoodadId = reader.GetUInt32("req_doodad_id", 0),
+                            NeedBind = reader.GetBoolean("need_bind"),
+                            AcId = reader.GetUInt32("ac_id", 0),
+                            ActabilityLimit = reader.GetInt32("actability_limit"),
+                            ShowUpperCraft = reader.GetBoolean("show_upper_crafts"),
+                            RecommendLevel = reader.GetInt32("recommend_level"),
+                            VisibleOrder = reader.GetInt32("visible_order"),
+                            Desc = reader.GetString("desc"),
+                            ProductsPackId = reader.GetUInt32("products_pack_id", 0),
+                            Title = reader.GetString("title"),
+                            UseOnlyActability = reader.GetBoolean("use_only_actability")
+                        };
                         _crafts.Add(template.Id, template);
                     }
                 }
@@ -75,22 +102,24 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
                         if (!_crafts.ContainsKey(craftId))
                             continue;
 
-                        var template = new CraftProduct();
-                        template.Id = reader.GetUInt32("id");
-                        template.CraftId = reader.GetUInt32("craft_id");
-                        template.ItemId = reader.GetUInt32("item_id");
-                        template.Amount = reader.GetInt32("amount", 1); //We always want to produce at least 1 item ?
-                        template.Rate = reader.GetInt32("rate");
-                        template.ShowLowerCrafts = reader.GetBoolean("show_lower_crafts");
-                        template.UseGrade = reader.GetBoolean("use_grade");
-                        template.ItemGradeId = reader.GetUInt32("item_grade_id");
+                        var template = new CraftProduct
+                        {
+                            Id = reader.GetUInt32("id"),
+                            CraftId = craftId,
+                            ItemId = reader.GetUInt32("item_id"),
+                            Amount = reader.GetInt32("amount", 1), //We always want to produce at least 1 item ?
+                            Rate = reader.GetInt32("rate"),
+                            ShowLowerCrafts = reader.GetBoolean("show_lower_crafts"),
+                            UseGrade = reader.GetBoolean("use_grade"),
+                            ItemGradeId = reader.GetUInt32("item_grade_id")
+                        };
 
                         _crafts[template.CraftId].CraftProducts.Add(template);
                     }
                 }
             }
 
-            /* Craft products (item you get at the end) */
+            /* Craft materials */
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM craft_materials";
@@ -103,18 +132,23 @@ public class CraftManager : Singleton<CraftManager>, ICraftManager
                         if (!_crafts.ContainsKey(craftId))
                             continue;
 
-                        var template = new CraftMaterial();
-                        template.Id = reader.GetUInt32("id");
-                        template.CraftId = craftId;
-                        template.ItemId = reader.GetUInt32("item_id");
-                        template.Amount = reader.GetInt32("amount", 1); //We always want to cost at least 1 item ?
-                        template.MainGrade = reader.GetBoolean("main_grade");
+                        var template = new CraftMaterial
+                        {
+                            Id = reader.GetUInt32("id"),
+                            CraftId = craftId,
+                            ItemId = reader.GetUInt32("item_id"),
+                            Amount = reader.GetInt32("amount", 1), //We always want to cost at least 1 item ?
+                            MainGrade = reader.GetBoolean("main_grade"),
+                            RequireGrade = reader.GetInt32("require_grade"),
+                            UpperGrade = reader.GetBoolean("upper_grade")
+                        };
 
                         _crafts[craftId].CraftMaterials.Add(template);
                     }
                 }
             }
 
+            /* Craft pack crafts */
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM craft_pack_crafts";
