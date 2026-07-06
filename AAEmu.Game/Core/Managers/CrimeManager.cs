@@ -36,6 +36,16 @@ public class CrimeManager(IWorldManager worldManager,
         return CrimeEvents.Values.Where(x => x.Criminal == playerId).ToList();
     }
 
+    /// <summary>
+    /// Загружает события преступлений из таблицы <c>crime</c> БД MySQL.
+    /// </summary>
+    /// <remarks>
+    /// Используемые поля таблицы <c>crime</c>: id, criminal, victim, reporter,
+    /// doodad_template, crime_type, zone_key, x, y, z, crime_time, report_time,
+    /// arg1, arg2, arg3, msg.
+    /// compact.sqlite3 / compact.server.table.sqlite3 не используются.
+    /// Контейнер: <c>CrimeEvents</c> (id → CrimeEvent).
+    /// </remarks>
     public void Load()
     {
         Logger.Info("Loading crime events...");

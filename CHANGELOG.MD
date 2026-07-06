@@ -13,6 +13,7 @@
 - Documented `ChatManager` (no DB tables, in-memory chat channels), added `Docs/Managers/ChatManager.md` and unit tests for `ChatChannel` properties.
 - Documented `CommandManager` (no DB tables, command scripts from `Scripts/Commands`), added `Docs/Managers/CommandManager.md` and unit tests for command prefix.
 - Documented `CraftManager` SQLite tables (`crafts`, `craft_products`, `craft_materials`, `craft_pack_crafts`), added `Docs/Managers/CraftManager.md` and unit tests verifying schema and class mappings.
+- Documented `CrimeManager` MySQL table (`crime`), added `Docs/Managers/CrimeManager.md` and unit tests for `CrimeEvent` column mapping.
 
 ## History
 
