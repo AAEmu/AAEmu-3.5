@@ -9,6 +9,7 @@ namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 public class DoodadFuncAttachment : DoodadFuncTemplate
 {
     // doodad_funcs
+    public uint AnimActionId { get; set; }
     public AttachPointKind AttachPointId { get; init; }
     public int Space { get; init; }
     public BondKind BondKindId { get; init; }

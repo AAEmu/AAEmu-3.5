@@ -5,4 +5,5 @@ public class DoodadFuncConsumeChangerItem
     public uint Id { get; set; }
     public uint DoodadFuncConsumeChangerId { get; set; }
     public uint ItemId { get; set; }
+    public int Count { get; set; }
 }

@@ -5,7 +5,9 @@ namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 
 public class DoodadFuncConsumeChangerModel : DoodadPhaseFuncTemplate
 {
+    // TODO: no DB column, stale
     public string Name { get; set; }
+    public string Model { get; set; }
 
     public override bool Use(BaseUnit caster, Doodad owner)
     {

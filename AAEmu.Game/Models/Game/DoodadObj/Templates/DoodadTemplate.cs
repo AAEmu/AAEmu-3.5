@@ -15,6 +15,7 @@ public class DoodadTemplate
     public uint ModelKindId { get; set; }
     public bool UseCreatorFaction { get; set; }
     public bool ForceTodTopPriority { get; set; }
+    // TODO: no DB column, stale
     public uint MilestoneId { get; set; }
     public uint GroupId { get; set; }
     public bool UseTargetDecal { get; set; }

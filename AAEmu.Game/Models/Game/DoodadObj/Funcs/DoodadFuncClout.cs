@@ -24,6 +24,10 @@ public class DoodadFuncClout : DoodadPhaseFuncTemplate
     public uint TargetBuffTagId { get; set; }
     public uint TargetNoBuffTagId { get; set; }
     public bool UseOriginSource { get; set; }
+    public bool CheckNoTargetTagSrc { get; set; }
+    public bool CheckProjectileHighPriority { get; set; }
+    public bool CheckTargetTagSrc { get; set; }
+    public uint FxGroupId { get; set; }
     public List<uint> Effects { get; set; }
 
     public override bool Use(BaseUnit caster, Doodad owner)

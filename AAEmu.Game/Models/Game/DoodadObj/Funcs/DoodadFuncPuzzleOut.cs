@@ -14,6 +14,7 @@ public class DoodadFuncPuzzleOut : DoodadPhaseFuncTemplate
     public int Delay { get; set; }
     public int NextPhase { get; set; }
     public int ProjectileDelay { get; set; }
+    public uint SoundId { get; set; }
 
     public override bool Use(BaseUnit caster, Doodad owner)
     {

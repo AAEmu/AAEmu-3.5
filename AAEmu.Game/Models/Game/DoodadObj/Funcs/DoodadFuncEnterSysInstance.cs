@@ -12,6 +12,7 @@ public class DoodadFuncEnterSysInstance : DoodadFuncTemplate
     // doodad_funcs
     public uint ZoneId { get; set; }
     public FactionsEnum FactionId { get; set; }
+    public bool Selective { get; set; }
 
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {

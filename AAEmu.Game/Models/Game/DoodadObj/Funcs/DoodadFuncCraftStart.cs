@@ -6,6 +6,8 @@ namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 public class DoodadFuncCraftStart : DoodadFuncTemplate
 {
     // doodad_funcs
+    public string Name { get; set; }
+
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {
         Logger.Trace("DoodadFuncCraftStart");

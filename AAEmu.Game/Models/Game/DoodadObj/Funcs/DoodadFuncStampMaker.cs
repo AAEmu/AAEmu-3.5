@@ -6,10 +6,12 @@ namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 public class DoodadFuncStampMaker : DoodadFuncTemplate
 {
     // doodad_funcs
+    public bool ConsumeAll { get; set; }
+    public int ConsumeCount { get; set; }
+    public uint ConsumeItemSetId { get; set; }
+    public uint ConsumeItemId { get; set; }
     public int ConsumeMoney { get; set; }
     public uint ItemId { get; set; }
-    public uint ConsumeItemId { get; set; }
-    public int ConsumeCount { get; set; }
 
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {

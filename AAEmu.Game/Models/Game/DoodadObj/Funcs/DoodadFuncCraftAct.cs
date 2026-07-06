@@ -6,6 +6,11 @@ namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 public class DoodadFuncCraftAct : DoodadFuncTemplate
 {
     // doodad_funcs
+    public string Model20 { get; set; }
+    public string Model40 { get; set; }
+    public string Model60 { get; set; }
+    public string Model80 { get; set; }
+
     public override void Use(BaseUnit caster, Doodad owner, uint skillId, int nextPhase = 0)
     {
         Logger.Trace("DoodadFuncCraftAct");
