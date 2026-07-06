@@ -26,6 +26,12 @@ using Portal = AAEmu.Game.Models.Game.Portal;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Менеджер порталов. Загружает точки возврата/respawn/worldgate из JSON
+/// и реагенты для открытия порталов из таблиц
+/// <c>open_portal_inland_reagents</c>, <c>open_portal_outland_reagents</c> и
+/// <c>district_return_points</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class PortalManager(ILocalizationManager localizationManager, IWorldManager worldManager, IZoneManager zoneManager, INpcManager npcManager, IObjectIdManager objectIdManager, ITaskManager taskManager) : Singleton<PortalManager>, IPortalManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();

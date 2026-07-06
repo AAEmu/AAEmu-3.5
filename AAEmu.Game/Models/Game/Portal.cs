@@ -43,10 +43,20 @@ public class VisitedDistrict
     public uint Owner { get; set; }
 }
 
+/// <summary>
+/// Связь района и точки возврата из таблицы <c>district_return_points</c> БД <c>compact.sqlite3</c>.
+/// </summary>
 public class DistrictReturnPoints
 {
+    /// <summary>Идентификатор записи.</summary>
     public uint Id { get; set; }
+
+    /// <summary>Идентификатор района (district).</summary>
     public uint DistrictId { get; set; }
+
+    /// <summary>Идентификатор фракции, для которой действует точка возврата.</summary>
     public FactionsEnum FactionId { get; set; }
+
+    /// <summary>Идентификатор точки возврата (<see cref="Portal.Id"/>).</summary>
     public uint ReturnPointId { get; set; }
 }
