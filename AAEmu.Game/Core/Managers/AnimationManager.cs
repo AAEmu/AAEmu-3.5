@@ -101,6 +101,28 @@ public class AnimationManager : Singleton<AnimationManager>, IAnimationManager
         return res;
     }
 
+    /// <summary>
+    /// Загружает анимации из таблицы <c>anims</c> БД <c>compact.sqlite3</c>
+    /// и дополняет длительностями из клиентского файла <c>game/combat_sync_event_list.g</c>.
+    /// </summary>
+    /// <remarks>
+    /// Схема таблицы <c>anims</c> (проверена по compact.sqlite3):
+    /// <list type="bullet">
+    ///   <item><description><c>id</c> int PRIMARY KEY → <see cref="Anim.Id"/></description></item>
+    ///   <item><description><c>category_id</c> int → <see cref="Anim.Category"/></description></item>
+    ///   <item><description><c>hang_ub</c> text → <see cref="Anim.HangUB"/></description></item>
+    ///   <item><description><c>loop</c> bool → <see cref="Anim.Loop"/></description></item>
+    ///   <item><description><c>move_ub</c> text → <see cref="Anim.MoveUB"/></description></item>
+    ///   <item><description><c>name</c> text → <see cref="Anim.Name"/></description></item>
+    ///   <item><description><c>relaxed_ub</c> text → <see cref="Anim.RelaxedUB"/></description></item>
+    ///   <item><description><c>ride_ub</c> text → <see cref="Anim.RideUB"/></description></item>
+    ///   <item><description><c>swim_move_ub</c> text → <see cref="Anim.SwimMoveUB"/></description></item>
+    ///   <item><description><c>swim_ub</c> text → <see cref="Anim.SwimUB"/></description></item>
+    /// </list>
+    /// Контейнеры: <c>_animations</c> (id → Anim), <c>_animationsByName</c> (name → Anim).
+    /// Связанные сетевые пакеты (x2game 3.5.0.3): CSStartSkill_0x1A4, SCSkillStarted_0x1DB,
+    /// SCSkillFired_0x11B, SCSkillEnded_0x1BC, SCSkillStopped_0x2AB и др.
+    /// </remarks>
     public void Load()
     {
         _animations = [];

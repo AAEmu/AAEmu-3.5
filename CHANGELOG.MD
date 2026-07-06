@@ -7,6 +7,7 @@
 - Updated `SkillManager.Load()` to match the current SQLite schema for `skills`, `buff_tick_effects`, `skill_controllers`, and related effect tables.
 - Added mappings for previously missing effect types, including `DoodadItemChangeEffect`, `HighAbilityResourceEffect`, `LevelUpEffect`, `MoveToLocationEffect`, `PlayLogEffect`, and `WorldMessageEffect`.
 - Added regression tests against the real SQLite data and updated the Russian testing progress documentation.
+- Documented `AnimationManager` data sources (`anims` table schema), added `Docs/Managers/AnimationManager.md`, and added unit tests verifying the `anims` schema and `Anim` class mapping.
 
 ## History
 
