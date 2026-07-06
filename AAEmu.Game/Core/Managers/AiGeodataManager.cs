@@ -380,6 +380,12 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
 
     #endregion Finding the closest point
 
+    /// <summary>
+    /// Метод не выполняет загрузку данных (устаревший/пустой).
+    /// Менеджер работает с AI-геоданными, предварительно загруженными в <see cref="WorldTemplate"/> (bai/навигация).
+    /// Таблицы compact.sqlite3: не используются.
+    /// Таблицы compact.server.table.sqlite3: не используются.
+    /// </summary>
     public void Load()
     {
         // Nothing to load here anymore, everything
