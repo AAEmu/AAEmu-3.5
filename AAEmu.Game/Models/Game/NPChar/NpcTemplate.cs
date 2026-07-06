@@ -7,6 +7,9 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Models.Game.NPChar;
 
+/// <summary>
+/// Static template data for a non-player character (NPC).
+/// </summary>
 public class NpcTemplate
 {
     public uint Id { get; set; }
@@ -31,6 +34,7 @@ public class NpcTemplate
     public int BaseSkillId { get; set; }
     public bool TrackFriendship { get; set; }
     public bool Priest { get; set; }
+    // TODO: no DB column, stale (also note the typo)
     public int NpcTedencyId { get; set; }
     public bool Blacksmith { get; set; }
     public bool Teleporter { get; set; }
@@ -39,6 +43,7 @@ public class NpcTemplate
     public float Scale { get; set; }
     public float SightRangeScale { get; set; }
     public float SightFovScale { get; set; }
+    // TODO: no DB column, stale
     public int MilestoneId { get; set; }
     public float AttackStartRangeScale { get; set; }
     public bool Aggression { get; set; }
@@ -81,7 +86,9 @@ public class NpcTemplate
     public bool CrowdEffect { get; set; }
     public byte Race { get; set; }
     public byte Gender { get; set; }
+    // TODO: no DB column, stale
     public uint MerchantPackId { get; set; }
+    // TODO: no DB column, stale
     public uint EquipBodiesId { get; set; }
     public uint EquipClothsId { get; set; }
     public uint EquipWeaponsId { get; set; }
@@ -96,6 +103,28 @@ public class NpcTemplate
     public Dictionary<SkillUseConditionKind, List<NpcSkill>> Skills { get; set; } = [];
     public List<NpcPassiveBuff> PassiveBuffs { get; set; } = [];
     public uint TotalCustomId { get; set; }
+
+    // New columns from the npcs table
+    public bool BattleFieldRecruiter { get; set; }
+    public int NpcStrafeParamId { get; set; }
+    public int NpcAiClientParamId { get; set; }
+    public uint SoundPackId { get; set; }
+    public int DecayingSecAfterLooted { get; set; }
+    public bool DontPushableLikeGhost { get; set; }
+    public bool ForceTargetMeOnAttack { get; set; }
+    public bool CheckBackpack { get; set; }
+    public bool CheckTargetUnderTerrain { get; set; }
+    public bool NationRelationVote { get; set; }
+    public bool NoPenalty { get; set; }
+    public float RunAwayThreshold { get; set; }
+    public bool ShowFactionTag { get; set; }
+    public bool ShowOnBossTelescope { get; set; }
+    public string SoState { get; set; }
+    public bool TradegoodBuy { get; set; }
+    public bool UseModelCameraDistance { get; set; }
+    public int MateReviveDelay { get; set; }
+    public int MateReviveHpPercent { get; set; }
+    public int MateReviveMpPercent { get; set; }
 
     public void BindSkills(List<NpcSkill> skills)
     {
