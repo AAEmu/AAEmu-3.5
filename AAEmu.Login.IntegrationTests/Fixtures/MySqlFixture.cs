@@ -17,7 +17,14 @@ public class MySqlFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        try
+        {
+            await _container.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Assert.Skip($"Docker is not available; skipping MySQL integration tests. {ex.Message}");
+        }
 
         var schemaPath = Path.Combine(AppContext.BaseDirectory, "SQL", "aaemu_login.sql");
         var schemaSql = await File.ReadAllTextAsync(schemaPath);
