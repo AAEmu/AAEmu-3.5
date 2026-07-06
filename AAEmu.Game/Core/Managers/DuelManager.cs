@@ -15,6 +15,13 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Управляет дуэлями между персонажами: вызов, начало, отслеживание расстояния/здоровья и завершение.
+/// Метод <c>Load()</c> отсутствует; данные не загружаются из compact.sqlite3 / compact.server.table.sqlite3.
+/// Обрабатываемые пакеты (x2game 3.5.0.3):
+/// CSChallengeDuel_0x02B, CSStartDuel_0x00E, SCDuelChallenged_0x0BD, SCDuelStartCountdown_0x184,
+/// SCDuelStarted_0x100, SCDuelEnded_0x22A, SCDuelState_0x193.
+/// </summary>
 public class DuelManager : Singleton<DuelManager>, IDuelManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
