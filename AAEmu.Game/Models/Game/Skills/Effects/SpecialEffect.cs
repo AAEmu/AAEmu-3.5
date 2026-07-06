@@ -11,6 +11,8 @@ public class SpecialEffect : EffectTemplate
     public int Value2 { get; set; }
     public int Value3 { get; set; }
     public int Value4 { get; set; }
+    public int Value5 { get; set; }
+    public int Value6 { get; set; }
 
     public override bool OnActionTime => false;
 
@@ -20,7 +22,8 @@ public class SpecialEffect : EffectTemplate
     {
         if (source == null) return;
 
-        Logger.ConditionalTrace("SpecialEffect, Special: {0}, Value1: {1}, Value2: {2}, Value3: {3}, Value4: {4}", SpecialEffectTypeId, Value1, Value2, Value3, Value4);
+        Logger.ConditionalTrace("SpecialEffect, Special: {0}, Value1: {1}, Value2: {2}, Value3: {3}, Value4: {4}, Value5: {5}, Value6: {6}",
+            SpecialEffectTypeId, Value1, Value2, Value3, Value4, Value5, Value6);
 
         var classType = Type.GetType("AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects." + SpecialEffectTypeId);
         if (classType == null)

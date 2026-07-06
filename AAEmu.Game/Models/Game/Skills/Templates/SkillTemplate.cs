@@ -57,7 +57,7 @@ public class SkillTemplate
     public bool StopCastingOnBigHit { get; set; }
     public bool StopChannelingOnBigHit { get; set; }
     public bool AutoLearn { get; set; }
-    public bool NeedLearn { get; set; }
+    // public bool NeedLearn { get; set; } // 3.5.0.3 skills does not expose need_learn
     public uint MainhandToolId { get; set; }
     public uint OffhandToolId { get; set; }
     public int FrontAngle { get; set; }
@@ -65,7 +65,7 @@ public class SkillTemplate
     public bool Unmount { get; set; }
     public uint DamageTypeId { get; set; }
     public bool AllowToPrisoner { get; set; }
-    public uint MilestoneId { get; set; }
+    // public uint MilestoneId { get; set; } // 3.5.0.3 skills does not expose milestone_id
     public bool MatchAnimation { get; set; }
     public Plot Plot { get; set; }
     public bool UseAnimTime { get; set; }
@@ -110,6 +110,63 @@ public class SkillTemplate
     public bool SourceNotCollided { get; set; }
     public int SkillPoints { get; set; }
     public int DoodadHitFamily { get; set; }
+    public bool AccountCooldown { get; set; }
+    public bool AutoFire { get; set; }
+    public bool CalcUserLevel { get; set; }
+    public float CameraAcceleration { get; set; }
+    public float CameraDuration { get; set; }
+    public bool CameraHoldZ { get; set; }
+    public float CameraMaxDistance { get; set; }
+    public float CameraSlowDownDistance { get; set; }
+    public float CameraSpeed { get; set; }
+    public bool CanActiveWeaponWithoutAnim { get; set; }
+    public bool CastingUseable { get; set; }
+    public int CategoryId { get; set; }
+    public uint ChannelingAnimId { get; set; }
+    public int CharRaceId { get; set; }
+    public bool CheckObstacle { get; set; }
+    public bool ControllerCamera { get; set; }
+    public int ControllerCameraSpeed { get; set; }
+    public string Desc { get; set; }
+    public uint DoodadBundleId { get; set; }
+    public uint DualWieldFireAnimId { get; set; }
+    public uint FxGroupId { get; set; }
+    public int HighAbilityId { get; set; }
+    public uint IconId { get; set; }
+    public int LinkBackpackTypeId { get; set; }
+    public int LinkEquipSlotId { get; set; }
+    public bool MatchAnimationCount { get; set; }
+    public int MaxHighAbilityResource { get; set; }
+    public int MinHighAbilityResource { get; set; }
+    public string Name { get; set; }
+    public uint PercussionInstrumentFireAnimId { get; set; }
+    public uint PercussionInstrumentStartAnimId { get; set; }
+    public float PitchAngle { get; set; }
+    public uint ProjectileId { get; set; }
+    public int SecondCooldownTagId { get; set; }
+    public bool SensitiveOperation { get; set; }
+    public bool ShowTargetCastingTime { get; set; }
+    public bool SkipQuestApplyUseItem { get; set; }
+    public bool SkipValidateSource { get; set; }
+    public bool SourceAlive { get; set; }
+    public bool SourceShouldSwim { get; set; }
+    public uint StartAnimId { get; set; }
+    public bool StartAutoattack { get; set; }
+    public bool StopAutoattack { get; set; }
+    public uint StringInstrumentFireAnimId { get; set; }
+    public uint StringInstrumentStartAnimId { get; set; }
+    public bool SwitchToSkillCooldown { get; set; }
+    public bool SynergyIcon1BuffKind { get; set; }
+    public uint SynergyIcon1Id { get; set; }
+    public bool SynergyIcon2BuffKind { get; set; }
+    public uint SynergyIcon2Id { get; set; }
+    public int TargetDecalRadius { get; set; }
+    public int ThirdCooldownTagId { get; set; }
+    public uint TubeInstrumentFireAnimId { get; set; }
+    public uint TubeInstrumentStartAnimId { get; set; }
+    public uint TwohandFireAnimId { get; set; }
+    public bool UseSkillCamera { get; set; }
+    public bool ValidHeightEdgeToEdge { get; set; }
     public List<SkillEffect> Effects { get; set; } = [];
     public bool FirstReagentOnly { get; set; }
 }

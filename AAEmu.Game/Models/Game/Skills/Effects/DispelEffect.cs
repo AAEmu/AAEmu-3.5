@@ -9,6 +9,7 @@ public class DispelEffect : EffectTemplate
 {
     public int DispelCount { get; set; }
     public int CureCount { get; set; }
+    public int Stack { get; set; }
     public uint BuffTagId { get; set; }
 
     public override bool OnActionTime => false;

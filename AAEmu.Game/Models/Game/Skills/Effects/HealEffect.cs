@@ -29,6 +29,7 @@ public class HealEffect : EffectTemplate
     public int ActabilityStep { get; set; }
     public float ActabilityMul { get; set; }
     public float ActabilityAdd { get; set; }
+    public string ExtraEffects { get; set; }
 
     public override bool OnActionTime => false;
 

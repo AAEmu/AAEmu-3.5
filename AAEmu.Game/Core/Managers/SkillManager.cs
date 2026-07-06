@@ -280,19 +280,24 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             { "CraftEffect", [] },
             { "DamageEffect", [] },
             { "DispelEffect", [] },
+            { "DoodadItemChangeEffect", [] },
             { "FlyingStateChangeEffect", [] },
             { "GainLootPackItemEffect", [] },
             { "HealEffect", [] },
+            { "HighAbilityResourceEffect", [] },
             { "ImprintUccEffect", [] },
             { "ImpulseEffect", [] },
             { "InteractionEffect", [] },
             { "KillNpcWithoutCorpseEffect", [] },
+            { "LevelUpEffect", [] },
             { "ManaBurnEffect", [] },
+            { "MoveToLocationEffect", [] },
             { "MoveToRezPointEffect", [] },
             { "NpcControlEffect", [] },
             { "NpcSpawnerDespawnEffect", [] },
             { "NpcSpawnerSpawnEffect", [] },
             { "OpenPortalEffect", [] },
+            { "PlayLogEffect", [] },
             { "PhysicalExplosionEffect", [] },
             { "PutDownBackpackEffect", [] },
             { "RecoverExpEffect", [] },
@@ -305,16 +310,13 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             { "SpecialEffect", [] },
             { "TrainCraftEffect", [] },
             { "TrainCraftRankEffect", [] }, // missing from the effect table
+            { "WorldMessageEffect", [] },
             { "SkillController", [] }, // missing from the effect table
             { "SpawnFishEffect", [] }, // missing from the effect table
             { "ResetAoeDiminishingEffect", [] } // missing from the effect table
         };
 
         _buffs = [];
-        // TODO 
-        /*
-            _effects.Add("PlayLogEffect", new Dictionary<uint, EffectTemplate>()); // missing from the effect table
-        */
 
         _buffTags = [];
         _taggedBuffs = [];
@@ -341,6 +343,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         var template = new SkillTemplate();
                         template.Id = reader.GetUInt32("id");
+                        template.Name = reader.GetString("name");
+                        template.Desc = reader.GetString("desc");
                         template.Cost = reader.GetInt32("cost");
                         template.Show = reader.GetBoolean("show", true);
                         template.FireAnim = animationManager.GetAnimation(reader.GetUInt32("fire_anim_id", 0));
@@ -394,7 +398,6 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.StopCastingOnBigHit = reader.GetBoolean("stop_casting_on_big_hit", true);
                         template.StopChannelingOnBigHit = reader.GetBoolean("stop_channeling_on_big_hit", true);
                         template.AutoLearn = reader.GetBoolean("auto_learn", true);
-                        //template.NeedLearn = reader.GetBoolean("need_learn", true); // there is no such field in the database for version 3.0.3.0
                         template.MainhandToolId = reader.GetUInt32("mainhand_tool_id", 0);
                         template.OffhandToolId = reader.GetUInt32("offhand_tool_id", 0);
                         template.FrontAngle = reader.GetInt32("front_angle");
@@ -402,7 +405,6 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.Unmount = reader.GetBoolean("unmount", true);
                         template.DamageTypeId = reader.GetUInt32("damage_type_id", 0);
                         template.AllowToPrisoner = reader.GetBoolean("allow_to_prisoner", true);
-                        //template.MilestoneId = reader.GetUInt32("milestone_id", 0); // there is no such field in the database for version 3.0.3.0
                         template.MatchAnimation = reader.GetBoolean("match_animation", true);
                         template.Plot = reader.IsDBNull("plot_id") ? null : plotManager.GetPlot(reader.GetUInt32("plot_id"));
                         template.UseAnimTime = reader.GetBoolean("use_anim_time", true);
@@ -448,6 +450,61 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.SkillPoints = reader.GetInt32("skill_points");
                         template.DoodadHitFamily = reader.GetInt32("doodad_hit_family");
                         template.FirstReagentOnly = reader.GetBoolean("first_reagent_only", true);
+                        template.AccountCooldown = reader.GetBoolean("account_cooldown", true);
+                        template.AutoFire = reader.GetBoolean("auto_fire", true);
+                        template.CalcUserLevel = reader.GetBoolean("calc_user_level", true);
+                        template.CameraAcceleration = reader.GetFloat("camera_acceleration");
+                        template.CameraDuration = reader.GetFloat("camera_duration");
+                        template.CameraHoldZ = reader.GetBoolean("camera_hold_z", true);
+                        template.CameraMaxDistance = reader.GetFloat("camera_max_distance");
+                        template.CameraSlowDownDistance = reader.GetFloat("camera_slow_down_distance");
+                        template.CameraSpeed = reader.GetFloat("camera_speed");
+                        template.CanActiveWeaponWithoutAnim = reader.GetBoolean("can_active_weapon_without_anim", true);
+                        template.CastingUseable = reader.GetBoolean("casting_useable", true);
+                        template.CategoryId = reader.GetInt32("category_id");
+                        template.ChannelingAnimId = reader.GetUInt32("channeling_anim_id", 0);
+                        template.CharRaceId = reader.GetInt32("char_race_id");
+                        template.CheckObstacle = reader.GetBoolean("check_obstacle", true);
+                        template.ControllerCamera = reader.GetBoolean("controller_camera", true);
+                        template.ControllerCameraSpeed = reader.GetInt32("controller_camera_speed");
+                        template.DoodadBundleId = reader.GetUInt32("doodad_bundle_id", 0);
+                        template.DualWieldFireAnimId = reader.GetUInt32("dual_wield_fire_anim_id", 0);
+                        template.FxGroupId = reader.GetUInt32("fx_group_id", 0);
+                        template.HighAbilityId = reader.GetInt32("high_ability_id");
+                        template.IconId = reader.GetUInt32("icon_id", 0);
+                        template.LinkBackpackTypeId = reader.GetInt32("link_backpack_type_id");
+                        template.LinkEquipSlotId = reader.GetInt32("link_equip_slot_id");
+                        template.MatchAnimationCount = reader.GetBoolean("match_animation_count", true);
+                        template.MaxHighAbilityResource = reader.GetInt32("max_high_ability_resource");
+                        template.MinHighAbilityResource = reader.GetInt32("min_high_ability_resource");
+                        template.PercussionInstrumentFireAnimId = reader.GetUInt32("percussion_instrument_fire_anim_id", 0);
+                        template.PercussionInstrumentStartAnimId = reader.GetUInt32("percussion_instrument_start_anim_id", 0);
+                        template.PitchAngle = reader.GetFloat("pitch_angle");
+                        template.ProjectileId = reader.GetUInt32("projectile_id", 0);
+                        template.SecondCooldownTagId = reader.GetInt32("second_cooldown_tag_id");
+                        template.SensitiveOperation = reader.GetBoolean("sensitive_operation", true);
+                        template.ShowTargetCastingTime = reader.GetBoolean("show_target_casting_time", true);
+                        template.SkipQuestApplyUseItem = reader.GetBoolean("skip_quest_apply_use_item", true);
+                        template.SkipValidateSource = reader.GetBoolean("skip_validate_source", true);
+                        template.SourceAlive = reader.GetBoolean("source_alive", true);
+                        template.SourceShouldSwim = reader.GetBoolean("source_should_swim", true);
+                        template.StartAnimId = reader.GetUInt32("start_anim_id", 0);
+                        template.StartAutoattack = reader.GetBoolean("start_autoattack", true);
+                        template.StopAutoattack = reader.GetBoolean("stop_autoattack", true);
+                        template.StringInstrumentFireAnimId = reader.GetUInt32("string_instrument_fire_anim_id", 0);
+                        template.StringInstrumentStartAnimId = reader.GetUInt32("string_instrument_start_anim_id", 0);
+                        template.SwitchToSkillCooldown = reader.GetBoolean("switch_to_skill_cooldown", true);
+                        template.SynergyIcon1BuffKind = reader.GetBoolean("synergy_icon1_buffkind", true);
+                        template.SynergyIcon1Id = reader.GetUInt32("synergy_icon1_id", 0);
+                        template.SynergyIcon2BuffKind = reader.GetBoolean("synergy_icon2_buffkind", true);
+                        template.SynergyIcon2Id = reader.GetUInt32("synergy_icon2_id", 0);
+                        template.TargetDecalRadius = reader.GetInt32("target_decal_radius");
+                        template.ThirdCooldownTagId = reader.GetInt32("third_cooldown_tag_id");
+                        template.TubeInstrumentFireAnimId = reader.GetUInt32("tube_instrument_fire_anim_id", 0);
+                        template.TubeInstrumentStartAnimId = reader.GetUInt32("tube_instrument_start_anim_id", 0);
+                        template.TwohandFireAnimId = reader.GetUInt32("twohand_fire_anim_id", 0);
+                        template.UseSkillCamera = reader.GetBoolean("use_skill_camera", true);
+                        template.ValidHeightEdgeToEdge = reader.GetBoolean("valid_height_edge_to_edge", true);
                         
                         _skills.Add(template.Id, template);
                     }
@@ -543,6 +600,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.AbilityId = (AbilityType)reader.GetByte("ability_id");
                         template.Level = reader.GetByte("level");
                         template.BuffId = reader.GetUInt32("buff_id");
+                        template.HighAbilityId = reader.GetInt32("high_ability_id");
                         template.ReqPoints = reader.GetInt32("req_points");
                         template.Active = reader.GetBoolean("active", true);
                         template.SkillPoints = reader.GetInt32("skill_points");
@@ -562,12 +620,6 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                 {
                     while (reader.Read())
                     {
-                        // These string values are read here so they can fit nicely in the init-only part of the template
-                        var skillControllerIdValue = reader.GetString("skill_controller_id", "0");
-                        var mainHandToolIdValue = reader.GetString("mainhand_tool_id", "0");
-                        var offhandToolIdValue = reader.GetString("offhand_tool_id", "0");
-                        var tickMainHandToolIdValue = reader.GetString("tick_mainhand_tool_id", "0");
-                        var tickOffHandToolIdValue = reader.GetString("tick_offhand_tool_id", "0");
                         // updated to 3.0.3.0
                         var template = new BuffTemplate();
                         template.Id = reader.GetUInt32("id");
@@ -816,6 +868,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         var template = _buffs[buffId];
                         var tickEffect = new TickEffect
                         {
+                            CheckNoTargetTagSrc = reader.GetBoolean("check_no_target_tag_src", true),
+                            CheckTargetTagSrc = reader.GetBoolean("check_target_tag_src", true),
                             EffectId = reader.GetUInt32("effect_id"), TargetBuffTagId = reader.GetUInt32("target_buff_tag_id", 0),
                             TargetNoBuffTagId = reader.GetUInt32("target_nobuff_tag_id", 0)
                         };
@@ -898,8 +952,13 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         {
                             Id = reader.GetUInt32("id"),
                             KindId = reader.GetUInt32("kind_id"),
-                            ActiveWeaponId = reader.GetByte("active_weapon_id"),
-                            // TODO 1.2 // EndSkillId = reader.GetUInt32("end_skill_id")
+                            ActiveWeaponId = reader.GetUInt32("active_weapon_id"),
+                            EndAnimId = reader.GetUInt32("end_anim_id"),
+                            EndSkillId = reader.GetUInt32("end_skill_id"),
+                            StartAnimId = reader.GetUInt32("start_anim_id"),
+                            StrValue1 = reader.GetString("str_value1"),
+                            TransitionAnim1Id = reader.GetUInt32("transition_anim_1_id"),
+                            TransitionAnim2Id = reader.GetUInt32("transition_anim_2_id")
                         };
                         for (var i = 0; i < 15; i++)
                             template.Value[i] = reader.GetInt32($"value{i + 1}", 0);
@@ -919,6 +978,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         var template = new AccountAttributeEffect
                         {
                             Id = reader.GetUInt32("id"), KindId = reader.GetUInt32("kind_id"), BindWorld = reader.GetBoolean("bind_world"),
+                            KindValue = reader.GetUInt32("kind_value"),
                             IsAdd = reader.GetBoolean("is_add"),
                             Count = reader.GetUInt32("count"),
                             Time = reader.GetUInt32("time")
@@ -977,7 +1037,12 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                 {
                     while (reader.Read())
                     {
-                        var template = new BubbleEffect { Id = reader.GetUInt32("id"), KindId = reader.GetUInt32("kind_id") };
+                        var template = new BubbleEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            KindId = reader.GetUInt32("kind_id"),
+                            Speech = reader.GetString("speech")
+                        };
                         _effects["BubbleEffect"].Add(template.Id, template);
                     }
                 }
@@ -1130,9 +1195,28 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             Id = reader.GetUInt32("id"),
                             DispelCount = reader.GetInt32("dispel_count"),
                             CureCount = reader.GetInt32("cure_count"),
+                            Stack = reader.GetInt32("stack"),
                             BuffTagId = reader.GetUInt32("buff_tag_id", 0)
                         };
                         _effects["DispelEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM doodad_item_change_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new DoodadItemChangeEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            Idx = reader.GetInt32("idx")
+                        };
+                        _effects["DoodadItemChangeEffect"].Add(template.Id, template);
                     }
                 }
             }
@@ -1201,9 +1285,29 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             ActabilityGroupId = reader.GetUInt32("actability_group_id", 0),
                             ActabilityStep = reader.GetInt32("actability_step"),
                             ActabilityMul = reader.GetFloat("actability_mul"),
-                            ActabilityAdd = reader.GetFloat("actability_add")
+                            ActabilityAdd = reader.GetFloat("actability_add"),
+                            ExtraEffects = reader.GetString("extra_effects")
                         };
                         _effects["HealEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM high_ability_resource_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new HighAbilityResourceEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            MaxHighAbilityResource = reader.GetInt32("max_high_ability_resource"),
+                            MinHighAbilityResource = reader.GetInt32("min_high_ability_resource")
+                        };
+                        _effects["HighAbilityResourceEffect"].Add(template.Id, template);
                     }
                 }
             }
@@ -1324,6 +1428,24 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                 }
             }
 
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM level_up_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new LevelUpEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            Level = reader.GetInt32("level")
+                        };
+                        _effects["LevelUpEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
             using (var command = connection2.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM npc_control_effects";
@@ -1354,6 +1476,24 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         var template = new OpenPortalEffect { Id = reader.GetUInt32("id"), Distance = reader.GetFloat("distance") };
                         _effects["OpenPortalEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM move_to_location_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new MoveToLocationEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            OwnHouseOnly = reader.GetBoolean("own_house_only", true)
+                        };
+                        _effects["MoveToLocationEffect"].Add(template.Id, template);
                     }
                 }
             }
@@ -1406,9 +1546,9 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             Id = reader.GetUInt32("id"),
                             NeedMoney = reader.GetBoolean("need_money", true),
                             NeedLaborPower = reader.GetBoolean("need_labor_power", true),
-                            NeedPriest = reader.GetBoolean("need_priest", true)
+                            NeedPriest = reader.GetBoolean("need_priest", true),
+                            Penaltied = reader.GetBoolean("penaltied", true)
                         };
-                        // TODO 1.2 // template.Penaltied = reader.GetBoolean("penaltied", true);
                         _effects["RecoverExpEffect"].Add(template.Id, template);
                     }
                 }
@@ -1489,6 +1629,24 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
 
             using (var command = connection.CreateCommand())
             {
+                command.CommandText = "SELECT * FROM play_log_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new PlayLogEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            Message = reader.GetString("message")
+                        };
+                        _effects["PlayLogEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
                 command.CommandText = "SELECT * FROM scoped_f_effects";
                 command.Prepare();
                 using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
@@ -1497,7 +1655,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         var template = new ScopedFEffect
                         {
-                            Id = reader.GetUInt32("id"), Range = reader.GetInt32("range"), Key = reader.GetBoolean("key", true),
+                            Id = reader.GetUInt32("id"), Range = reader.GetInt32("range"), Key = reader.GetString("key"),
                             DoodadId = reader.GetUInt32("doodad_id")
                         };
                         _effects["ScopedFEffect"].Add(template.Id, template);
@@ -1637,7 +1795,9 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             Value1 = reader.GetInt32("value1"),
                             Value2 = reader.GetInt32("value2"),
                             Value3 = reader.GetInt32("value3"),
-                            Value4 = reader.GetInt32("value4")
+                            Value4 = reader.GetInt32("value4"),
+                            Value5 = reader.GetInt32("value5"),
+                            Value6 = reader.GetInt32("value6")
                         };
                         _effects["SpecialEffect"].Add(template.Id, template);
                     }
@@ -1654,6 +1814,30 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                     {
                         var template = new TrainCraftEffect { Id = reader.GetUInt32("id"), CraftId = reader.GetUInt32("craft_id") };
                         _effects["TrainCraftEffect"].Add(template.Id, template);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM world_message_effects";
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        var template = new WorldMessageEffect
+                        {
+                            Id = reader.GetUInt32("id"),
+                            FactionScopeId = reader.GetInt32("faction_scope_id"),
+                            IconKey = reader.GetString("icon_key"),
+                            KillHero = reader.GetBoolean("kill_hero", true),
+                            KillStreakCount = reader.GetInt32("kill_streak_count"),
+                            Message = reader.GetString("message"),
+                            ZoneGroupOnly = reader.GetBoolean("zone_group_only", true),
+                            ZoneGroupWarState = reader.GetBoolean("zone_group_war_state", true)
+                        };
+                        _effects["WorldMessageEffect"].Add(template.Id, template);
                     }
                 }
             }

@@ -44,6 +44,11 @@ ______________________________________________________________________
 - **`WorldPosTests.cs`** — 6 тестов для класса WorldPos
 - **`CompletedQuestTests.cs`** — 5 тестов для класса CompletedQuest
 
+#### Дополнение 23.06.2026:
+
+- **`SkillManagerLoadTests.cs`** — регрессионные тесты для `SkillManager.Load()` на реальных SQLite-базах `compact.sqlite3` и `compact.server.table.sqlite3`
+- Проверены новые поля `SkillTemplate`, `SkillControllerTemplate` и `TickEffect`, а также новые типы эффектов из таблиц `play_log_effects`, `world_message_effects`, `high_ability_resource_effects`, `move_to_location_effects`, `level_up_effects`, `doodad_item_change_effects` и `recover_exp_effects`
+
 #### Core Managers (Ядро)
 
 | Класс                      | Тестов | Статус              |

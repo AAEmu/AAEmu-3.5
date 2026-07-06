@@ -7,6 +7,7 @@ namespace AAEmu.Game.Models.Game.Skills.Effects;
 public class AccountAttributeEffect : EffectTemplate
 {
     public uint KindId { get; set; }
+    public uint KindValue { get; set; }
     public bool BindWorld { get; set; }
     public bool IsAdd { get; set; }
     public uint Count { get; set; }
