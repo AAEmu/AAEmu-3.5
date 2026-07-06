@@ -11,6 +11,12 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
+/// <summary>
+/// Управляет регистрацией и выполнением GM/административных команд, получаемых из чата.
+/// Метод <c>Load()</c> отсутствует; данные не загружаются из compact.sqlite3 / compact.server.table.sqlite3.
+/// Команды компилируются из C#-скриптов в <c>AAEmu.Game/Scripts/Commands</c>.
+/// Связанные пакеты (x2game 3.5.0.3): CSSendChatMessagePacket.
+/// </summary>
 public partial class CommandManager : Singleton<CommandManager>, ICommandManager
 {
     public const string CommandPrefix = "/";

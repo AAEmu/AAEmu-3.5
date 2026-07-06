@@ -11,6 +11,7 @@
 - Documented `AuctionManager` data source (`auction_house` MySQL table) and related auction packets, added `Docs/Managers/AuctionManager.md` and unit tests for `AuctionLot` column mapping.
 - Documented `CashShopManager` data sources (`ics_skus`, `ics_shop_items`, `ics_menu` MySQL tables) and ICS packets, added `Docs/Managers/CashShopManager.md` and unit tests for `IcsSku`/`IcsItem` column mapping.
 - Documented `ChatManager` (no DB tables, in-memory chat channels), added `Docs/Managers/ChatManager.md` and unit tests for `ChatChannel` properties.
+- Documented `CommandManager` (no DB tables, command scripts from `Scripts/Commands`), added `Docs/Managers/CommandManager.md` and unit tests for command prefix.
 
 ## History
 
