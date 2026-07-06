@@ -28,6 +28,10 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers.UnitManagers;
 
+/// <summary>
+/// Менеджер персонажей. Загружает стартовые шаблоны персонажей, экипировку,
+/// расходники, титулы, жизненные умения и лимиты экспертизы из БД <c>compact.sqlite3</c>.
+/// </summary>
 public class CharacterManager(
     IWorldManager worldManager,
     IAccountManager accountManager,
@@ -112,15 +116,30 @@ public class CharacterManager(
                 {
                     while (reader.Read())
                     {
-                        var template = new CharacterTemplate();
+                        var template = new CharacterTemplate
+                        {
+                            Race = (Race)reader.GetByte("char_race_id"),
+                            Gender = (Gender)reader.GetByte("char_gender_id"),
+                            ModelId = reader.GetUInt32("model_id"),
+                            FactionId = (FactionsEnum)reader.GetUInt32("faction_id"),
+                            ZoneId = reader.GetUInt32("starting_zone_id"),
+                            ReturnDistrictId = reader.GetUInt32("default_return_district_id"),
+                            ResurrectionDistrictId = reader.GetUInt32("default_resurrection_district_id"),
+                            Creatable = reader.GetBoolean("creatable", true),
+                            DefaultCustomId = reader.GetUInt32("default_custom_id", 0),
+                            DefaultFxVoiceSoundPackId = reader.GetUInt32("default_fx_voice_sound_pack_id", 0),
+                            DefaultSystemVoiceSoundPackId = reader.GetUInt32("default_system_voice_sound_pack_id", 0),
+                            FaceItemId = reader.GetUInt32("face_item_id", 0),
+                            FightPreviewClothPackId = reader.GetUInt32("fight_preview_cloth_pack_id", 0),
+                            FightPreviewWeaponPackId = reader.GetUInt32("fight_preview_weapon_pack_id", 0),
+                            LovePreviewClothPackId = reader.GetUInt32("love_preview_cloth_pack_id", 0),
+                            LovePreviewWeaponPackId = reader.GetUInt32("love_preview_weapon_pack_id", 0),
+                            MagicPreviewClothPackId = reader.GetUInt32("magic_preview_cloth_pack_id", 0),
+                            MagicPreviewWeaponPackId = reader.GetUInt32("magic_preview_weapon_pack_id", 0),
+                            PreviewClothPackId = reader.GetUInt32("preview_cloth_pack_id", 0),
+                            WildPreviewClothPackId = reader.GetUInt32("wild_preview_cloth_pack_id", 0)
+                        };
                         var id = reader.GetUInt32("id");
-                        template.Race = (Race)reader.GetByte("char_race_id");
-                        template.Gender = (Gender)reader.GetByte("char_gender_id");
-                        template.ModelId = reader.GetUInt32("model_id");
-                        template.FactionId = (FactionsEnum)reader.GetUInt32("faction_id");
-                        template.ZoneId = reader.GetUInt32("starting_zone_id");
-                        template.ReturnDistrictId = reader.GetUInt32("default_return_district_id");
-                        template.ResurrectionDistrictId = reader.GetUInt32("default_resurrection_district_id");
                         using (var command2 = connection.CreateCommand())
                         {
                             command2.CommandText = "SELECT * FROM item_body_parts WHERE model_id=@model_id";
@@ -178,7 +197,9 @@ public class CharacterManager(
                         var ability = (AbilityType)reader.GetByte("ability_id");
                         var item = new AbilitySupplyItem
                         {
-                            Id = reader.GetUInt32("item_id"),
+                            Id = reader.GetUInt32("id"),
+                            AbilityId = reader.GetUInt32("ability_id"),
+                            ItemId = reader.GetUInt32("item_id"),
                             Amount = reader.GetInt32("amount"),
                             Grade = reader.GetByte("grade_id")
                         };
@@ -231,6 +252,10 @@ public class CharacterManager(
                                         template.Items.BraceletGrade = reader2.GetByte("bracelet_grade_id");
                                         template.Items.Back = reader2.GetUInt32("back_id");
                                         template.Items.BackGrade = reader2.GetByte("back_grade_id");
+                                        template.Items.Backpack = reader2.GetUInt32("backpack_id");
+                                        template.Items.BackpackGrade = reader2.GetByte("backpack_grade_id");
+                                        template.Items.Stabilizer = reader2.GetUInt32("stabilizer_id");
+                                        template.Items.StabilizerGrade = reader2.GetByte("stabilizer_grade_id");
                                         template.Items.Cosplay = reader2.GetUInt32("cosplay_id");
                                         template.Items.CosplayGrade = reader2.GetByte("cosplay_grade_id");
                                         template.Items.Undershirts = reader2.GetUInt32("undershirt_id");
@@ -312,7 +337,13 @@ public class CharacterManager(
                 {
                     while (reader.Read())
                     {
-                        var template = new AppellationTemplate { Id = reader.GetUInt32("id"), BuffId = reader.GetUInt32("buff_id", 0) };
+                        var template = new AppellationTemplate
+                        {
+                            Id = reader.GetUInt32("id"),
+                            BuffId = reader.GetUInt32("buff_id", 0),
+                            Name = reader.GetString("name"),
+                            ApplyAppellationAtOnce = reader.GetBoolean("apply_appellation_at_once", true)
+                        };
 
                         _appellations.Add(template.Id, template);
                     }
@@ -329,7 +360,12 @@ public class CharacterManager(
                     {
                         var template = new ActabilityTemplate
                         {
-                            Id = reader.GetUInt32("id"), Name = reader.GetString("name"), UnitAttributeId = reader.GetInt32("unit_attr_id")
+                            Id = reader.GetUInt32("id"),
+                            Name = reader.GetString("name"),
+                            UnitAttributeId = reader.GetInt32("unit_attr_id"),
+                            IconPath = reader.GetString("icon_path"),
+                            SkillPageVisible = reader.GetBoolean("skill_page_visible", true),
+                            Visible = reader.GetBoolean("visible", true)
                         };
                         _actabilities.Add(template.Id, template);
                     }
@@ -367,14 +403,20 @@ public class CharacterManager(
                         var template = new ExpertLimit
                         {
                             Id = reader.GetUInt32("id"),
+                            Name = reader.GetString("name"),
                             UpLimit = reader.GetInt32("up_limit"),
                             ExpertLimitCount = reader.GetByte("expert_limit"),
                             Advantage = reader.GetInt32("advantage"),
                             CastAdvantage = reader.GetInt32("cast_adv"),
+                            ColorArgb = reader.GetUInt32("color_argb", 0),
+                            GaugeColor = reader.GetUInt32("gauge_color", 0),
                             UpCurrencyId = reader.GetUInt32("up_currency_id", 0),
                             UpPrice = reader.GetInt32("up_price"),
                             DownCurrencyId = reader.GetUInt32("down_currency_id", 0),
-                            DownPrice = reader.GetInt32("down_price")
+                            DownPrice = reader.GetInt32("down_price"),
+                            Show = reader.GetBoolean("show", true),
+                            ExpMul = reader.GetInt32("exp_mul"),
+                            UseIntensified = reader.GetBoolean("use_intensified", true)
                         };
                         _expertLimits.Add(step++, template);
                     }
@@ -541,11 +583,11 @@ public class CharacterManager(
         byte slot = 10;
         foreach (var item in items.Supplies)
         {
-            character.Inventory.Bag.AcquireDefaultItem(ItemTaskType.Invalid, item.Id, item.Amount, item.Grade);
-            //var createdItem = itemManager.Create(item.Id, item.Amount, item.Grade);
+            character.Inventory.Bag.AcquireDefaultItem(ItemTaskType.Invalid, item.ItemId, item.Amount, item.Grade);
+            //var createdItem = itemManager.Create(item.ItemId, item.Amount, item.Grade);
             //character.Inventory.AddItem(Models.Game.Items.Actions.ItemTaskType.Invalid, createdItem);
 
-            character.SetAction(slot, ActionSlotType.ItemType, item.Id);
+            character.SetAction(slot, ActionSlotType.ItemType, item.ItemId);
             slot++;
         }
 
@@ -553,11 +595,11 @@ public class CharacterManager(
         if (items != null)
             foreach (var item in items.Supplies)
             {
-                character.Inventory.Bag.AcquireDefaultItem(ItemTaskType.Invalid, item.Id, item.Amount, item.Grade);
-                //var createdItem = itemManager.Create(item.Id, item.Amount, item.Grade);
+                character.Inventory.Bag.AcquireDefaultItem(ItemTaskType.Invalid, item.ItemId, item.Amount, item.Grade);
+                //var createdItem = itemManager.Create(item.ItemId, item.Amount, item.Grade);
                 //character.Inventory.AddItem(ItemTaskType.Invalid, createdItem);
 
-                character.SetAction(slot, ActionSlotType.ItemType, item.Id);
+                character.SetAction(slot, ActionSlotType.ItemType, item.ItemId);
                 slot++;
             }
 

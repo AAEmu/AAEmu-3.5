@@ -20,6 +20,8 @@ public class EquipItemsTemplate
     public byte BraceletGrade { get; set; }
     public uint Back { get; set; }
     public byte BackGrade { get; set; }
+    public uint Backpack { get; set; }
+    public byte BackpackGrade { get; set; }
     public uint Cosplay { get; set; }
     public byte CosplayGrade { get; set; }
     public uint Undershirts { get; set; }
