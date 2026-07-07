@@ -57,10 +57,13 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             Connection.ActiveChar.Simulation = new Simulation(character);
 
             Connection.SendPacket(new CharacterStatePacket(character));
-            Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
-            Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
-            Connection.SendPacket(new SCCharacterGamePointsPacket(character));
+            //Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
+            //Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.ActiveChar.Inventory.Send();
+            Connection.SendPacket(new SCCharacterGamePointsPacket(character));
+
+            Connection.ActiveChar.Portals.Send();
+
             Connection.SendPacket(new SCActionSlotsPacket(Connection.ActiveChar.Slots));
 
             Connection.ActiveChar.Quests.Send();
@@ -69,13 +72,13 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             Connection.ActiveChar.Actability.Send();
             Connection.ActiveChar.Mails.SendUnreadMailCount();
             Connection.ActiveChar.Appellations.Send();
-            Connection.ActiveChar.Portals.Send();
             Connection.ActiveChar.Friends.Send();
             Connection.ActiveChar.Blocked.Send();
 
             foreach (var house in houses)
             {
-                Connection.SendPacket(new SCMyHousePacket(house));
+                Connection.SendPacket(new SCHouseStatePacket(house));
+                //Connection.SendPacket(new SCMyHousePacket(house));
             }
 
             foreach (var conflict in ZoneManager.Instance.GetConflicts())
@@ -113,11 +116,11 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
                 var casterObj = new SkillCasterUnit(character.ObjId);
                 character.Buffs.AddBuff(new Buff(character, character, casterObj, buffTemplate, null, DateTime.UtcNow) { Passive = true });
             }
-            
+
             // Load persistent buffs from database
             character.Buffs.LoadActiveBuffs(character);
             character.CheckWantedThreshold();
-            
+
             character.UpdateGearBonuses(null, null);
             character.RestoreSavedHpMp();
 

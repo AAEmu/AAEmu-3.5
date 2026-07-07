@@ -9,6 +9,7 @@ public class SCAccountAttributeListPacket : GamePacket
     private readonly uint _extraKind;
     private readonly byte _worldId;
     private readonly uint _count;
+    private readonly uint _count2;
     private readonly DateTime _startDate;
     private readonly DateTime _endData;
 
@@ -16,8 +17,9 @@ public class SCAccountAttributeListPacket : GamePacket
     {
         _AccountAttributeKind = 1;
         _extraKind = 0;
-        _worldId = 0x1;
-        _count = 0;
+        _worldId = 0xFF;
+        _count = 1;
+        _count2 = 0;
         _startDate = DateTime.Now;
         _endData = DateTime.MinValue;
     }
@@ -30,7 +32,7 @@ public class SCAccountAttributeListPacket : GamePacket
             stream.Write(_AccountAttributeKind); // chatTypeGroup
             stream.Write(_extraKind);
             stream.Write(_worldId);
-            stream.Write(_count);
+            stream.Write(_count2);
             stream.Write(_startDate);
             stream.Write(_endData);
         }

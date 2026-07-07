@@ -44,9 +44,8 @@ public class CSAesXorKeyPacket : GamePacket
                 Connection.SendPacket(new CharacterListPacket(last, temp));
             }
         }
+
         Connection.SendPacket(new SCRaceCongestionPacket());
-
         Connection.SendPacket(new SCAccountAttributeListPacket());
-
     }
 }
