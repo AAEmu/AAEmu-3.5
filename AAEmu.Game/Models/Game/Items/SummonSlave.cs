@@ -43,44 +43,55 @@ public class SummonSlave : Item
     {
         if (stream.LeftBytes < DetailBytesLength)
             return;
-        SlaveType = stream.ReadByte(); // Type? (2 = slave?)
-        SlaveDbId = stream.ReadBc(); // DbId
-        IsDestroyed = stream.ReadByte();
-        try
+        SlaveType = stream.ReadByte();   // 1 Type? (2 = slave?)
+        SlaveDbId = stream.ReadBc();     // 3 4 DbId
+        IsDestroyed = stream.ReadByte(); // 1 5
+        if (IsDestroyed == 0)
+            _repairStartTime = DateTime.MinValue;
+        else
         {
-            // Read time of something else than 0
-            var timeBytes = stream.ReadBytes(4);
-            RepairStartTime = Convert.ToInt32(timeBytes) != 0 ? Convert.ToDateTime(timeBytes) : DateTime.MinValue;
-
-            // Read remaining bytes
-            _ = stream.ReadBytes((int)DetailBytesLength - 1 - 4 - 4); // Filler, Equipment?
-        }
-        catch
-        {
-            RepairStartTime = DateTime.MinValue;
+            long ticks = stream.ReadInt64();       // 8 13 Считываем 8 байт и преобразуем в long
+            _repairStartTime = DateTime.SpecifyKind(new DateTime(ticks), DateTimeKind.Utc);
         }
     }
 
     public override void WriteDetails(PacketStream stream)
     {
-        stream.Write(SlaveType);
-        stream.WriteBc(SlaveDbId);
-        stream.Write(IsDestroyed);
+        stream.Write(SlaveType);   // 1
+        stream.WriteBc(SlaveDbId); // 3 4
+        stream.Write(IsDestroyed); // 1 5
 
-        if (RepairStartTime == DateTime.MinValue)
-            stream.Write(0);
-        else
-            stream.Write(RepairStartTime);
-
-        stream.Write(0); // If this is anything besides 0, it will count as being in recovering (negative at that)
+        if (IsDestroyed == 0)
+            RepairStartTime = DateTime.MinValue;
+        long ticks = RepairStartTime.Ticks;
+        stream.Write(ticks); // 8 13 запишем 8 байт
 
         // The following 16 bytes somehow determine where a Vehicle is allowed to be summoned
         // TODO: Get real live data capture of this value being set
         // TODO: Get this from having a vehicle out when maintenance starts
-        stream.Write(0);
-        stream.Write(0);
-        stream.Write(0);
-        stream.Write(0);
+        stream.Write(0); // 4 17
+        stream.Write(0); // 4 21
+        stream.Write(0); // 4 25
+        stream.Write(0); // 4 29
+        //stream.Write(0); // 4 33 in 5+
+    }
+
+    public override void WriteAdditionalDetails(PacketStream stream)
+    {
+        stream.Write(SlaveDbId);   // 4 4
+        stream.Write(IsDestroyed); // 1 5
+
+        if (RepairStartTime == DateTime.MinValue)
+        {
+            stream.Write(0); // 4 9
+        }
+        else
+        {
+            var unixTime = (int)((RepairStartTime.ToUniversalTime() - DateTime.UnixEpoch).TotalSeconds);
+            stream.Write(unixTime); // 4 9
+        }
+
+        stream.Write(0); // 4 13
     }
 
     public override void OnManuallyDestroyingItem()

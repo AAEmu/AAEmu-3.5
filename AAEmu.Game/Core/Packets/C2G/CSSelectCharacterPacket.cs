@@ -6,6 +6,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.InstantGame;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units.Route;
 
@@ -56,6 +57,8 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             Connection.ActiveChar.Simulation = new Simulation(character);
 
             Connection.SendPacket(new SCCharacterStatePacket(character));
+            Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
+            Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.SendPacket(new SCCharacterGamePointsPacket(character));
             Connection.ActiveChar.Inventory.Send();
             Connection.SendPacket(new SCActionSlotsPacket(Connection.ActiveChar.Slots));
@@ -79,6 +82,13 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             {
                 Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime));
             }
+
+            var visitItem = new VisitCountItem { ZoneId = 302, Data = 7, Count = character.ArenaDailyEntryCount };
+            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
+            visitItem = new VisitCountItem { ZoneId = 302, Data = 11, Count = character.ArenaDailyEntryCount };
+            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
+            visitItem = new VisitCountItem { ZoneId = 302, Data = 13, Count = character.ArenaDailyEntryCount };
+            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
 
             FactionManager.Instance.SendFactions(Connection.ActiveChar);
             FactionManager.Instance.SendRelations(Connection.ActiveChar);

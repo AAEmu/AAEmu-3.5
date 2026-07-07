@@ -11,19 +11,8 @@ public class SCCharacterGamePointsPacket(Character character) : GamePacket(SCOff
         stream.Write(character.HonorPoint);
         stream.Write(character.VocationPoint);
 
-        for (var i = 0; i < 8; i++)
+        for (var i = 0; i < 12; i++)
             stream.Write(0); // point
         return stream;
     }
 }
-
-/*
-v3 = 10;
-do
-{
-result = a2->Reader->ReadUInt32("p", v2, 0);
-v2 += 4;
---v3;
-}
-while ( v3 );
-*/

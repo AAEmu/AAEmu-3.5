@@ -194,6 +194,13 @@ public partial class Character : Unit, ICharacter
     public CharacterMails Mails { get; set; }
     public CharacterAppellations Appellations { get; set; }
     public CharacterAbilities Abilities { get; set; }
+    public AbilityType HighAbility1 { get; set; }
+    public AbilityType HighAbility2 { get; set; }
+    public AbilityType HighAbility3 { get; set; }
+    public List<AbilitySetInfo> AbilitySets { get; } = [];
+    public byte AbilitySetFreeActivationCount { get; set; }
+    public byte UsableAbilitySetSlotCount { get; set; } = 1;
+    public int ArenaDailyEntryCount { get; set; }
     public CharacterPortals Portals { get; set; }
     public CharacterFriends Friends { get; set; }
     public CharacterBlocked Blocked { get; set; }

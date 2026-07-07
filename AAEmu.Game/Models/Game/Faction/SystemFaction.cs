@@ -38,9 +38,11 @@ public class SystemFaction : PacketMarshaler
     public bool DiplomacyTarget { get; set; }
     public bool AggroLink { get; set; }
     public bool GuardHelp { get; set; }
+    public byte AllowChangeName { get; set; }
     public uint DiplomacyLinkId { get; set; }
     public string IconPath { get; set; } = string.Empty;
     public DateTime Created { get; set; } = DateTime.MinValue;
+    public DateTime RenameTime { get; set; } = DateTime.MinValue;
 
     public Dictionary<FactionsEnum, FactionRelation> Relations { get; set; } = [];
 
@@ -95,17 +97,18 @@ public class SystemFaction : PacketMarshaler
 
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write((uint)Id);
-        stream.Write(AggroLink);
-        stream.Write((uint)MotherId);
-        stream.Write(Name);
-        stream.Write(OwnerId);
-        stream.Write(OwnerName);
-        stream.Write(UnitOwnerType);
-        stream.Write(PoliticalSystem);
-        stream.Write(Created);
-        stream.Write(DiplomacyTarget);
-        stream.Write((byte)0);
+        stream.Write((uint)Id);             // type
+        stream.Write((uint)MotherId);       // type
+        stream.Write(Name);                 // name
+        stream.Write(OwnerId);              // ownerId
+        stream.Write(OwnerName);            // ownerName
+        stream.Write(UnitOwnerType);        // UnitOwnerType
+        stream.Write(PoliticalSystem);      // PoliticalSystem
+        stream.Write(Created);              // createdTime
+        stream.Write(AggroLink);            // aggroLink
+        stream.Write(DiplomacyTarget);      // dTarget
+        stream.Write(AllowChangeName);      // allowChangeName
+        stream.Write(RenameTime);           // renameTime
         return stream;
     }
 }

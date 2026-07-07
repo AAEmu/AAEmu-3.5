@@ -3,6 +3,7 @@
 using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
@@ -25,15 +26,19 @@ public class SCCharacterStatePacket : GamePacket
 
         stream.Write(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xDB, 0xFB, 0x17, 0xC0 }); //angles
         stream.Write(_character.Experience);     // exp
+        stream.Write(_character.HeirExp);        // hierExp add in 3.5.0.3 NA
         stream.Write(_character.RecoverableExp); // recoverableExp
         stream.Write(0u);                        // penaltiedExp
-        stream.Write(0u);                        // returnDistrictId
-        stream.Write(0);                         // returnDistrict -> type(id)
-        stream.Write(0u);                        // resurrectionDistrict -> type(id)
+        stream.Write(_character.ReturnDistrictId);        // returnDistrictId
+        stream.Write(_character.ReturnDistrictId);        // returnDistrict -> type(id)
+        stream.Write(_character.ResurrectionDistrictId);  // resurrectionDistrict -> type(id)
 
         for (var i = 0; i < 13; i++)             // in 1.2 = 11, in 1.7 = 11, in 3.0.3.0 = 13
         {
-            stream.Write((uint)0);               // abilityExp
+            if (i == 0 || !_character.Abilities.Abilities.TryGetValue((AbilityType)i, out var ability))
+                stream.Write(0u);                // abilityExp
+            else
+                stream.Write(ability.Exp);       // abilityExp
         }
 
         stream.Write(_character.Mails.UnreadMailCount.TotalSent);                // totalSentMail
