@@ -6,11 +6,13 @@ namespace AAEmu.Game.Core.Packets.G2C;
 public class SCHouseTaxInfoPacket(
     ushort tl,
     int dominionTaxRate,
+    int hostileTaxRate,
     int moneyAmount,
     int moneyAmount2,
     DateTime due,
     bool isAlreadyPaid,
-    int weeksWithoutPay,
+    byte weeksWithoutPay,
+    byte weeksPrepay,
     bool isHeavyTaxHouse)
     : GamePacket(SCOffsets.SCHouseTaxInfoPacket, 5)
 {
@@ -18,11 +20,13 @@ public class SCHouseTaxInfoPacket(
     {
         stream.Write(tl);
         stream.Write(dominionTaxRate);
+        stream.Write(hostileTaxRate);
         stream.Write(moneyAmount);
         stream.Write(moneyAmount2);
         stream.Write(due);
         stream.Write(isAlreadyPaid);
         stream.Write(weeksWithoutPay);
+        stream.Write(weeksPrepay);
         stream.Write(isHeavyTaxHouse);
         return stream;
     }

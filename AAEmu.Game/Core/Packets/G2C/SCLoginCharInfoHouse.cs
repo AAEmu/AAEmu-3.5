@@ -9,6 +9,6 @@ public class SCLoginCharInfoHouse(uint id, House house) : GamePacket(SCOffsets.S
     public override PacketStream Write(PacketStream stream)
     {
         stream.Write(id);
-        return house.Write(stream);
+        return house.WriteHouseState(stream);
     }
 }

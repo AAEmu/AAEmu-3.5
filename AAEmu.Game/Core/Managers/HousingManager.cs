@@ -396,7 +396,7 @@ public class HousingManager(
 
         var houseTemplate = HousingGameData.Instance.GetTemplate(designId);
 
-        CalculateBuildingTaxInfo(connection.ActiveChar.AccountId, houseTemplate, true, out var totalTaxAmountDue, out var heavyTaxHouseCount, out var normalTaxHouseCount, out _, out _);
+        CalculateBuildingTaxInfo(connection.ActiveChar.AccountId, houseTemplate, true, out var totalTaxAmountDue, out var heavyTaxHouseCount, out var normalTaxHouseCount, out var hostileTaxRate, out var oneWeekTaxCount);
 
         var baseTax = (int)(houseTemplate.Taxation?.Tax ?? 0);
         var depositTax = baseTax * 2;
@@ -408,7 +408,9 @@ public class HousingManager(
                 houseTemplate.HeavyTax,
                 baseTax,
                 depositTax,
-                totalTaxAmountDue
+                totalTaxAmountDue,
+                oneWeekTaxCount,
+                hostileTaxRate
             )
         );
     }
@@ -430,7 +432,7 @@ public class HousingManager(
 
         // Note: I'm sure this can be done better, but it works and displays correctly
         var requiresPayment = false;
-        var weeksWithoutPay = -1;
+        byte weeksWithoutPay = 0;
         if (house.TaxDueDate <= DateTime.UtcNow)
         {
             requiresPayment = true;
@@ -441,6 +443,7 @@ public class HousingManager(
             requiresPayment = true;
             weeksWithoutPay = 1;
         }
+        byte weeksPrepay = 0;
 
         // Logger.Debug($"SCHouseTaxInfoPacket; tlId:{house.TlId}, domTaxRate: 0, deposit: {depositTax}, taxDue:{totalTaxAmountDue}, protectEnd:{house.ProtectionEndDate}, isPaid:{requiresPayment}, weeksWithoutPay:{weeksWithoutPay}, isHeavy:{house.Template.HeavyTax}");
 
@@ -448,11 +451,13 @@ public class HousingManager(
             new SCHouseTaxInfoPacket(
                 house.TlId,
                 0,  // TODO: implement when castles are added
+                0,  // TODO: implement hostile tax rate when nation/territory taxes are added
                 depositTax, // this is used in the help text on (?) when you hover your mouse over it to display deposit tax for this building
                 totalTaxAmountDue, // Amount Due
                 house.ProtectionEndDate,
                 requiresPayment,
                 weeksWithoutPay,  // TODO: do proper calculation ?
+                weeksPrepay,
                 house.Template.HeavyTax
             )
         );
@@ -1610,7 +1615,7 @@ public class HousingManager(
         if (character.Id != house.OwnerId)
             return;
         house.AllowRecover = !house.AllowRecover;
-        house.BroadcastPacket(new SCHousingRecoverTogglePacket(house.TlId, house.AllowRecover), false);
+        house.BroadcastPacket(new SCToggleHousingRecoverPacket(house.TlId, house.AllowRecover), false);
     }
 
     /// <summary>

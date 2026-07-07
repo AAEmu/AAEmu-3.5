@@ -8,6 +8,6 @@ public class SCHouseStatePacket(House house) : GamePacket(SCOffsets.SCHouseState
 {
     public override PacketStream Write(PacketStream stream)
     {
-        return house.Write(stream);
+        return house.WriteHouseState(stream);
     }
 }

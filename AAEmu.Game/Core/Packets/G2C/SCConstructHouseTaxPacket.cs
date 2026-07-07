@@ -10,7 +10,9 @@ public class SCConstructHouseTaxPacket(
     bool isHeavyTaxHouse,
     int baseTaxMoneyAmount,
     int depositTaxMoneyAmount,
-    int totalTaxMoneyAmount)
+    int totalTaxMoneyAmount,
+    int oneWeekTaxMoneyAmount,
+    int hostileTaxRate)
     : GamePacket(SCOffsets.SCConstructHouseTaxPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
@@ -22,6 +24,8 @@ public class SCConstructHouseTaxPacket(
         stream.Write(baseTaxMoneyAmount);
         stream.Write(depositTaxMoneyAmount);
         stream.Write(totalTaxMoneyAmount);
+        stream.Write(oneWeekTaxMoneyAmount);
+        stream.Write(hostileTaxRate);
         return stream;
     }
 }
