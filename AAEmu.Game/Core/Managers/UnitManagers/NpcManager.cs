@@ -140,6 +140,7 @@ public class NpcManager(IObjectIdManager objectIdManager, IModelManager modelMan
             CanFly = modelManager.IsFlyOrSwim(template.ModelId),
             Faction = factionManager.GetFaction(template.FactionId),
             Level = template.Level,
+            HeirLevel = (byte)template.HeirLevel,
             Patrol = null
         };
 

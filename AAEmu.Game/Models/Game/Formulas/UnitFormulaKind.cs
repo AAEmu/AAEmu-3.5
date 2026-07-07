@@ -51,5 +51,27 @@ public enum UnitFormulaKind : byte
     HealDpsInc = 43,
     HealCriticalBonus = 44,
     Block = 45,
-    Dodge = 46
+    Dodge = 46,
+
+    // 3.0+/5.0+ formula kinds
+    Mass = 47,
+    SteeringSpeed = 48,
+    ReverseVelocity = 49,
+    MeleeDynamicNormalizable = 50,
+    RangedDynamicNormalizable = 51,
+    MagicDynamicNormalizable = 52,
+    HealDynamicNormalizable = 53,
+    DefenceDynamicNormalizable = 54,
+    MusicDynamicNormalizable = 55,
+    // 56-58 are not used in unit_formulas
+    BattleResist = 59,
+    Flexibility = 60,
+    IncomingDamageMul = 61,
+    // 62 is not used in unit_formulas
+    IgnoreShieldBonusMul = 63,
+    MeleeAntiMissMul = 64,
+    RangedAntiMissMul = 65,
+    SpellAntiMissMul = 66,
+    BullsEye = 67,
+    CastingTimeMul = 68
 }
