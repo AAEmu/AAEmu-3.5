@@ -152,7 +152,7 @@ public class ZoneConflict(ZoneGroup owner)
 
         try
         {
-            WorldManager.Instance.BroadcastPacketToServer(new SCConflictZoneStatePacket(ZoneGroupId, CurrentZoneState, NextStateTime));
+            WorldManager.Instance.BroadcastPacketToServer(new SCConflictZoneStatePacket(ZoneGroupId, CurrentZoneState, NextStateTime, DateTime.MinValue));
         }
         catch (Exception ex)
         {

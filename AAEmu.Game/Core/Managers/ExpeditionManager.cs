@@ -285,7 +285,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
             new SCFactionCreatedPacket(expedition, owner.ObjId, [(owner.ObjId, owner.Id, owner.Name)])
         );
 
-        worldManager.BroadcastPacketToServer(new SCFactionListPacket(expedition));
+        worldManager.BroadcastPacketToServer(new SCSystemFactionListPacket(expedition));
         owner.BroadcastPacket(
             new SCUnitExpeditionChangedPacket(owner.ObjId, owner.Id, "", owner.Name, 0, (uint)expedition.Id, false),
             true
@@ -570,7 +570,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
             var expeditions = _expeditions.Values.ToArray();
             var dividedArrays = Helpers.SplitArray(expeditions, 20); // Разделяем массив на массивы по 20 значений
             foreach (SystemFaction[] expedition in dividedArrays)
-                character.SendPacket(new SCFactionListPacket(expedition));
+                character.SendPacket(new SCSystemFactionListPacket(expedition));
         }
 
         character.SendPacket(new SCExpeditionRolePolicyListPacket([]));

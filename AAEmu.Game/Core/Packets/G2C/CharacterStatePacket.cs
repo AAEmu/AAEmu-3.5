@@ -7,11 +7,11 @@ using AAEmu.Game.Models.Game.Skills;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCCharacterStatePacket : GamePacket
+public class CharacterStatePacket : GamePacket
 {
     private readonly Character _character;
 
-    public SCCharacterStatePacket(Character character) : base(SCOffsets.SCCharacterStatePacket, 5)
+    public CharacterStatePacket(Character character) : base(SCOffsets.CharacterStatePacket, 5)
     {
         _character = character;
     }
@@ -21,6 +21,7 @@ public class SCCharacterStatePacket : GamePacket
         stream.Write(_character.Transform.InstanceId); // instanceId (iid)
         stream.Write(_character.Guid);       // guid
         stream.Write(0);                     // rwd
+        stream.Write(0);                     // srwd
 
         _character.Write(stream);            //Character_List_Packet_48B0
 

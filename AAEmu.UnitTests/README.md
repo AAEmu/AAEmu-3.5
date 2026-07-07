@@ -48,7 +48,7 @@ dotnet test /p:CollectCoverage=true
 ### Priority 2 (Core Features)
 - `NpcGameData` - NPC spawning and AI
 - `BuffGameData` - Buff/debuff system
-- `SCCharacterListPacket` - Character list
+- `CharacterListPacket` - Character list
 
 ### Priority 3 (Additional Features)
 - `AchievementGameData` - Achievement system

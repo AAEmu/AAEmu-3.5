@@ -56,7 +56,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             Connection.ActiveChar.Simulation = new Simulation(character);
 
-            Connection.SendPacket(new SCCharacterStatePacket(character));
+            Connection.SendPacket(new CharacterStatePacket(character));
             Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
             Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.SendPacket(new SCCharacterGamePointsPacket(character));
@@ -80,7 +80,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             foreach (var conflict in ZoneManager.Instance.GetConflicts())
             {
-                Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime));
+                Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime, DateTime.MinValue));
             }
 
             var visitItem = new VisitCountItem { ZoneId = 302, Data = 7, Count = character.ArenaDailyEntryCount };

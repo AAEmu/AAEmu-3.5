@@ -443,7 +443,7 @@ public static class CSOffsets
     public const ushort CSRequestPermissionToPlayCinemaForDirectingMode = 0xfff;
     public const ushort CSSetupSecondPassword = 0xfff;
     public const ushort CSTakeAttachmentSequentially = 0xfff;
-    public const ushort CSUnbondDoodadPacket = 0xfff;
+    public const ushort CSUnbondDoodadPacket = 0x064;
     public const ushort CSUnknownInstancePacket = 0xfff;
     public const ushort CSBidAuctionPacket = 0xfff;
     public const ushort CSCancelAuctionPacket = 0xfff;
@@ -459,6 +459,6 @@ public static class CSOffsets
     //public const ushort CSSpecialtyRatioPacket = 0xfff;
     //public const ushort CSTeleportEndedPacket = 0xfff;
     //public const ushort CSChangeMateNamePacket = 0xfff;
-    //public const ushort CSDetachFromDoodadPacket = 0xfff;
+
     //public const ushort CSSpawnSlavePacket = 0xfff;
 }

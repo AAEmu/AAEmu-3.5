@@ -128,13 +128,13 @@ public class FactionManager(ILocalizationManager localizationManager) : Singleto
     public void SendFactions(Character character)
     {
         if (_systemFactions.Values.Count == 0)
-            character.SendPacket(new SCFactionListPacket());
+            character.SendPacket(new SCSystemFactionListPacket());
         else
         {
             var factions = _systemFactions.Values.ToArray();
             var dividedArrays = Helpers.SplitArray(factions, 20); // Разделяем массив на массивы по 20 значений
             foreach (var systemFaction in dividedArrays)
-                character.SendPacket(new SCFactionListPacket(systemFaction));
+                character.SendPacket(new SCSystemFactionListPacket(systemFaction));
         }
     }
 

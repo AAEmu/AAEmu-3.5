@@ -30,7 +30,7 @@ public static class SCOffsets
     public const ushort off_39D143F0 = 0x223;
     //public const ushort SCInitialConfigPacket = 0x03D;
     //public const ushort SCTrionConfigPacket = 0x08A;
-    public const ushort SCSystemFactionListPacket = 0x296;
+    public const ushort SCSystemFactionListPacket = 0x296; // was SCFactionListPacket
     public const ushort SCExpeditionListPacket = 0x212;
     public const ushort SCNationMemberListPacket = 0x246;
     public const ushort SCExpeditionRolePolicyListPacket = 0x1AA;
@@ -686,7 +686,7 @@ public static class SCOffsets
     public const ushort off_39D1769C = 0x02B;
     public const ushort SCUnitAiAggroPacket = 0x0C7;
     public const ushort SCCharacterGenderAndModelModifiedPacket = 0x2B3;
-    public const ushort SCAccountAttributePacket = 0x0CA; // off_39D17774
+    public const ushort SCAccountAttributeListPacket = 0x0CA; // was SCAccountAttributePacket / off_39D17774
     public const ushort SCAccountAttribute2Packet = 0x2BE; // off_39D17780
     public const ushort off_39D17798 = 0x0BF;
     public const ushort off_39D177A4 = 0x0C2;
@@ -696,7 +696,7 @@ public static class SCOffsets
     public const ushort SCHousingTradeListPacket = 0x2C8;
     public const ushort SCCreateCharacterResponsePacket = 0x236;
     public const ushort SCEditCharacterResponsePacket = 0x2D7;
-    public const ushort SCCharacterListPacket = 0x076;
+    public const ushort CharacterListPacket = 0x076; // was SCCharacterListPacket
     public const ushort SCSlaveEquipmentChangedPacket = 0x203;
     public const ushort SCOneUnitMovementPacket = 0x084;
     public const ushort SCImpulseUnitPacket = 0x16E;
@@ -751,7 +751,7 @@ public static class SCOffsets
     public const ushort SCFamilyMemberAddedPacket = 0x2D8;
     public const ushort off_39D1EE28 = 0x207;
     public const ushort SCFamilyCreatedPacket = 0x13F;
-    public const ushort SCCharacterStatePacket = 0x17E;
+    public const ushort CharacterStatePacket = 0x17E; // was SCCharacterStatePacket
 
     // в версии 3030 в x2game.dll нет таких пакетов
     public const ushort SCFactionCreatedPacket = 0xfff;
@@ -779,7 +779,6 @@ public static class SCOffsets
     public const ushort SCSkillUpgradedPacket = 0xfff;
     public const ushort SCTrialCancledPacket = 0xfff;
     public const ushort SCExpeditionRoleChangedPacket = 0xfff;
-    public const ushort SCFactionListPacket = 0x296; // SCSystemFactionListPacket
     public const ushort SCItemUccDataChangedPacket = 0xfff; // SCItemUccChangedPacket
     public const ushort SCCofferContentsUpdatePacket = 0xfff; // SCCofferContentsPacket
     public const ushort SCResultRestrictCheckPacket = 0x281;

@@ -3,12 +3,12 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCResponseUIDataPacket(uint characterId, ushort uiDataType, string uiData)
+public class SCResponseUIDataPacket(long type, ushort uiDataType, string uiData)
     : GamePacket(SCOffsets.SCResponseUIDataPacket, 5)
 {
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write(characterId);
+        stream.Write(type);
         stream.Write(uiDataType);
         stream.Write(uiData);
         stream.Write(uiData.Length + 1);

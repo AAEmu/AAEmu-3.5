@@ -10,10 +10,12 @@ public class SCJoinedChatChannelPacket(ChatType type, short subType, FactionsEnu
 {
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write((short)type);
-        stream.Write(subType);
-        stream.Write((uint)factionId);
-        // -------------
+        // 10.0 reads this as a single s64 "chat" field:
+        //   bits 0..15  -> ChatType,
+        //   bits 16..31 -> subType,
+        //   bits 32..63 -> factionId.
+        var chat = ((long)(short)type) | ((long)subType << 16) | ((long)(uint)factionId << 32);
+        stream.Write(chat);
         stream.Write(""); // name
         return stream;
     }

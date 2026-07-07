@@ -3,7 +3,7 @@ using AAEmu.Game.Core.Network.Game;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCAccountAttributePacket : GamePacket
+public class SCAccountAttributeListPacket : GamePacket
 {
     private readonly byte _AccountAttributeKind;
     private readonly uint _extraKind;
@@ -12,7 +12,7 @@ public class SCAccountAttributePacket : GamePacket
     private readonly DateTime _startDate;
     private readonly DateTime _endData;
 
-    public SCAccountAttributePacket() : base(SCOffsets.SCAccountAttributePacket, 5)
+    public SCAccountAttributeListPacket() : base(SCOffsets.SCAccountAttributeListPacket, 5)
     {
         _AccountAttributeKind = 1;
         _extraKind = 0;

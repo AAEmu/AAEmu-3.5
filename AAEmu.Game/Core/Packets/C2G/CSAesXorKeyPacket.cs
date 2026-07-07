@@ -32,7 +32,7 @@ public class CSAesXorKeyPacket : GamePacket
 
         if (characters.Length == 0)
         {
-            Connection.SendPacket(new SCCharacterListPacket(true, characters));
+            Connection.SendPacket(new CharacterListPacket(true, characters));
         }
         else
         {
@@ -41,12 +41,12 @@ public class CSAesXorKeyPacket : GamePacket
                 var last = characters.Length - i <= 2;
                 var temp = new Character[last ? characters.Length - i : 2];
                 Array.Copy(characters, i, temp, 0, temp.Length);
-                Connection.SendPacket(new SCCharacterListPacket(last, temp));
+                Connection.SendPacket(new CharacterListPacket(last, temp));
             }
         }
         Connection.SendPacket(new SCRaceCongestionPacket());
 
-        Connection.SendPacket(new SCAccountAttributePacket());
+        Connection.SendPacket(new SCAccountAttributeListPacket());
 
     }
 }
