@@ -1,6 +1,11 @@
 .vs/
 .vscode/
 .idea/
+.kimi/
+.codex/
+.claude/
+.cursor/
+.windsurf/
 bin/
 obj/
 publish/

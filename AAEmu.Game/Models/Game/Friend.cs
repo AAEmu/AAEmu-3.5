@@ -12,6 +12,7 @@ public class Friend : PacketMarshaler
     public string Name { get; set; }
     public Race Race { get; set; }
     public byte Level { get; set; }
+    public byte HeirLevel { get; set; }
     public int Health { get; set; }
     public AbilityType Ability1 { get; set; }
     public AbilityType Ability2 { get; set; }
@@ -27,6 +28,7 @@ public class Friend : PacketMarshaler
         stream.Write(Name);
         stream.Write((byte)Race);
         stream.Write(Level);
+        stream.Write(HeirLevel);
         stream.Write(Health);
         stream.Write((byte)Ability1);
         stream.Write((byte)Ability2);
