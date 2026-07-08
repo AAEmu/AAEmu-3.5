@@ -521,7 +521,6 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
     public static void SendExpeditionInfo(Character character)
     {
         var members = character.Expedition.Members;
-        var total = (uint)members.Count;
         var id = character.Expedition.Id;
 
         character.SendPacket(new SCExpeditionRolePolicyListPacket(character.Expedition.Policies));
@@ -529,7 +528,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         for (var i = 0; i < members.Count; i += 20)
         {
             var block = members.Skip(i).Take(20).ToList();
-            character.SendPacket(new SCExpeditionMemberListPacket(total, (uint)id, block));
+            character.SendPacket(new SCExpeditionMemberListPacket((uint)id, block));
         }
     }
 

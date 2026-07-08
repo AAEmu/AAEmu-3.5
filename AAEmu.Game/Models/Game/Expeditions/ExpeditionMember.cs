@@ -16,6 +16,7 @@ public class ExpeditionMember : PacketMarshaler
     public DateTime LastWorldLeaveTime { get; set; }
     public string Name { get; set; }
     public byte Level { get; set; }
+    public byte HeirLevel { get; set; }
     public uint ZoneId { get; set; }
     public uint Id3 { get; set; } // TODO mb system faction.Id?
     public byte[] Abilities { get; set; } = [11, 11, 11];
@@ -23,6 +24,9 @@ public class ExpeditionMember : PacketMarshaler
     public Vector3 Position { get; set; } = Vector3.Zero;
     public string Memo { get; set; }
     public DateTime TransferRequestedTime { get; set; }
+    public DateTime NationJoinTime { get; set; }
+    public int ContributionPoint { get; set; }
+    public int GearScore { get; set; }
 
     public void Refresh(Character character)
     {
@@ -31,6 +35,7 @@ public class ExpeditionMember : PacketMarshaler
         ZoneId = character.Transform.ZoneId;
         Abilities = [(byte)character.Ability1, (byte)character.Ability2, (byte)character.Ability3];
         Level = character.Level;
+        HeirLevel = character.HeirLevel;
         Name = character.Name;
         LastWorldLeaveTime = DateTime.UtcNow;
     }
@@ -66,6 +71,7 @@ public class ExpeditionMember : PacketMarshaler
         stream.Write(LastWorldLeaveTime);
         stream.Write(Name);
         stream.Write(Level);
+        stream.Write(HeirLevel);
         stream.Write(ZoneId);
         stream.Write(Id3);
         foreach (var ability in Abilities)
@@ -76,6 +82,9 @@ public class ExpeditionMember : PacketMarshaler
         stream.Write(Position.Z);
         stream.Write(Memo);
         stream.Write(TransferRequestedTime);
+        stream.Write(NationJoinTime);
+        stream.Write(ContributionPoint);
+        stream.Write(GearScore);
         return stream;
     }
 }
