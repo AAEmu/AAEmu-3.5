@@ -17,7 +17,7 @@ public class SCLoadInstancePacket(
     public override PacketStream Write(PacketStream stream)
     {
         stream.Write(instanceId);
-        stream.Write(zoneId);
+        stream.Write((int)zoneId);
         stream.Write(x);
         stream.Write(y);
         stream.Write(z);
