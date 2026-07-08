@@ -11,10 +11,7 @@ public class SCActabilityPacket(bool last, Actability[] actabilities) : GamePack
         stream.Write(last);
         stream.Write((byte)actabilities.Length); // TODO max count 100
         foreach (var actability in actabilities)
-        {
-            stream.WritePisc(actability.Id, actability.Point);
-            stream.Write(actability.Step);
-        }
+            stream.Write(actability);
 
         return stream;
     }
