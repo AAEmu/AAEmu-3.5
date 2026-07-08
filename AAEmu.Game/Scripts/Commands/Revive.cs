@@ -41,7 +41,7 @@ public class Revive : ICommand
                         targetPlayer.Transform.World.Position.Y, targetPlayer.Transform.World.Position.Z,
                         targetPlayer.Transform.World.Rotation.Z), true);
                 targetPlayer.BroadcastPacket(
-                    new SCUnitPointsPacket(targetPlayer.ObjId, targetPlayer.Hp, targetPlayer.Mp), true);
+                    new SCUnitPointsPacket(targetPlayer.ObjId, targetPlayer.Hp, targetPlayer.Mp, targetPlayer.HighAbilityRsc), true);
                 targetPlayer.PostUpdateCurrentHp(targetPlayer, 0, targetPlayer.Hp, KillReason.Unknown);
             }
             else

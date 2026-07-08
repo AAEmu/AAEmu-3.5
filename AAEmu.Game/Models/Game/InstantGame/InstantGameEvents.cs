@@ -57,7 +57,7 @@ public partial class InstantGame
 
             victim.Hp = victim.MaxHp; // Full HP
             victim.Mp = victim.MaxMp; // Full MP
-            victim.BroadcastPacket(new SCUnitPointsPacket(victim.ObjId, victim.Hp, victim.Mp), true); // Reset HP and MP
+            victim.BroadcastPacket(new SCUnitPointsPacket(victim.ObjId, victim.Hp, victim.Mp, victim.HighAbilityRsc), true); // Reset HP and MP
 
             spawn = corps == InstantCorps.Corps1 ? _battlefield.Spawns.Corps2Spawn : _battlefield.Spawns.Corps1Spawn;
 
@@ -74,7 +74,7 @@ public partial class InstantGame
 
                 killer.Hp = killer.MaxHp;
                 killer.Mp = killer.MaxMp;
-                killer.BroadcastPacket(new SCUnitPointsPacket(killer.ObjId, killer.Hp, killer.Mp), true);
+                killer.BroadcastPacket(new SCUnitPointsPacket(killer.ObjId, killer.Hp, killer.Mp, killer.HighAbilityRsc), true);
                 killer.Buffs.RemoveAllEffects();
                 killer.ResetAllSkillCooldowns(false);
             }

@@ -274,35 +274,159 @@ public class Inventory
     public bool SplitOrMoveItem(ItemTaskType taskType, ulong fromItemId, SlotType fromType, byte fromSlot,
         ulong toItemId, SlotType toType, byte toSlot, int count = 0)
     {
+        var needsResync = false;
         var fromItem = ItemManager.Instance.GetItemByItemId(fromItemId);
+        var sourceContainer = _itemContainers.GetValueOrDefault(fromType) ?? fromItem?.HoldingContainer;
+        var authoritativeSourceItem = sourceContainer?.GetItemBySlot(fromSlot);
+        if (IsPlayerInventoryContainer(sourceContainer?.ContainerType ?? SlotType.None)
+            && authoritativeSourceItem != null
+            && (fromItem == null || fromItem != authoritativeSourceItem || fromItem.SlotType != fromType || fromItem.Slot != fromSlot))
+        {
+            Logger.Warn(
+                "SplitOrMoveItem source item mismatch: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, authoritativeItem={5}({6})x{7}",
+                Owner?.Name ?? "?",
+                taskType,
+                fromItemId,
+                fromType,
+                fromSlot,
+                authoritativeSourceItem.Id,
+                authoritativeSourceItem.TemplateId,
+                authoritativeSourceItem.Count);
+            fromItem = authoritativeSourceItem;
+            fromItemId = fromItem.Id;
+            needsResync = true;
+        }
+
         if (fromItem == null && fromItemId != 0)
         {
+            if (IsPlayerInventoryContainer(sourceContainer?.ContainerType ?? SlotType.None))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem stale source item id: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, toItemId={5}, toType={6}, toSlot={7}",
+                    Owner?.Name ?? "?",
+                    taskType,
+                    fromItemId,
+                    fromType,
+                    fromSlot,
+                    toItemId,
+                    toType,
+                    toSlot);
+                Send();
+                return true;
+            }
+
             Logger.Error($"SplitOrMoveItem - ItemId {fromItemId} no longer exists, possibly a phantom item.");
             return false;
         }
 
         var toItem = ItemManager.Instance.GetItemByItemId(toItemId);
+        var targetContainer = _itemContainers.GetValueOrDefault(toType) ?? toItem?.HoldingContainer;
+        var authoritativeTargetItem = targetContainer?.GetItemBySlot(toSlot);
+        if (IsPlayerInventoryContainer(targetContainer?.ContainerType ?? SlotType.None)
+            && authoritativeTargetItem != null
+            && (toItem == null || toItem != authoritativeTargetItem || toItem.SlotType != toType || toItem.Slot != toSlot))
+        {
+            Logger.Warn(
+                "SplitOrMoveItem target item mismatch: owner={0}, task={1}, toItemId={2}, toType={3}, toSlot={4}, authoritativeItem={5}({6})x{7}",
+                Owner?.Name ?? "?",
+                taskType,
+                toItemId,
+                toType,
+                toSlot,
+                authoritativeTargetItem.Id,
+                authoritativeTargetItem.TemplateId,
+                authoritativeTargetItem.Count);
+            toItem = authoritativeTargetItem;
+            toItemId = toItem.Id;
+            needsResync = true;
+        }
+
         if (toItem == null && toItemId != 0)
         {
+            if (IsPlayerInventoryContainer(targetContainer?.ContainerType ?? SlotType.None))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem stale target item id: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, toItemId={5}, toType={6}, toSlot={7}",
+                    Owner?.Name ?? "?",
+                    taskType,
+                    fromItemId,
+                    fromType,
+                    fromSlot,
+                    toItemId,
+                    toType,
+                    toSlot);
+                Send();
+                return true;
+            }
+
             Logger.Error($"SplitOrMoveItem - ItemId {toItemId} no longer exists, possibly a phantom item.");
             return false;
         }
 
-        // Grab containers for easy manipulation
-        var sourceContainer = fromItem?.HoldingContainer ?? _itemContainers.GetValueOrDefault(fromType);
-        var targetContainer = toItem?.HoldingContainer ?? _itemContainers.GetValueOrDefault(toType);
+        var result = SplitOrMoveItemEx(taskType, sourceContainer, targetContainer, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+        if (result && needsResync && taskType == ItemTaskType.SwapItems)
+            Send();
 
-        return SplitOrMoveItemEx(taskType, sourceContainer, targetContainer, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+        return result;
     }
 
     public bool SplitOrMoveItemEx(ItemTaskType taskType, ItemContainer sourceContainer, ItemContainer targetContainer, ulong fromItemId, SlotType fromType, byte fromSlot, ulong toItemId, SlotType toType, byte toSlot, int count = 0)
     {
         Logger.Trace($"SplitOrMoveItem({fromItemId} {fromType}:{fromSlot} => {toItemId} {toType}:{toSlot} - {count})");
 
+        if (sourceContainer == null || targetContainer == null)
+        {
+            Logger.Warn(
+                "SplitOrMoveItem - missing container: owner={0}, fromItemId={1}, fromType={2}, fromSlot={3}, toItemId={4}, toType={5}, toSlot={6}",
+                Owner?.Name ?? "?",
+                fromItemId,
+                fromType,
+                fromSlot,
+                toItemId,
+                toType,
+                toSlot);
+            return false;
+        }
+
         // Try to grab the actual source item
         var fromItem = ItemManager.Instance.GetItemByItemId(fromItemId);
+        var authoritativeSourceItem = sourceContainer.GetItemBySlot(fromSlot);
+        if (IsPlayerInventoryContainer(sourceContainer.ContainerType)
+            && authoritativeSourceItem != null
+            && (fromItem == null || fromItem != authoritativeSourceItem || fromItem.SlotType != fromType || fromItem.Slot != fromSlot))
+        {
+            Logger.Warn(
+                "SplitOrMoveItem source item mismatch: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, authoritativeItem={5}({6})x{7}",
+                Owner?.Name ?? "?",
+                taskType,
+                fromItemId,
+                fromType,
+                fromSlot,
+                authoritativeSourceItem.Id,
+                authoritativeSourceItem.TemplateId,
+                authoritativeSourceItem.Count);
+            fromItem = authoritativeSourceItem;
+            fromItemId = fromItem.Id;
+        }
+
         if (fromItem == null && fromItemId != 0)
         {
+            if (IsPlayerInventoryContainer(sourceContainer.ContainerType))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem stale source item id: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, toItemId={5}, toType={6}, toSlot={7}",
+                    Owner?.Name ?? "?",
+                    taskType,
+                    fromItemId,
+                    fromType,
+                    fromSlot,
+                    toItemId,
+                    toType,
+                    toSlot);
+                Send();
+                return true;
+            }
+
             Logger.Error($"SplitOrMoveItem - ItemId {fromItemId} no longer exists, possibly a phantom item.");
             return false;
         }
@@ -315,17 +439,57 @@ public class Inventory
         if (count <= 0 && fromItem != null)
             count = fromItem.Count;
 
-        // If target item is not provided (itemId was not found), grab the item in the target slot instead
-        if (itemInTargetSlot == null)
-            itemInTargetSlot = targetContainer.GetItemBySlot(toSlot);
+        var itemByTargetSlot = targetContainer.GetItemBySlot(toSlot);
+        if (IsPlayerInventoryContainer(targetContainer.ContainerType)
+            && itemByTargetSlot != null
+            && (itemInTargetSlot == null || itemInTargetSlot != itemByTargetSlot || itemInTargetSlot.SlotType != toType || itemInTargetSlot.Slot != toSlot))
+        {
+            Logger.Warn(
+                "SplitOrMoveItem target item mismatch: owner={0}, task={1}, toItemId={2}, toType={3}, toSlot={4}, authoritativeItem={5}({6})x{7}",
+                Owner?.Name ?? "?",
+                taskType,
+                toItemId,
+                toType,
+                toSlot,
+                itemByTargetSlot.Id,
+                itemByTargetSlot.TemplateId,
+                itemByTargetSlot.Count);
+            itemInTargetSlot = itemByTargetSlot;
+            toItemId = itemInTargetSlot.Id;
+        }
+        else if (itemInTargetSlot == null && toItemId != 0)
+        {
+            if (IsPlayerInventoryContainer(targetContainer.ContainerType))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem stale target item id: owner={0}, task={1}, fromItemId={2}, fromType={3}, fromSlot={4}, toItemId={5}, toType={6}, toSlot={7}",
+                    Owner?.Name ?? "?",
+                    taskType,
+                    fromItemId,
+                    fromType,
+                    fromSlot,
+                    toItemId,
+                    toType,
+                    toSlot);
+                Send();
+                return true;
+            }
+
+            Logger.Error($"SplitOrMoveItem - ItemId {toItemId} no longer exists, possibly a phantom item.");
+            return false;
+        }
+        else if (itemInTargetSlot == null)
+        {
+            itemInTargetSlot = itemByTargetSlot;
+        }
 
         // Check if containers can accept the items
-        if (targetContainer is not null && !targetContainer.CanAccept(fromItem, toSlot))
+        if (!targetContainer.CanAccept(fromItem, toSlot))
         {
             Logger.Error($"SplitOrMoveItem - fromItemId {fromItemId} is not welcome in this container {targetContainer.ContainerType} ({targetContainer.ContainerId}).");
             return false;
         }
-        if (sourceContainer is not null && !sourceContainer.CanAccept(itemInTargetSlot, fromSlot))
+        if (!sourceContainer.CanAccept(itemInTargetSlot, fromSlot))
         {
             Logger.Error($"SplitOrMoveItem - toItemId {toItemId} is not welcome in this container {sourceContainer.ContainerType} ({sourceContainer.ContainerId}).");
             return false;
@@ -355,17 +519,42 @@ public class Inventory
         }
 
         // Check if what the client provides as its source container is actually what the server has as data for the item
-        if (action != SwapAction.doEquipInEmptySlot && sourceContainer?.ContainerType != fromType)
+        if (action != SwapAction.doEquipInEmptySlot && sourceContainer.ContainerType != fromType)
         {
-            Logger.Error("SplitOrMoveItem Source Item Container did not match what the client asked");
-            return false;
+            if (IsPlayerInventoryContainer(sourceContainer.ContainerType) && IsPlayerInventoryContainer(fromType))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem source container mismatch: itemId={0}, requested={1}:{2}, actual={3}:{4}",
+                    fromItemId,
+                    fromType,
+                    fromSlot,
+                    sourceContainer.ContainerType,
+                    fromItem?.Slot);
+                fromType = sourceContainer.ContainerType;
+            }
+            else
+            {
+                Logger.Error("SplitOrMoveItem Source Item Container did not match what the client asked");
+                return false;
+            }
         }
 
         // Check if what the client provides as its source slot number is actually what the server has as data for the item
         if (action != SwapAction.doEquipInEmptySlot && fromItem?.Slot != fromSlot)
         {
-            Logger.Error("SplitOrMoveItem Source Item slot did not match what the client asked");
-            return false;
+            if (IsPlayerInventoryContainer(sourceContainer.ContainerType))
+            {
+                Logger.Warn(
+                    "SplitOrMoveItem source slot mismatch: itemId={0}, requestedSlot={1}, actualSlot={2}",
+                    fromItemId,
+                    fromSlot,
+                    fromItem.Slot);
+            }
+            else
+            {
+                Logger.Error("SplitOrMoveItem Source Item slot did not match what the client asked");
+                return false;
+            }
         }
 
         // Check if the amount we want to move is actually available from source
@@ -381,19 +570,43 @@ public class Inventory
             // Check if target slot type is what the server has on data
             if (itemInTargetSlot.SlotType != toType)
             {
-                Logger.Error("SplitOrMoveItem Target Item Type does not match");
-                return false;
+                if (IsPlayerInventoryContainer(targetContainer.ContainerType) && IsPlayerInventoryContainer(toType))
+                {
+                    Logger.Warn(
+                        "SplitOrMoveItem target type mismatch: itemId={0}, requestedType={1}, actualType={2}",
+                        itemInTargetSlot.Id,
+                        toType,
+                        itemInTargetSlot.SlotType);
+                    itemInTargetSlot = itemByTargetSlot;
+                }
+                else
+                {
+                    Logger.Error("SplitOrMoveItem Target Item Type does not match");
+                    return false;
+                }
             }
 
             // Check if target slot number is what the server has on data
-            if (itemInTargetSlot.Slot != toSlot)
+            if (itemInTargetSlot != null && itemInTargetSlot.Slot != toSlot)
             {
-                Logger.Error("SplitOrMoveItem Target Item Slot does not match");
-                return false;
+                if (IsPlayerInventoryContainer(targetContainer.ContainerType))
+                {
+                    Logger.Warn(
+                        "SplitOrMoveItem target slot mismatch: itemId={0}, requestedSlot={1}, actualSlot={2}",
+                        itemInTargetSlot.Id,
+                        toSlot,
+                        itemInTargetSlot.Slot);
+                    itemInTargetSlot = itemByTargetSlot;
+                }
+                else
+                {
+                    Logger.Error("SplitOrMoveItem Target Item Slot does not match");
+                    return false;
+                }
             }
 
             // Check if target slot has enough room left for this item
-            if (action != SwapAction.doEquipInEmptySlot && itemInTargetSlot.TemplateId == fromItem?.TemplateId && itemInTargetSlot.Count + count > fromItem.Template.MaxCount && fromItem.Template.MaxCount > 1)
+            if (itemInTargetSlot != null && action != SwapAction.doEquipInEmptySlot && itemInTargetSlot.TemplateId == fromItem?.TemplateId && itemInTargetSlot.Count + count > fromItem.Template.MaxCount && fromItem.Template.MaxCount > 1)
             {
                 Logger.Error("SplitOrMoveItem Target Item stack does not have enough room to take source");
                 return false;
@@ -484,18 +697,18 @@ public class Inventory
             }
 
             // If equipping a 2-Handed weapon, and we had an off-hand slot weapon equipped, mark it for un-equip 
-            if (isTo2H && sourceContainer?.ContainerType == SlotType.Equipment && fromSlot == (int)EquipmentItemSlot.Mainhand)
+            if (isTo2H && sourceContainer.ContainerType == SlotType.Equipment && fromSlot == (int)EquipmentItemSlot.Mainhand)
                 doUnEquipOffhand = true;
 
             // If equipping a 2-Handed weapon, and we had a main slot weapon equipped, mark it for un-equip
-            if (isMain2H && sourceContainer?.ContainerType == SlotType.Equipment && fromSlot == (int)EquipmentItemSlot.Offhand)
+            if (isMain2H && sourceContainer.ContainerType == SlotType.Equipment && fromSlot == (int)EquipmentItemSlot.Offhand)
                 doUnEquipMainHand = true;
 
             // Client actually always sends from equipment => inventory no matter how you click it, this is just a safety if it ever changes
             // Same checks as above, but in reverse order
-            if (isFrom2H && targetContainer?.ContainerType == SlotType.Equipment && toSlot == (int)EquipmentItemSlot.Mainhand)
+            if (isFrom2H && targetContainer.ContainerType == SlotType.Equipment && toSlot == (int)EquipmentItemSlot.Mainhand)
                 doUnEquipOffhand = true;
-            if (isMain2H && targetContainer?.ContainerType == SlotType.Equipment && toSlot == (int)EquipmentItemSlot.Offhand)
+            if (isMain2H && targetContainer.ContainerType == SlotType.Equipment && toSlot == (int)EquipmentItemSlot.Offhand)
                 doUnEquipMainHand = true;
         }
 
@@ -547,7 +760,9 @@ public class Inventory
                 ni.SlotType = toType;
                 ni.Slot = toSlot;
                 ni.HoldingContainer = targetContainer;
+                ni.OwnerId = targetContainer.OwnerId;
                 targetContainer.Items.Add(ni);
+                targetContainer.OnEnterContainer(ni, sourceContainer, fromSlot);
                 itemTasks.Add(new ItemAdd(ni));
                 if (targetContainer != sourceContainer)
                     targetContainer.UpdateFreeSlotCount();
@@ -563,6 +778,7 @@ public class Inventory
                     sourceContainer.Items.Remove(fromItem);
                     targetContainer.Items.Add(fromItem);
                     fromItem.HoldingContainer = targetContainer;
+                    fromItem.OwnerId = targetContainer.OwnerId;
                     sourceContainer.UpdateFreeSlotCount();
                     targetContainer.UpdateFreeSlotCount();
                 }
@@ -589,22 +805,24 @@ public class Inventory
                 // Swap both item slots
                 itemTasks.Add(new ItemMove(fromType, fromSlot, fromItemId, toType, toSlot, toItemId));
                 // itemTasks.Add(new ItemMove(fromType, fromSlot, fromItem!.Id, toType, toSlot, itemInTargetSlot!.Id));
-                fromItem!.SlotType = targetContainer!.ContainerType;
+                fromItem!.SlotType = targetContainer.ContainerType;
                 fromItem.Slot = toSlot;
-                if (sourceContainer != null && sourceContainer != targetContainer)
+                if (sourceContainer != targetContainer)
                 {
                     sourceContainer.Items.Remove(fromItem);
                     targetContainer.Items.Add(fromItem);
                     fromItem.HoldingContainer = targetContainer;
+                    fromItem.OwnerId = targetContainer.OwnerId;
                     targetContainer.UpdateFreeSlotCount();
                 }
-                itemInTargetSlot!.SlotType = sourceContainer!.ContainerType;
+                itemInTargetSlot!.SlotType = sourceContainer.ContainerType;
                 itemInTargetSlot.Slot = fromSlot;
                 if (sourceContainer != targetContainer)
                 {
                     targetContainer.Items.Remove(itemInTargetSlot);
                     sourceContainer.Items.Add(itemInTargetSlot);
                     itemInTargetSlot.HoldingContainer = sourceContainer;
+                    itemInTargetSlot.OwnerId = sourceContainer.OwnerId;
                     sourceContainer.UpdateFreeSlotCount();
                 }
                 break;
@@ -618,9 +836,9 @@ public class Inventory
 
         // Force-assign item owners for safety
         if (fromItem != null)
-            fromItem.OwnerId = sourceContainer?.OwnerId ?? 0;
+            fromItem.OwnerId = fromItem.HoldingContainer?.OwnerId ?? 0;
         if (itemInTargetSlot != null)
-            itemInTargetSlot.OwnerId = targetContainer?.OwnerId ?? 0;
+            itemInTargetSlot.OwnerId = itemInTargetSlot.HoldingContainer?.OwnerId ?? 0;
 
         // Send Item manipulation packet 
         if (taskType != ItemTaskType.Invalid && itemTasks.Count > 0)
@@ -629,16 +847,32 @@ public class Inventory
         // Send ItemContainer events
         if (sourceContainer != targetContainer)
         {
-            if (fromItem != null)
+            switch (action)
             {
-                sourceContainer?.OnLeaveContainer(fromItem, targetContainer, fromSlot);
-                targetContainer?.OnEnterContainer(fromItem, sourceContainer, fromSlot);
-            }
-
-            if (itemInTargetSlot != null)
-            {
-                targetContainer?.OnLeaveContainer(itemInTargetSlot, sourceContainer, fromSlot);
-                sourceContainer?.OnEnterContainer(itemInTargetSlot, targetContainer, fromSlot);
+                case SwapAction.doEquipInEmptySlot:
+                    if (itemInTargetSlot != null)
+                    {
+                        targetContainer.OnLeaveContainer(itemInTargetSlot, sourceContainer, toSlot);
+                        sourceContainer.OnEnterContainer(itemInTargetSlot, targetContainer, toSlot);
+                    }
+                    break;
+                case SwapAction.doMoveAllToEmpty:
+                    if (fromItem != null)
+                    {
+                        sourceContainer.OnLeaveContainer(fromItem, targetContainer, fromSlot);
+                        targetContainer.OnEnterContainer(fromItem, sourceContainer, fromSlot);
+                    }
+                    break;
+                case SwapAction.doSwap:
+                    if (fromItem != null)
+                        sourceContainer.OnLeaveContainer(fromItem, targetContainer, fromSlot);
+                    if (itemInTargetSlot != null)
+                        targetContainer.OnLeaveContainer(itemInTargetSlot, sourceContainer, toSlot);
+                    if (fromItem != null)
+                        targetContainer.OnEnterContainer(fromItem, sourceContainer, fromSlot);
+                    if (itemInTargetSlot != null)
+                        sourceContainer.OnEnterContainer(itemInTargetSlot, targetContainer, toSlot);
+                    break;
             }
         }
 
@@ -647,6 +881,11 @@ public class Inventory
             targetContainer.ApplyBindRules(taskType);
 
         return itemTasks.Count > 0;
+    }
+
+    private static bool IsPlayerInventoryContainer(SlotType slotType)
+    {
+        return slotType == SlotType.Inventory || slotType == SlotType.Equipment || slotType == SlotType.Bank;
     }
 
     /// <summary>

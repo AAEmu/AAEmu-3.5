@@ -79,9 +79,9 @@ public class ShipMoveType : MoveType
         ZoneId = (ushort)slave.Transform.ZoneId;
         Time = (uint)(DateTime.UtcNow - slave.SpawnTime).TotalMilliseconds;
         Stuck = false;
-        // Must match physics: smoothed values. Request jumps with each client packet and makes the rudder stutter.
+        // Keep packet values consistent with physics-smoothed controls.
         Throttle = slave.Throttle;
+        Rpm = slave.Rpm;
         Steering = slave.Steering;
-        Rpm = 0;
     }
 }

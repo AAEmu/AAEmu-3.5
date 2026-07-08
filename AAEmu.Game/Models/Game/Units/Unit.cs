@@ -354,7 +354,7 @@ public class Unit : BaseUnit, IUnit
 
         Hp = Math.Max(Hp - value, 0);
 
-        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Hp > 0 ? Mp : 0), true);
+        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Hp > 0 ? Mp : 0, HighAbilityRsc), true);
 
         PostUpdateCurrentHp(attacker, oldHp, Hp, killReason);
     }
@@ -443,7 +443,7 @@ public class Unit : BaseUnit, IUnit
 
         //else
         //StartRegen();
-        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp), true);
+        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, HighAbilityRsc), true);
     }
 
     public virtual void DoDie(BaseUnit killer, KillReason killReason)

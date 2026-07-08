@@ -174,7 +174,7 @@ public partial class InstantGame
                 // Reset HP
                 character.Hp = character.MaxHp;
                 character.Mp = character.MaxMp;
-                character.BroadcastPacket(new SCUnitPointsPacket(character.ObjId, character.Hp, character.Mp), true);
+                character.BroadcastPacket(new SCUnitPointsPacket(character.ObjId, character.Hp, character.Mp, character.HighAbilityRsc), true);
                 // Reset Buffs
                 character.Buffs.RemoveAllEffects();
                 // Reset Cooldowns

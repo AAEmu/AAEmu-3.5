@@ -282,7 +282,7 @@ public static class SCOffsets
     public const ushort SCPlotCastingStoppedPacket = 0x133;
     public const ushort SCPlotChannelingStoppedPacket = 0x0A2;
     public const ushort SCEnvDamagePacket = 0x0FB;
-    public const ushort SCSnowingEverywherePacket = 0x032;
+    public const ushort SCSnowingEverywherePacket = 0x032; // was SCSnowOnOffPacket
     public const ushort SCDiceValuePacket = 0x243;
     public const ushort SCDiceBidRuleChangePacket = 0x01C;
     public const ushort SCHungPacket = 0x1A2;
@@ -790,7 +790,7 @@ public static class SCOffsets
     public const ushort SCKnockBackUnitPacket = 0xfff;
     public const ushort SCLootDicePacket = 0xfff;
     public const ushort SCAggroTargetChanged = 0xfff;
-    public const ushort SCOnOffSnowPacket = 0xfff;
+    //public const ushort SCOnOffSnowPacket = 0xfff;
     public const ushort SCShowCommonFarmPacket = 0xfff;
     public const ushort SCSlaveStatePacket = 0xfff;
     public const ushort SCSuspectGoingBotTrial = 0xfff;

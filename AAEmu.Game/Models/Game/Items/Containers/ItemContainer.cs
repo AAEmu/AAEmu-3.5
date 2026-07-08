@@ -174,8 +174,16 @@ public class ItemContainer
             return;
         }
 
-        var usedSlotsCount = Items.Count(i => i != null);
+        var usedSlotsCount = 0;
+        foreach (var item in Items)
+        {
+            if (item != null)
+                usedSlotsCount++;
+        }
+
         _freeSlotCount = _containerSize - usedSlotsCount;
+        if (_freeSlotCount < 0)
+            Logger.Warn("Inventory overflow for player '{0}' (Max: {1}, Current: {2})", Owner?.Name ?? "Unknown", _containerSize, usedSlotsCount);
     }
 
     /// <summary>
@@ -207,6 +215,10 @@ public class ItemContainer
         {
             needNewSlot = true;
         }
+        else if (preferredSlot >= ContainerSize)
+        {
+            return -1;
+        }
         else
         {
             foreach (var i in Items)
@@ -222,10 +234,16 @@ public class ItemContainer
         // Find a new slot if needed
         if (needNewSlot)
         {
-            var usedSlots = (from iSlot in Items where iSlot.Slot != preferredSlot select iSlot.Slot).ToList();
+            var usedSlots = new bool[ContainerSize];
+            foreach (var item in Items)
+            {
+                if (item.Slot >= 0 && item.Slot < ContainerSize && item.Slot != preferredSlot)
+                    usedSlots[item.Slot] = true;
+            }
+
             for (var i = 0; i < ContainerSize; i++)
             {
-                if (!usedSlots.Contains(i))
+                if (!usedSlots[i])
                 {
                     return i;
                 }
@@ -455,6 +473,11 @@ public class ItemContainer
     /// <returns></returns>
     public bool RemoveItem(ItemTaskType task, Item item, bool releaseIdAsWell)
     {
+        if (item?.HoldingContainer == null)
+        {
+            return false;
+        }
+
         if (!item.CanDestroy())
         {
             return false;
@@ -548,7 +571,8 @@ public class ItemContainer
         // Check all remaining items
         if (amountToConsume > 0)
         {
-            foreach (var i in foundItems.OrderBy(x => x.Slot))
+            foundItems.Sort((a, b) => a.Slot.CompareTo(b.Slot));
+            foreach (var i in foundItems)
             {
                 var toRemove = Math.Min(i.Count, amountToConsume);
                 i.Count -= toRemove;
@@ -655,7 +679,8 @@ public class ItemContainer
         // Never update in mail or auction containers
         if (ContainerType != SlotType.Mail && ContainerType != SlotType.Auction)
         {
-            foreach (var i in currentItems.OrderBy(x => x.Slot))
+            currentItems.Sort((a, b) => a.Slot.CompareTo(b.Slot));
+            foreach (var i in currentItems)
             {
                 var freeSpace = i.Template.MaxCount - i.Count;
                 if (freeSpace > 0)
@@ -986,7 +1011,8 @@ public class ItemContainer
 
     public virtual void OnEnterContainer(Item item, ItemContainer lastContainer, byte previousSlot)
     {
-        // Do nothing
+        item.HoldingContainer = this;
+        item.OwnerId = OwnerId;
     }
 
     public virtual void OnLeaveContainer(Item item, ItemContainer newContainer, byte previousSlot)

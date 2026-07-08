@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -55,6 +55,7 @@ public class Slave : Unit
     public sbyte SteeringRequest { get; set; }
     public sbyte Steering { get; set; }
     public float SteeringSmoothed { get; set; }
+    public sbyte Rpm { get; set; }
     public float RotSpeed { get; set; }
     /// <summary>Smoothed 0.9..1 multiplier: forward speed loss while turning (see <see cref="ShipController"/>).</summary>
     public float TurnSpeedVelocityMul { get; set; } = 1f;
@@ -682,7 +683,7 @@ public class Slave : Unit
     public override void AddVisibleObject(Character character)
     {
         character.SendPacket(new SCUnitStatePacket(this));
-        character.SendPacket(new SCUnitPointsPacket(ObjId, Hp, Mp));
+        character.SendPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, HighAbilityRsc));
         character.SendPacket(new SCSlaveStatePacket(ObjId, TlId, Summoner?.Name ?? string.Empty, Summoner?.ObjId ?? 0, Id));
 
         base.AddVisibleObject(character);
@@ -1074,7 +1075,7 @@ public class Slave : Unit
 
         Hp = Math.Min(Hp, MaxHp);
         Mp = Math.Min(Mp, MaxMp);
-        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp), false);
+        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, HighAbilityRsc), false);
         PostUpdateCurrentHp(this, oldHp, Hp, KillReason.Unknown);
     }
 

@@ -60,14 +60,15 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             // начинаем слать пакеты
             //// TODO подобрать правильное место для пакета
             //character.Attendances.ResetIfNewMonth();
+
             //if (character.Attendances.Records?.Count == 0)
             //    character.Attendances.SendEmptyAttendances();
             //else
             //    character.Attendances.Send();
 
             Connection.SendPacket(new CharacterStatePacket(character));
-            Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
-            Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
+            //Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
+            //Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.ActiveChar.Inventory.Send();
             Connection.SendPacket(new SCCharacterGamePointsPacket(character));
 
@@ -94,7 +95,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             foreach (var conflict in ZoneManager.Instance.GetConflicts())
             {
-                Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime, DateTime.MinValue));
+                Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime));
             }
 
             //var visitItem = new VisitCountItem { ZoneId = 302, Data = 7, Count = character.ArenaDailyEntryCount };
