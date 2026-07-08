@@ -6,6 +6,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Housing;
 using AAEmu.Game.Models.Game.InstantGame;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units.Route;
@@ -27,7 +28,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             // Despawn any old pets this character might have even before loading it
             character.Load();
             character.Connection = Connection;
-            var houses = Connection.Houses.Values.Where(x => x.OwnerId == character.Id);
+            var houses = Connection.Houses.Values.Where(x => x.OwnerId == character.Id).ToArray();
             // Remove old pets from all world instances
             foreach (var worldInstance in WorldManager.Instance.GetWorlds())
             {
@@ -75,11 +76,13 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             Connection.ActiveChar.Friends.Send();
             Connection.ActiveChar.Blocked.Send();
 
-            foreach (var house in houses)
-            {
-                Connection.SendPacket(new SCHouseStatePacket(house));
-                //Connection.SendPacket(new SCMyHousePacket(house));
-            }
+            Connection.SendPacket(new SCAddHousePacket(houses));
+
+            //foreach (var house in houses)
+            //{
+            //    Connection.SendPacket(new SCHouseStatePacket(house));
+            //    //Connection.SendPacket(new SCMyHousePacket(house));
+            //}
 
             foreach (var conflict in ZoneManager.Instance.GetConflicts())
             {
