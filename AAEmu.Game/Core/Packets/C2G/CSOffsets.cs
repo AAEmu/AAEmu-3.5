@@ -145,7 +145,7 @@ public static class CSOffsets
     public const ushort CSEnprotectStubCallResponsePacket = 0x0F9;
     public const ushort CSRepresentCharacterPacket = 0x15B;
     public const ushort off_39D1439C = 0x19D;
-    public const ushort off_39D143A8 = 0x196;
+    public const ushort CSStoppedCinema = 0x196; // off_39D143A8
     public const ushort CSCreateCharacterPacket = 0x0B8;
     public const ushort CSEditCharacterPacket = 0x156;
     public const ushort CSSpawnCharacterPacket = 0x12C;
@@ -448,9 +448,9 @@ public static class CSOffsets
     public const ushort CSBidAuctionPacket = 0xfff;
     public const ushort CSCancelAuctionPacket = 0xfff;
     public const ushort CSExecuteCraft = 0xfff;
-    public const ushort CSICSMenuListPacket = 0xfff;
-    public const ushort CSICSGoodsListPacket = 0xfff;
-    public const ushort CSICSBuyGoodPacket = 0xfff;
+    public const ushort CSICSMenuListPacket = 0x106;
+    public const ushort CSICSGoodsListPacket = 0x0CE;
+    public const ushort CSICSBuyGoodPacket = 0x0EC;
     public const ushort CSEndMusicPacket = 0xfff;
     public const ushort CSExitBeautySalonPacket = 0xfff;
     public const ushort CSBeautyshopDataPacket = 0xfff;
