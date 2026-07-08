@@ -1151,29 +1151,41 @@ public class WorldManagerTests
     [Test]
     public async Task Constants_CellSize_ReturnsCorrectValue()
     {
+        // Arrange
+        var cellSize = WorldManager.CELL_SIZE;
+
         // Assert
-        await Assert.That(WorldManager.CELL_SIZE).IsEqualTo(1024);
+        await Assert.That(cellSize).IsEqualTo(1024);
     }
 
     [Test]
     public async Task Constants_RegionSize_ReturnsCorrectValue()
     {
+        // Arrange
+        var regionSize = WorldManager.REGION_SIZE;
+
         // Assert
-        await Assert.That(WorldManager.REGION_SIZE).IsEqualTo(64);
+        await Assert.That(regionSize).IsEqualTo(64);
     }
 
     [Test]
     public async Task Constants_SectorsPerCell_ReturnsCorrectValue()
     {
+        // Arrange
+        var sectorsPerCell = WorldManager.SECTORS_PER_CELL;
+
         // Assert
-        await Assert.That(WorldManager.SECTORS_PER_CELL).IsEqualTo(16); // 1024 / 64 = 16
+        await Assert.That(sectorsPerCell).IsEqualTo(16); // 1024 / 64 = 16
     }
 
     [Test]
     public async Task Constants_DefaultCombatTimeout_ReturnsCorrectValue()
     {
+        // Arrange
+        var defaultCombatTimeout = WorldManager.DefaultCombatTimeout;
+
         // Assert
-        await Assert.That(WorldManager.DefaultCombatTimeout).IsEqualTo(15f);
+        await Assert.That(defaultCombatTimeout).IsEqualTo(15f);
     }
 
     #endregion
@@ -1202,7 +1214,7 @@ public class WorldManagerTests
         {
             Id = id,
             Name = name,
-            ZoneKeys = new List<uint>(),
+            ZoneKeys = [],
             CellX = 2,
             CellY = 2,
             ZoneKeyByRegions = new uint[32, 32]

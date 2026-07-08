@@ -256,71 +256,101 @@ public class ItemTests
     [Test]
     public async Task DawnStone_ReturnsCorrectId()
     {
+        // Arrange
+        var dawnStoneId = (uint)ItemConstants.DawnStone;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.DawnStone).IsEqualTo(327u);
+        await Assert.That(dawnStoneId).IsEqualTo(327u);
     }
 
     [Test]
     public async Task Coins_ReturnsCorrectId()
     {
+        // Arrange
+        var coinsId = (uint)ItemConstants.Coins;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.Coins).IsEqualTo(500u);
+        await Assert.That(coinsId).IsEqualTo(500u);
     }
 
     [Test]
     public async Task TaxCertificate_ReturnsCorrectId()
     {
+        // Arrange
+        var taxCertificateId = (uint)ItemConstants.TaxCertificate;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.TaxCertificate).IsEqualTo(31891u);
+        await Assert.That(taxCertificateId).IsEqualTo(31891u);
     }
 
     [Test]
     public async Task BoundTaxCertificate_ReturnsCorrectId()
     {
+        // Arrange
+        var boundTaxCertificateId = (uint)ItemConstants.BoundTaxCertificate;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.BoundTaxCertificate).IsEqualTo(31892u);
+        await Assert.That(boundTaxCertificateId).IsEqualTo(31892u);
     }
 
     [Test]
     public async Task AppraisalCertificate_ReturnsCorrectId()
     {
+        // Arrange
+        var appraisalCertificateId = (uint)ItemConstants.AppraisalCertificate;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.AppraisalCertificate).IsEqualTo(28085u);
+        await Assert.That(appraisalCertificateId).IsEqualTo(28085u);
     }
 
     [Test]
     public async Task CrestStamp_ReturnsCorrectId()
     {
+        // Arrange
+        var crestStampId = (uint)ItemConstants.CrestStamp;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.CrestStamp).IsEqualTo(17662u);
+        await Assert.That(crestStampId).IsEqualTo(17662u);
     }
 
     [Test]
     public async Task CrestInk_ReturnsCorrectId()
     {
+        // Arrange
+        var crestInkId = (uint)ItemConstants.CrestInk;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.CrestInk).IsEqualTo(17663u);
+        await Assert.That(crestInkId).IsEqualTo(17663u);
     }
 
     [Test]
     public async Task SheetMusic_ReturnsCorrectId()
     {
+        // Arrange
+        var sheetMusicId = (uint)ItemConstants.SheetMusic;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.SheetMusic).IsEqualTo(28051u);
+        await Assert.That(sheetMusicId).IsEqualTo(28051u);
     }
 
     [Test]
     public async Task SalonCertificate_ReturnsCorrectId()
     {
+        // Arrange
+        var salonCertificateId = (uint)ItemConstants.SalonCertificate;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.SalonCertificate).IsEqualTo(30811u);
+        await Assert.That(salonCertificateId).IsEqualTo(30811u);
     }
 
     [Test]
     public async Task TreasureMapWithCoordinates_ReturnsCorrectId()
     {
+        // Arrange
+        var treasureMapId = (uint)ItemConstants.TreasureMapWithCoordinates;
+
         // Act & Assert
-        await Assert.That((uint)ItemConstants.TreasureMapWithCoordinates).IsEqualTo(24581u);
+        await Assert.That(treasureMapId).IsEqualTo(24581u);
     }
 
     #endregion

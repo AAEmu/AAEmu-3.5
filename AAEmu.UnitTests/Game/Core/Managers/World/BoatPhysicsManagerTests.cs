@@ -3,20 +3,17 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Managers.World;
-using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.Game.World.Xml;
 using AAEmu.Game.Physics.Forces;
 using AAEmu.Game.Utils;
-
-using Jitter2.Collision.Shapes;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 
 namespace AAEmu.UnitTests.Game.Core.Managers.World
 {
-    public class BoatPhysicsManagerTests
+    public class BoatPhysicsManagerTests : IDisposable
     {
         // Note: all tests in this class are commented out (no [Test] attribute).
         // Fields kept for reference but using real instances instead of mocks to avoid TUnit.Mocks source generator issues.
@@ -24,7 +21,22 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
         private readonly Slave _mockSlave;
         private readonly RigidBody _mockRigidBody;
         private readonly PhysicsManager _boatPhysicsManager;
+        private readonly Jitter2.World _physicsWorld;
         private WorldTemplate _worldTemplate;
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _physicsWorld.Dispose();
+            }
+        }
 
         public BoatPhysicsManagerTests()
         {
@@ -42,7 +54,7 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             {
                 CellX = 1,
                 CellY = 1,
-                Cells = new WorldCell[0,0],
+                Cells = new WorldCell[0, 0],
                 HeightMaxCoefficient = 0.63,
                 HousingZones = [],
                 Id = 0,
@@ -58,7 +70,8 @@ namespace AAEmu.UnitTests.Game.Core.Managers.World
             };
             _mockWorld = new WorldInstance(_worldTemplate, 0, false, worldIdManager.GetNextId());
             _mockSlave = new Slave();
-            _mockRigidBody = new Jitter2.World().CreateRigidBody();
+            _physicsWorld = new Jitter2.World();
+            _mockRigidBody = _physicsWorld.CreateRigidBody();
 
             // Configure ModelManager to return _mockShipModel.Object for GetShipModel
             //_mockModelManager = new Mock<ModelManager>();

@@ -1,4 +1,6 @@
-﻿using AAEmu.Commons.Network;
+﻿#nullable enable
+
+using AAEmu.Commons.Network;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
@@ -6,16 +8,16 @@ namespace AAEmu.UnitTests.Game.Models.Game.Skills;
 
 public class BuffTests
 {
-    private static BaseUnit CreateMockOwner() => new BaseUnit();
+    private static BaseUnit CreateMockOwner() => new();
 
-    private static BaseUnit CreateMockCaster() => new BaseUnit();
+    private static BaseUnit CreateMockCaster() => new();
 
     private static Buff CreateBuff(
-        BaseUnit ownerMock = null,
-        BaseUnit casterMock = null,
-        SkillCaster skillCaster = null,
-        BuffTemplate template = null,
-        Skill skill = null,
+        BaseUnit? ownerMock = null,
+        BaseUnit? casterMock = null,
+        SkillCaster? skillCaster = null,
+        BuffTemplate? template = null,
+        Skill? skill = null,
         DateTime? startTime = null)
     {
         var mockOwner = ownerMock ?? CreateMockOwner();

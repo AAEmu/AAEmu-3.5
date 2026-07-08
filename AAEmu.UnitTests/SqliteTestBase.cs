@@ -5,7 +5,7 @@ namespace AAEmu.UnitTests;
 /// <summary>
 /// Base class for tests that require a real SQLite database connection
 /// </summary>
-public abstract class SqliteTestBase : IDisposable
+public abstract class SqliteTestBase : IAsyncDisposable
 {
     protected SqliteConnection Connection { get; }
     protected string ConnectionString { get; }
@@ -156,6 +156,17 @@ public abstract class SqliteTestBase : IDisposable
         command.Parameters.AddWithValue("@grade", grade);
         command.Parameters.AddWithValue("@buffId", buffId);
         command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Disposes managed resources asynchronously
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Connection != null)
+        {
+            await Connection.DisposeAsync();
+        }
     }
 
     /// <summary>

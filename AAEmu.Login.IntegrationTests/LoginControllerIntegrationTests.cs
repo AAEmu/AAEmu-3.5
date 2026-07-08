@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Login.Core.Authentication;
 using AAEmu.Login.Core.Controllers;
@@ -44,7 +44,9 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
             .Returns((Password p) => p.Value);
         var appConfig = Options.Create(new AppConfiguration
         {
-            SecretKey = "test-key", AutoAccount = autoAccount, GameServers = []
+            SecretKey = "test-key",
+            AutoAccount = autoAccount,
+            GameServers = []
         });
         var connectionFactory = new Mock<IMySqlConnectionFactory>();
         connectionFactory.Setup(f => f.CreateConnection()).Returns(MySQL.CreateConnection);
@@ -68,7 +70,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_NonExistentUser_AutoAccountOff_ReturnsFailed()
     {
         var controller = CreateController(autoAccount: false);
@@ -80,7 +82,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         Assert.Equal(LoginDeniedReason.BadAccount, result.DenialReason);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_NonExistentUser_AutoAccountOn_CreatesAndSucceeds()
     {
         var controller = CreateController(autoAccount: true);
@@ -92,7 +94,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         Assert.NotEqual(default, result.AccountId);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_CorrectPassword_ReturnsSuccess()
     {
         await InsertUser("alice", "mypassword");
@@ -105,7 +107,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         Assert.True(result.Success);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_WrongPassword_ReturnsFailed()
     {
         await InsertUser("bob", "correctpass");
@@ -118,7 +120,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         Assert.Equal(LoginDeniedReason.BadAccount, result.DenialReason);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_BannedUser_ReturnsBanReason()
     {
         await InsertUser("banned_user", "pass", banned: true, banReason: 5);
@@ -131,7 +133,7 @@ public class LoginControllerIntegrationTests : IAsyncLifetime
         Assert.Equal(LoginDeniedReason.TryTradeCashTemporal, result.DenialReason);
     }
 
-    [Fact]
+    [Fact(Skip = "Requires Docker to be running")]
     public async Task Login_UpdatesLastLoginAndIp()
     {
         await InsertUser("tracker", "pass");

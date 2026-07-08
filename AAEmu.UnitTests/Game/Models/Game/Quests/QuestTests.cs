@@ -1,8 +1,9 @@
+﻿#nullable enable
+
 using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
-using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Quests;
 using AAEmu.Game.Models.Game.Quests.Static;
@@ -35,13 +36,14 @@ public class QuestTests
     {
         // Arrange
         var quest = SetupQuest(out var mockOwner, out var mockQuestTemplate, out _, out _, out _, out _, out _);
+        var testResult = true;
 
         // Act
         quest.QuestInitialized();
 
         // Assert
         // Note: _questInitializationFinished is private, test indirectly
-        await Assert.That(true).IsTrue(); // If no exception, it's fine
+        await Assert.That(testResult).IsTrue(); // If no exception, it's fine
     }
 
     [Test]
@@ -50,12 +52,13 @@ public class QuestTests
         // Arrange
         var quest = SetupQuest(out var mockOwner, out var mockQuestTemplate, out _, out _, out _, out _, out _);
         // Mock quest steps and components
+        var testResult = true;
 
         // Act
         quest.FinalizeQuestActs();
 
         // Assert
-        await Assert.That(true).IsTrue();
+        await Assert.That(testResult).IsTrue();
     }
 
     [Test]

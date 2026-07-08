@@ -1,6 +1,7 @@
-using AAEmu.Game.Core.Managers;
+﻿using AAEmu.Game.Core.Managers;
 
 using Microsoft.Extensions.DependencyInjection;
+#pragma warning disable CS9113 // Parameter is unread
 
 namespace AAEmu.UnitTests.Game.Core.Managers;
 
@@ -18,28 +19,28 @@ public class ManagerOrchestratorTests
     private interface IC : ILoadable;
 
     /// <summary>A has no dependencies.</summary>
-    private class A : IA { public void Load() { } }
+    private sealed class A : IA { public void Load() { } }
 
     /// <summary>B depends on A (takes IA in its constructor).</summary>
-    private class B(IA a) : IB { public void Load() { } }
+    private sealed class B(IA _) : IB { public void Load() { } }
 
     /// <summary>C depends on B (takes IB in its constructor).</summary>
-    private class C(IB b) : IC { public void Load() { } }
+    private sealed class C(IB _) : IC { public void Load() { } }
 
     // For cycle detection
     private interface IX : ILoadable;
     private interface IY : ILoadable;
 
-    private class CycleX(IY y) : IX { public void Load() { } }
-    private class CycleY(IX x) : IY { public void Load() { } }
+    private sealed class CycleX(IY _) : IX { public void Load() { } }
+    private sealed class CycleY(IX _) : IY { public void Load() { } }
 
     // For Lazy<T> skip test
     private interface IP : ILoadable;
     private interface IQ : ILoadable;
 
     /// <summary>P takes Q as Lazy&lt;IQ&gt; — should NOT create a dependency edge.</summary>
-    private class P(Lazy<IQ> q) : IP { public void Load() { } }
-    private class Q : IQ { public void Load() { } }
+    private sealed class P(Lazy<IQ> _) : IP { public void Load() { } }
+    private sealed class Q : IQ { public void Load() { } }
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -65,8 +66,7 @@ public class ManagerOrchestratorTests
         // A → (no deps)  →  batch 0
         // B → depends on A → batch 1
         // C → depends on B → batch 2
-        var (orchestrator, _) = Build(services =>
-        {
+        var (orchestrator, _) = Build(services => {
             services.AddSingleton<A>();
             services.AddSingleton<IA>(sp => sp.GetRequiredService<A>());
             services.AddSingleton<B>();
@@ -94,8 +94,7 @@ public class ManagerOrchestratorTests
     public async Task BuildBatches_IndependentManagersAreInSameBatch()
     {
         // A and Q have no constructor deps on each other → both in batch 0
-        var (orchestrator, _) = Build(services =>
-        {
+        var (orchestrator, _) = Build(services => {
             services.AddSingleton<A>();
             services.AddSingleton<IA>(sp => sp.GetRequiredService<A>());
             services.AddSingleton<Q>();
@@ -112,8 +111,7 @@ public class ManagerOrchestratorTests
     public async Task BuildBatches_ThrowsOnCycle()
     {
         // CycleX depends on IY, CycleY depends on IX → cycle
-        var (orchestrator, _) = Build(services =>
-        {
+        var (orchestrator, _) = Build(services => {
             services.AddSingleton<CycleX>();
             services.AddSingleton<IX>(sp => sp.GetRequiredService<CycleX>());
             services.AddSingleton<CycleY>();
@@ -129,8 +127,7 @@ public class ManagerOrchestratorTests
     {
         // P takes Lazy<IQ> — this should NOT be treated as a dependency on Q.
         // Therefore both P and Q have no unresolved deps and appear in batch 0.
-        var (orchestrator, _) = Build(services =>
-        {
+        var (orchestrator, _) = Build(services => {
             services.AddSingleton<Q>();
             services.AddSingleton<IQ>(sp => sp.GetRequiredService<Q>());
             // Register Lazy<IQ> explicitly so DI can satisfy P's constructor
@@ -160,8 +157,7 @@ public class ManagerOrchestratorTests
     public async Task BuildBatches_ExcludesFactoryRegistrations()
     {
         // Only factory-registered (no ImplementationType) — should be excluded
-        var (orchestrator, _) = Build(services =>
-        {
+        var (orchestrator, _) = Build(services => {
             // Factory lambda → ImplementationType == null → excluded
             services.AddSingleton<IA>(_ => new A());
         });
@@ -192,7 +188,7 @@ public class ManagerOrchestratorTests
     }
 
     // Tracking helper — injected via type registration so ImplementationType is set in the descriptor.
-    private class TrackingA(List<string> log) : ILoadable
+    private sealed class TrackingA(List<string> log) : ILoadable
     {
         public void Load() => log.Add("A");
     }

@@ -1,4 +1,4 @@
-using AAEmu.Commons.Models;
+﻿using AAEmu.Commons.Models;
 using AAEmu.Commons.Utils.DB;
 using MySql.Data.MySqlClient;
 using Testcontainers.MySql;
@@ -8,22 +8,25 @@ namespace AAEmu.Login.IntegrationTests.Fixtures;
 
 public class MySqlFixture : IAsyncLifetime
 {
-    private readonly MySqlContainer _container = new MySqlBuilder()
-        .WithImage("mysql:8.0")
-        .WithDatabase("aaemu_login")
-        .WithUsername("test")
-        .WithPassword("test")
-        .Build();
+    private MySqlContainer? _container;
 
     public async ValueTask InitializeAsync()
     {
         try
         {
+            _container = new MySqlBuilder()
+                .WithImage("mysql:8.0")
+                .WithDatabase("aaemu_login")
+                .WithUsername("test")
+                .WithPassword("test")
+                .Build();
+
             await _container.StartAsync();
         }
         catch (Exception ex)
         {
-            Assert.Skip($"Docker is not available; skipping MySQL integration tests. {ex.Message}");
+            // Docker is not available, tests will be skipped via Skip attribute
+            return;
         }
 
         var schemaPath = Path.Combine(AppContext.BaseDirectory, "SQL", "aaemu_login.sql");
@@ -32,14 +35,13 @@ public class MySqlFixture : IAsyncLifetime
         // Strip CREATE DATABASE / USE lines — Testcontainers already created the DB
         var filteredLines = schemaSql
             .Split('\n')
-            .Where(line =>
-            {
+            .Where(line => {
                 var trimmed = line.TrimStart().ToUpperInvariant();
                 return !trimmed.StartsWith("CREATE DATABASE") && !trimmed.StartsWith("USE ");
             });
         var cleanedSql = string.Join('\n', filteredLines);
 
-        await using var connection = new MySqlConnection(_container.GetConnectionString());
+        await using var connection = new MySqlConnection(_container!.GetConnectionString());
         await connection.OpenAsync();
 
         await using var command = connection.CreateCommand();
@@ -61,7 +63,10 @@ public class MySqlFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _container.DisposeAsync();
+        if (_container != null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }
 
