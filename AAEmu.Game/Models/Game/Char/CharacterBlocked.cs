@@ -60,7 +60,7 @@ public class CharacterBlocked(Character owner)
         var allBlocked = GetBlockedInfo([.. BlockedList.Keys]);
         var allBlockedArray = new Blocked[allBlocked.Count];
         allBlocked.CopyTo(allBlockedArray, 0);
-        Owner.SendPacket(new SCBlockedUsersPacket(allBlockedArray.Length, allBlockedArray));
+        Owner.SendPacket(new SCBlockedUsersPacket(allBlockedArray));
     }
 
     public void Load(MySqlConnection connection)
@@ -128,16 +128,15 @@ public class CharacterBlocked(Character owner)
             Owner = Owner.Id
         };
         BlockedList.Add(blocked.Id, template);
-        Owner.SendPacket(new SCAddBlockedUserPacket(blocked.Id, blocked.Name, true, 0));
+        Owner.SendPacket(new SCAddBlockedUserPacket(FormatBlocked(blocked), true, 0));
     }
 
     public void RemoveBlockedUser(string name)
     {
         var blocked = WorldManager.Instance.GetCharacter(name);
-        if (blocked == null || !BlockedList.ContainsKey(blocked.Id)) return; // not blocked
-        BlockedList.Remove(blocked.Id);
+        if (blocked == null || !BlockedList.Remove(blocked.Id)) return; // not blocked
         _removedBlocked.Add(blocked.Id);
-        Owner.SendPacket(new SCDeleteBlockedUserPacket(blocked.Id, true, name, 0));
+        Owner.SendPacket(new SCDeleteBlockedUserPacket(FormatBlocked(blocked), true, 0));
     }
 
     private static Blocked FormatBlocked(Character blocked)
