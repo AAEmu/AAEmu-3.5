@@ -861,7 +861,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                             template.Buff = buff;
                         template.Chance = reader.GetInt32("chance");
                         template.Stack = reader.GetInt32("stack");
-                        template.AbLevel = reader.GetInt32("ab_level");
+                        template.AbLevel = reader.GetUInt16("ab_level");
                         _effects["BuffEffect"].Add(template.Id, template);
                     }
                 }

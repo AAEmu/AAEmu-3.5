@@ -186,10 +186,10 @@ public class BuffTests
         var buff = CreateBuff();
 
         // Act
-        buff.AbLevel = 10u;
+        buff.AbLevel = 10;
 
         // Assert
-        await Assert.That(buff.AbLevel).IsEqualTo(10u);
+        await Assert.That(buff.AbLevel).IsEqualTo(10);
     }
 
     #endregion

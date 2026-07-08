@@ -10,22 +10,20 @@ public class TCDoodadStreamPacket(int id, int next, Doodad[] doodads) : StreamPa
 
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write(id);
-        stream.Write(next);
-        stream.Write(doodads.Length);
+        stream.Write(id);             // id
+        stream.Write(next);           // next
+        stream.Write(doodads.Length); // count
         foreach (var doodad in doodads)
         {
-            stream.WriteBc(doodad.ObjId);
-            stream.Write(doodad.TemplateId);
+            stream.WriteBc(doodad.ObjId);    // bc
+            stream.Write(doodad.TemplateId); // type
             stream.WritePosition(doodad.Transform.World.Position.X, doodad.Transform.World.Position.Y, doodad.Transform.World.Position.Z);
             var (roll, pitch, yaw) = doodad.Transform.World.ToRollPitchYawShorts();
-            stream.Write(roll);
-            stream.Write(pitch);
-            stream.Write(yaw);
+            stream.Write(roll);  // rotx
+            stream.Write(pitch); // roty
+            stream.Write(yaw);   // rotz
             stream.Write(doodad.Scale);
             stream.Write(doodad.FuncGroupId); // doodad_func_groups Id
-            //stream.Write(doodad.TimeLeft); // growing
-            //stream.Write(doodad.PlantTime); // plantTime
         }
 
         return stream;

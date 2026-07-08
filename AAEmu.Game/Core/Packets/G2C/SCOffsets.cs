@@ -153,11 +153,11 @@ public static class SCOffsets
     public const ushort SCCastingDelayedPacket = 0x1F6;
     public const ushort SCUnitDamagedPacket = 0x0E9; // off_39D149C0
     public const ushort SCUnitHealedPacket = 0x235; // off_39D149CC
-    public const ushort SCBuffStatePacket = 0x04E;
+    public const ushort SCBuffStatePacket = 0x04E; // off_39D149D8
     public const ushort SCBuffCreatedPacket = 0x1EE; // off_39D149E4
-    public const ushort SCDoodadAcceptQuestPacket = 0x175;
-    public const ushort SCBuffRemovedPacket = 0x17F; // off_39D149FC
-    public const ushort SCBuffUpdatedPacket = 0x12B;
+    public const ushort SCBuffRemovedPacket = 0x175; // off_39D149F0
+    public const ushort SCGlideBuffRemovedPacket = 0x17F; // off_39D149FC
+    public const ushort SCBuffUpdatedPacket = 0x12B; // off_39D14A08
     public const ushort SCUnitPointsPacket = 0x12E;
     public const ushort SCCombatEngagedPacket = 0x254;
     public const ushort SCCombatClearedPacket = 0x180;
@@ -744,7 +744,7 @@ public static class SCOffsets
     public const ushort SCUnitStatePacket = 0x204;
     public const ushort SCSiegeStatePacket = 0x164; // off_39D1E894
     public const ushort SCDominionDataPacket = 0x1F8; // off_39D1E8A0
-    public const ushort SCGamePointChangedPacket = 0xfff;
+    public const ushort SCGamePointChangedPacket = 0x0f7;
     public const ushort SCNationListPacket = 0x0AA;
     public const ushort SCFactionRelationListPacket = 0x148;
     public const ushort SCFamilyDescPacket = 0x0DF; // SCFamilyDescribedPacket

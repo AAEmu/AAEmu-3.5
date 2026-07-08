@@ -57,9 +57,17 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             Connection.ActiveChar.Simulation = new Simulation(character);
 
+            // начинаем слать пакеты
+            //// TODO подобрать правильное место для пакета
+            //character.Attendances.ResetIfNewMonth();
+            //if (character.Attendances.Records?.Count == 0)
+            //    character.Attendances.SendEmptyAttendances();
+            //else
+            //    character.Attendances.Send();
+
             Connection.SendPacket(new CharacterStatePacket(character));
-            //Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
-            //Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
+            Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
+            Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.ActiveChar.Inventory.Send();
             Connection.SendPacket(new SCCharacterGamePointsPacket(character));
 
@@ -89,12 +97,12 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
                 Connection.SendPacket(new SCConflictZoneStatePacket(conflict.ZoneGroupId, conflict.CurrentZoneState, conflict.NextStateTime, DateTime.MinValue));
             }
 
-            var visitItem = new VisitCountItem { ZoneId = 302, Data = 7, Count = character.ArenaDailyEntryCount };
-            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
-            visitItem = new VisitCountItem { ZoneId = 302, Data = 11, Count = character.ArenaDailyEntryCount };
-            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
-            visitItem = new VisitCountItem { ZoneId = 302, Data = 13, Count = character.ArenaDailyEntryCount };
-            Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
+            //var visitItem = new VisitCountItem { ZoneId = 302, Data = 7, Count = character.ArenaDailyEntryCount };
+            //Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
+            //visitItem = new VisitCountItem { ZoneId = 302, Data = 11, Count = character.ArenaDailyEntryCount };
+            //Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
+            //visitItem = new VisitCountItem { ZoneId = 302, Data = 13, Count = character.ArenaDailyEntryCount };
+            //Connection.SendPacket(new SCInstanceVisitCountsPacket(visitItem));
 
             FactionManager.Instance.SendFactions(Connection.ActiveChar);
             FactionManager.Instance.SendRelations(Connection.ActiveChar);
@@ -107,7 +115,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
 
             Connection.ActiveChar.SendOption(1);
             Connection.ActiveChar.SendOption(2);
-            Connection.ActiveChar.SendOption(5);
+            //Connection.ActiveChar.SendOption(5);
 
             Connection.ActiveChar.Buffs.AddBuff((uint)BuffConstants.LoggedOn, Connection.ActiveChar);
 

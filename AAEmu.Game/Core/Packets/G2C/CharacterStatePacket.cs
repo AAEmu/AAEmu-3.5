@@ -21,7 +21,7 @@ public class CharacterStatePacket : GamePacket
         stream.Write(_character.Transform.InstanceId); // instanceId (iid)
         stream.Write(_character.Guid);       // guid
         stream.Write(0);                     // rwd
-        stream.Write(0);                     // srwd
+        //stream.Write(0);                     // srwd
 
         _character.Write(stream);            //Character_List_Packet_48B0
 
