@@ -199,7 +199,7 @@ public class CashShopManager(IWorldManager worldManager, IAccountManager account
             if (shopItem == null)
                 continue;
 
-            connection.SendPacket(new SCICSGoodListPacket(isLast, numberOfPages, mainTabId, subTabId, shopItem));
+            connection.SendPacket(new SCICSGoodListPacket(isLast, (byte)page, (byte)numberOfPages, mainTabId, subTabId, shopItem));
         }
 
         for (var i = 0; i < thisPageItems.Count; i++)

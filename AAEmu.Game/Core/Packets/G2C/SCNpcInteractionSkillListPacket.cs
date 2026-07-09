@@ -45,10 +45,9 @@ public class SCNpcInteractionSkillListPacket : GamePacket
         stream.Write(_skillList.Length);
         foreach (var skillId in _skillList)
         {
-            stream.Write(skillId);
+            stream.Write((ushort)skillId);
         }
-        stream.Write((byte)1); // interactable, doesn't seem to matter what we set here
-        stream.Write(_modifierKeys);
+        stream.Write(true); // interactable
 
         return stream;
     }

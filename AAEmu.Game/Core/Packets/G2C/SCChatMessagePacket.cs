@@ -103,7 +103,8 @@ public class SCChatMessagePacket : GamePacket
                         stream.Write(_data[i]);   // data length = 208
                         break;
                     case 3:
-                        stream.Write(_qType[i]);  // qType
+                        stream.Write((byte)1);       // qType block present
+                        stream.Write((ushort)_qType[i]);  // qType
                         break;
                     case 4:
                         stream.Write(_itemId[i]); // itemId

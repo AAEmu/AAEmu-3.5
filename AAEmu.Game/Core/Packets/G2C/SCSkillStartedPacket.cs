@@ -6,11 +6,13 @@ using AAEmu.Game.Models.Game.Skills.Static;
 namespace AAEmu.Game.Core.Packets.G2C;
 
 [Flags]
-public enum ExtraDataFlags
+public enum ExtraDataFlags : byte
 {
+    None = 0,
     HasByte = 1,
     HasUShort = 2,
     HasUInt = 4,
+    HasBool = 8,
 }
 
 public class SCSkillStartedPacket(
@@ -26,11 +28,12 @@ public class SCSkillStartedPacket(
 
     public ushort RealCastTimeDiv10 { get; set; }
     public ushort BaseCastTimeDiv10 { get; set; }
-    public byte CastSynergy { get; set; }
+    public bool CastSynergy { get; set; }
     private ExtraDataFlags ExtraDataFlag { get; set; }
     private byte ExtraDataByte { get; set; }
     private ushort ExtraDataUShort { get; set; }
     private uint ExtraDataUInt { get; set; }
+    private bool ExtraDataBool { get; set; } = true;
 
     public override PacketStream Write(PacketStream stream)
     {
@@ -42,7 +45,7 @@ public class SCSkillStartedPacket(
 
         stream.Write(RealCastTimeDiv10);
         stream.Write(BaseCastTimeDiv10);
-        stream.Write(CastSynergy); // castSynergy // (short)0
+        stream.Write(CastSynergy); // castSynergy
         stream.Write((byte)ExtraDataFlag); // f
         if (ExtraDataFlag.HasFlag(ExtraDataFlags.HasByte))
             stream.Write(ExtraDataByte);
@@ -50,6 +53,8 @@ public class SCSkillStartedPacket(
             stream.Write(ExtraDataUShort);
         if (ExtraDataFlag.HasFlag(ExtraDataFlags.HasUInt))
             stream.Write(ExtraDataUInt);
+        if (ExtraDataFlag.HasFlag(ExtraDataFlags.HasBool))
+            stream.Write(ExtraDataBool);
         return stream;
     }
 
@@ -82,6 +87,17 @@ public class SCSkillStartedPacket(
         else
             ExtraDataFlag &= ~ExtraDataFlags.HasUInt;
         ExtraDataUInt = val;
+
+        return this;
+    }
+
+    public SCSkillStartedPacket SetResultBool(bool val)
+    {
+        if (!val)
+            ExtraDataFlag |= ExtraDataFlags.HasBool;
+        else
+            ExtraDataFlag &= ~ExtraDataFlags.HasBool;
+        ExtraDataBool = val;
 
         return this;
     }

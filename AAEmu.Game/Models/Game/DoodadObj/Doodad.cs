@@ -908,14 +908,14 @@ public class Doodad : BaseUnit
         stream.Write((byte)OwnerType); // ownerType
         stream.Write(OwnerDbId);       // dbHouseId
         stream.Write(Data);            // data - attachPointId для хранения в базе данных
+        stream.Write(FreshnessTime);   // freshnessTime
+
         var itemCheck = TagsGameData.Instance.GetIdsByTagId(TagsGameData.TagType.Items, (uint)TagsEnum.TradePackStorageChest);
         if (itemCheck.Contains(ItemTemplateId))
         {
-            stream.Write(FreshnessTime); // freshnessTime
-            stream.Write(OwnerId);       // type crafter?
-            stream.Write((short)14);     // type
-            stream.Write(IsRebuy);       // isRebuy
+            stream.Write(OwnerId);       // crafter type
         }
+
         return stream;
     }
 

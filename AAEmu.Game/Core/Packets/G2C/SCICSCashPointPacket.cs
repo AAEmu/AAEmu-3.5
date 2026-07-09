@@ -8,6 +8,8 @@ public class SCICSCashPointPacket(int point) : GamePacket(SCOffsets.SCICSCashPoi
     public override PacketStream Write(PacketStream stream)
     {
         stream.Write(point);
+        stream.Write(0);     // bpoint
+        stream.Write(false); // reload flag
         return stream;
     }
 }

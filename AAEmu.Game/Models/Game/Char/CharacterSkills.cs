@@ -163,7 +163,11 @@ public class CharacterSkills(Character owner)
     {
         var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
 
+        if (skillTemplate == null)
+            return false;
+
         return Skills.Values.Any(skill =>
+            skill?.Template != null &&
             skill.Template.AbilityId == skillTemplate.AbilityId &&
             skill.Template.AbilityLevel == skillTemplate.AbilityLevel);
     }

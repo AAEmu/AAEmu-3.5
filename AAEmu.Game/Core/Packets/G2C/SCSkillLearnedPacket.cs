@@ -8,8 +8,8 @@ public class SCSkillLearnedPacket(Skill skill) : GamePacket(SCOffsets.SCSkillLea
 {
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write(skill.Id);
-        stream.Write(skill.Level);
+        stream.Write((byte)1); // skillType block present
+        stream.Write((ushort)skill.Id);
         return stream;
     }
 }

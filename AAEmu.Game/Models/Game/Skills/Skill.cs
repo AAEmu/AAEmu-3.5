@@ -839,11 +839,9 @@ public class Skill
         // 0 means "no override" — packet keeps its default (skill template's FireAnim).
         var weaponAnimId = GetWeaponAttackAnimId(caster);
         var firedPacket = new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
-        {
-            ComputedDelay = (short)totalDelay
-        };
+            .SetEffectDelay((ushort)totalDelay);
         if (weaponAnimId > 0)
-            firedPacket.FireAnimId = weaponAnimId;
+            firedPacket.SetFireAnimId(weaponAnimId);
         caster.BroadcastPacket(firedPacket, true);
 
         if (totalDelay > 0)

@@ -799,11 +799,11 @@ public static class SCOffsets
     public const ushort SCUnitOfflinePacket = 0xfff;
     public const ushort SCUnknownPacket = 0xfff;
     public const ushort SCUserNoteLoadedPacket = 0xfff;
-    public const ushort SCAiAggroPacket = 0xfff;
-    public const ushort SCCancelCharacterDeleteResponsePacket = 0xfff;
+    public const ushort SCAiAggroPacket = 0x0C7;
+    public const ushort SCCancelCharacterDeleteResponsePacket = 0x183;
     //public const ushort SCChatSpamDelayPacket = 0x2D6;
     public const ushort SCCrimeChangedPacket = 0xfff;
-    public const ushort SCDeleteCharacterResponsePacket = 0xfff;
+    public const ushort SCDeleteCharacterResponsePacket = 0x2A2;
     public const ushort SCDoodadQuestAcceptPacket = 0xfff;
     public const ushort SCGradeEnchantResultPacket = 0xfff;
     public const ushort SCInstantGameAddPointPacket = 0xfff;

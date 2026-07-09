@@ -5,45 +5,61 @@ using AAEmu.Game.Models.StaticValues;
 
 namespace AAEmu.Game.Core.Packets.G2C;
 
-public class SCICSGoodListPacket(bool pageEnd, ushort totalPage, byte mainTab, byte subTab, IcsItem item)
-    : GamePacket(SCOffsets.SCICSGoodListPacket, 5)
+public class SCICSGoodListPacket : GamePacket
 {
-    private readonly IcsSku _firstSku = item.FirstSku;
+    private readonly bool _pageEnd;
+    private readonly byte _reqPage;
+    private readonly byte _totalPage;
+    private readonly byte _mainTab;
+    private readonly byte _subTab;
+    private readonly IcsItem _item;
+    private readonly IcsSku _firstSku;
+
+    public SCICSGoodListPacket(bool pageEnd, byte reqPage, byte totalPage, byte mainTab, byte subTab, IcsItem item)
+        : base(SCOffsets.SCICSGoodListPacket, 5)
+    {
+        _pageEnd = pageEnd;
+        _reqPage = reqPage;
+        _totalPage = totalPage;
+        _mainTab = mainTab;
+        _subTab = subTab;
+        _item = item;
+        _firstSku = item.FirstSku;
+    }
 
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write(pageEnd);
-        stream.Write(totalPage);
+        stream.Write(_pageEnd);
+        stream.Write(_reqPage);
+        stream.Write(_totalPage);
 
-        stream.Write(item.ShopId);
-        stream.Write(item.Name);
-        stream.Write(mainTab);
-        stream.Write(subTab);
-        stream.Write(item.LevelMin);
-        stream.Write(item.LevelMax);
-        stream.Write(item.DisplayItemId);
-        stream.Write(item.IsSale);
-        stream.Write(item.IsHidden);
-        stream.Write((byte)item.LimitedType);
-        stream.Write(item.LimitedStockMax);
-        stream.Write((byte)item.BuyRestrictType);
-        stream.Write(item.BuyRestrictId);
-        stream.Write(item.SaleStart);
-        stream.Write(item.SaleEnd);
+        stream.Write(_item.ShopId);
+        stream.Write(_item.Name);
+        stream.Write(_mainTab);
+        stream.Write(_subTab);
+        stream.Write(_item.LevelMin);
+        stream.Write(_item.LevelMax);
+        stream.Write(_item.DisplayItemId);
+        stream.Write(_item.IsSale);
+        stream.Write(_item.IsHidden);
+        stream.Write((byte)_item.LimitedType);
+        stream.Write(_item.LimitedStockMax);
+        stream.Write((byte)_item.BuyRestrictType);
+        stream.Write(_item.BuyRestrictId);
+        stream.Write(_item.SaleStart);
+        stream.Write(_item.SaleEnd);
 
-        // stream.Write(_item); // Replaced with new code
         if (_firstSku != null)
         {
             stream.Write((byte)_firstSku.Currency);
             stream.Write(_firstSku.Price);
-            stream.Write(item.Remaining);
+            stream.Write(_item.Remaining);
             stream.Write(_firstSku.BonusItemId);
             stream.Write(_firstSku.BonusItemCount);
-            stream.Write((byte)item.ShopButtons);
+            stream.Write((byte)_item.ShopButtons);
         }
         else
         {
-            // No item for some reason?
             stream.Write((byte)CashShopCurrencyType.Credits);
             stream.Write(0);
             stream.Write(0);
@@ -51,8 +67,10 @@ public class SCICSGoodListPacket(bool pageEnd, ushort totalPage, byte mainTab, b
             stream.Write(0);
             stream.Write((byte)CashShopCmdUiType.AllowAll);
         }
-        // stream.Write(0);
-        // stream.Write(0); // In captures this is discount price
+
+        stream.Write(_firstSku?.PayItemType ?? 0);
+        stream.Write(0); // discount price placeholder
+
         return stream;
     }
 }

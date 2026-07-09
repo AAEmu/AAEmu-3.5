@@ -60,8 +60,17 @@ private Dictionary<string, Anim> _animationsByName = [];
 ### Структуры (кратко)
 
 - `CSStartSkill_0x1A4`: `type` (uint32), далее вложенные блоки skill-данных.
-- `SCSkillStarted_0x1DB`: блок `st` (`type` uint32), блок `sid` (`tl` uint16),
-  вложенные skill-данные, `castSynergy` (bool).
+- `SCSkillStarted_0x1DB`: `st` (`id` uint32), `sid` (`tl` uint16),
+  `caster`, `target`, `skillObject`, `RealCastTimeDiv10` (ushort),
+  `BaseCastTimeDiv10` (ushort), `CastSynergy` (bool), `f` (flags byte),
+  затем опциональные данные результата (`byte` / `ushort` / `uint` / `bool`).
+- `SCSkillFired_0x11B`: `sid` (`tl` uint16), `caster`, `target`,
+  `skillObject`, `EffectDelay` (msec/10, ushort), `ChannelingTime`
+  (msec/10, ushort), `f` (byte block; в IDA это `sub_39921B90`),
+  затем при наличии данных идут опциональные поля `c/e/p/d`, после этого
+  `pisc` (`id`, `fireAnimId`) и `flag` (byte).
+  В текущей реализации `f` пишется как `0`, поэтому опциональные поля
+  отсутствуют, а `id` передаётся внутри `pisc`, не отдельным полем перед `sid`.
 
 ## Примечания
 

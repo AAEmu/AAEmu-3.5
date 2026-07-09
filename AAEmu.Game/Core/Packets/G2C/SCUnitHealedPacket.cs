@@ -23,7 +23,8 @@ public class SCUnitHealedPacket(
         stream.Write((byte)healHitType); // h
         stream.Write(value); // a
         stream.Write(0); // o
-        stream.Write((byte)1); // result -> to debug into
+        stream.Write(false); // c
+        stream.Write((byte)1); // result
         return stream;
     }
 }

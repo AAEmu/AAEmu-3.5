@@ -13,26 +13,25 @@ public class SCSkillCooldownResetPacket : GamePacket
 
     public SCSkillCooldownResetPacket() : base(SCOffsets.SCSkillCooldownResetPacket, 5)
     {
-
     }
 
     public SCSkillCooldownResetPacket(Character chr, uint skillId, uint tagId, bool gcd) : base(SCOffsets.SCSkillCooldownResetPacket, 5)
     {
+        _chr = chr;
         _skillId = skillId;
         _tagId = tagId;
-        _gcd = gcd;
-        _chr = chr;
         _gcd = gcd;
     }
 
     public override PacketStream Write(PacketStream stream)
     {
-        //TODO заготовка для пакета
-
-        stream.WriteBc(_chr.ObjId); //unitId
-        stream.Write(_skillId); //skillId
-        stream.Write(_tagId); //tagId
-        stream.Write(_gcd); //gcd - Trigger GCD
+        stream.WriteBc(_chr.ObjId);      // unitId (BC)
+        stream.Write((ushort)_skillId);  // type
+        stream.Write((ushort)_tagId);    // type
+        stream.Write(_gcd);              // gc
+        stream.Write(false);             // rstc
+        stream.Write(false);             // rtsc
+        stream.Write(false);             // rtstc
 
         return stream;
     }
