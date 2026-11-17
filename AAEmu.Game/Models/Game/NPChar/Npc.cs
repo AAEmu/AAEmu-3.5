@@ -18,7 +18,9 @@ using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.Units.Static;
 using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Physics.Static;
 using AAEmu.Game.Utils;
+using AAEmu.Geometry;
 
 namespace AAEmu.Game.Models.Game.NPChar;
 
@@ -1170,6 +1172,9 @@ public partial class Npc : Unit
     /// <param name="actorFlags">ActorFlags to use for the movement packet</param>
     /// <param name="rangeTolerance">Makes the function return true if target distance is less than or equil to this value</param>
     /// <returns>True if withing rangeTolerance of other</returns>
+    /// <summary>This walker's "nothing near" cache for the wall test (<see cref="WalkerCollision.Probe"/>).</summary>
+    private WalkerCollision.Probe _walkerProbe;
+
     public bool MoveTowards(Vector3 other, float distance, byte actorFlags = 4, float rangeTolerance = 1f)
     {
         if ((ActiveSkillController?.State ?? SkillController.SCState.Ended) == SkillController.SCState.Running)
@@ -1223,7 +1228,36 @@ public partial class Npc : Unit
 
         // TODO: Implement proper use for Transform.World.AddDistanceToFront
         var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, Transform.Local.Position, other);
+
+        // Plan P6/W4: walls stop a walker (WalkerCollision). The step is clipped a body radius short of the wall and
+        // the rest of it slides along the wall; a step that has nothing left to walk is skipped, and the next tick
+        // retries from the same place. The probe is this NPC's own "nothing near" cache.
+        if (!CanFly && WorldManager.Instance.NpcGroundResolver is { } walls)
+        {
+            var clipped = walls.ClipWalk(
+                ParentWorld.Template,
+                Transform.ZoneId,
+                Transform.Local.Position,
+                new Vector3(newX, newY, newZ),
+                WalkerCollision.Radius(ModelSize),
+                _walkerProbe ??= new WalkerCollision.Probe(),
+                out var blockedByWall);
+            if (blockedByWall)
+            {
+                newX = clipped.X;
+                newY = clipped.Y;
+                // Pressed against the wall with the whole step eaten by it: stand still instead of reporting a move.
+                if (MathF.Abs(newX - Transform.Local.Position.X) + MathF.Abs(newY - Transform.Local.Position.Y) < 1e-3f)
+                    return false;
+            }
+        }
+
         var targetPositionZ = WorldManager.Instance.GetReferenceHeight(Ai, newX, newY, newZ, Transform.ZoneId);
+        // Ноль — не высота: юнит, поставленный на Z = 0, оказывается под землёй. Тогда остаёмся там, где были.
+        if (!Physics.Static.NpcGroundResolver.IsUsableHeight(targetPositionZ))
+        {
+            targetPositionZ = Transform.Local.Position.Z;
+        }
         Transform.Local.SetPosition(newX, newY, targetPositionZ);
 
         var angle = MathUtil.CalculateAngleFrom(Transform.Local.Position, other);
@@ -1247,7 +1281,7 @@ public partial class Npc : Unit
         moveType.DeltaMovement[0] = 0;
         moveType.DeltaMovement[1] = 127;
         moveType.DeltaMovement[2] = 0;
-        moveType.Stance = CurrentGameStance;    // COMBAT = 0x0, IDLE = 0x1
+        moveType.Stance = MovementStance(newX, newY, targetPositionZ);    // COMBAT = 0x0, IDLE = 0x1
         moveType.Alertness = CurrentAlertness;
         moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
 
@@ -1256,6 +1290,51 @@ public partial class Npc : Unit
         BroadcastPacket(new SCOneUnitMovementPacket(ObjId, moveType), false);
         return false;
     }
+
+    /// <summary>
+    /// Станс для пакета движения: в воде наземный юнит плывёт, летящий под водой — тоже (пороги нативных трасс:
+    /// в водной колонне 99 % записей — Swim).
+    /// </summary>
+    /// <remarks>
+    /// Боевая стойка не меняется: натив переводит в Swim только расслабленного юнита и летящего.
+    /// </remarks>
+    public GameStanceType MovementStance(float x, float y, float z)
+    {
+        var stance = CurrentGameStance;
+        // Only a relaxed unit or a flier can be put in the water: a fighting NPC keeps its combat stance in the water too,
+        // so the water lookups (and their rays) are skipped for everyone else on the hot path.
+        if (stance is not (GameStanceType.Relaxed or GameStanceType.Fly))
+            return stance;
+        var world = WorldManager.Instance;
+        if (world.StaticGeometry == null)
+            return stance;
+        // The zone key is carried by the unit itself: the zone-key -> world lookup logs a fatal error for an unknown key,
+        // and transforming a spawn position into one does the same.
+        var template = ParentWorld?.Template;
+        if (template == null)
+            return stance;
+        var resolver = world.NpcGroundResolver;
+        if (stance == GameStanceType.Fly)
+        {
+            // Летящий юнит под водой (рыба над уровнем моря) плывёт.
+            return resolver.TryWaterSurface(template, Transform.ZoneId, x, y, z, out var surface) && surface > z
+                ? GameStanceType.Swim
+                : stance;
+        }
+        return resolver.WaterStanceAt(template, Transform.ZoneId, x, y, z) == WaterStance.Swim
+            ? GameStanceType.Swim
+            : stance;
+    }
+
+    /// <summary>Станс для пакета движения по текущей позиции юнита.</summary>
+    public GameStanceType MovementStance()
+    {
+        // Stand-still packets (turn, teleport, knock-back) are not water motion: they keep the unit's own stance.
+        return CurrentGameStance;
+    }
+
+    /// <summary>Станс для пакета шага/рывка/прыжка по точке, в которую юнит приземляется.</summary>
+    public GameStanceType MovementStanceAt(Vector3 position) => MovementStance(position.X, position.Y, position.Z);
 
     public void LookTowards(Vector3 other, byte flags = 4)
     {
@@ -1318,7 +1397,7 @@ public partial class Npc : Unit
         moveType.DeltaMovement[0] = 0;
         moveType.DeltaMovement[1] = 0;
         moveType.DeltaMovement[2] = 0;
-        moveType.Stance = CurrentGameStance;// (sbyte)(CurrentAggroTarget?.ObjId > 0 ? 0 : 1);    // COMBAT = 0x0, IDLE = 0x1
+        moveType.Stance = MovementStance();// (sbyte)(CurrentAggroTarget?.ObjId > 0 ? 0 : 1);    // COMBAT = 0x0, IDLE = 0x1
         moveType.Alertness = CurrentAlertness;
         moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
         BroadcastPacket(new SCOneUnitMovementPacket(ObjId, moveType), false);

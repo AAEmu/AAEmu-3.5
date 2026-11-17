@@ -276,13 +276,14 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
                     {
                         foreach (var (_, nodeDescriptor) in netMission.NodeDescriptorList)
                         {
-                            var dist = (nodeDescriptor.Pos - pos).Length();
+                            // Squared distance: the comparison is the same and sqrt is not needed on this hot path.
+                            var dist = Vector3.DistanceSquared(nodeDescriptor.Pos, pos);
                             if (dist < closestDistance)
                             {
                                 closestDistance = dist;
                                 closestPoint = nodeDescriptor.Pos;
                                 // Slightly optimize if very close to target point
-                                if (closestDistance < 0.01f)
+                                if (closestDistance < 0.0001f)
                                 {
                                     return closestPoint.Z;
                                 }
@@ -297,13 +298,13 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
                     {
                         foreach (var obstacleDataDescriptor in vertexMission.ObstacleDataDescriptorList)
                         {
-                            var dist = (obstacleDataDescriptor.Pos - pos).Length();
+                            var dist = Vector3.DistanceSquared(obstacleDataDescriptor.Pos, pos);
                             if (dist < closestDistance)
                             {
                                 closestDistance = dist;
                                 closestPoint = obstacleDataDescriptor.Pos;
                                 // Slightly optimize if very close to target point
-                                if (closestDistance < 0.01f)
+                                if (closestDistance < 0.0001f)
                                 {
                                     return closestPoint.Z;
                                 }
@@ -322,8 +323,11 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
 
             return closestPoint.Z;
         }
-        catch
+        catch (Exception e)
         {
+            // Was a bare catch returning 0: no height data anywhere looked like a floor at sea level. Keep the
+            // fallback (callers treat 0 as "no data") but make the failure visible.
+            Logger.Warn(e, "AiGeodataManager.GetHeight failed at {0}", pos);
             res = 0f;
         }
         //stopWatch.Stop();

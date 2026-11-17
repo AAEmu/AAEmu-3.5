@@ -102,13 +102,14 @@ public sealed class LoginConnection : ILoginConnectionOwner
         finally
         {
             Shutdown();
-            _logger.LogDebug("LoginConnection {ConnectionID} from {ConnectionIP} disconnected", Id, Ip);
+            _logger.LogDebug("[ENTRY-DIAG] Login connection from {ConnectionIP} disconnected", Ip);
         }
     }
 
     private async Task DispatchMessagesAsync()
     {
         var input = _connectionContext.Transport.Input;
+        var readNumber = 0;
 
         try
         {
@@ -116,9 +117,20 @@ public sealed class LoginConnection : ILoginConnectionOwner
             {
                 var result = await input.ReadAsync(CancellationToken.None);
                 var buffer = result.Buffer;
+                readNumber++;
+                if (readNumber <= 5)
+                {
+                    _logger.LogDebug(
+                        "[ENTRY-DIAG] Login TCP read #{ReadNumber} from {ConnectionIP}: bufferedBytes={BufferedBytes}, completed={Completed}",
+                        readNumber, Ip, buffer.Length, result.IsCompleted);
+                }
 
                 while (_protocolHandler.TryParsePacket(ref buffer, out var packetType, out var packet))
                 {
+                    _logger.LogDebug(
+                        "[ENTRY-DIAG] Login packet 0x{PacketType:X3} from {ConnectionIP}: {PayloadBytes} payload bytes, state={LoginState}",
+                        packetType, Ip, packet.Count, Session.State);
+
                     // Now that we have the packet type, try to dispatch the packet.
                     if (!_packets.TryGetValue(packetType, out var packetDescriptor))
                     {

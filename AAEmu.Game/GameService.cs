@@ -108,6 +108,11 @@ public sealed class GameService : IHostedService, IDisposable
         WorldManager.Instance.CreateStaticInstances();
         WorldManager.Instance.Initialize();
 
+        // Plan P4: the layered NPC ground (brush floors, underground halls) is the default since 2026-11-16. The
+        // resolver itself comes from the container (see the WorldManager constructor); here only the package's
+        // diagnostics are forwarded to NLog.
+        AAEmu.Game.Physics.Static.GeometryLogBridge.Attach();
+
         CharacterManager.Instance.CheckForDeletedCharacters();
         CharacterManager.Instance.StartOnlineTracking();
 

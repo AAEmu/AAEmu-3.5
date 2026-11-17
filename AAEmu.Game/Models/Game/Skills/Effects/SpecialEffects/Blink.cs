@@ -74,7 +74,7 @@ public class Blink : SpecialEffectAction
             moveType.RotationZ = npc.Transform.Local.ToRollPitchYawSBytesMovement().Item3;
             moveType.Flags = MoveTypeFlags.Stopping | (npc.IsInBattle ? MoveTypeFlags.InCombat : 0);
             moveType.DeltaMovement = new sbyte[3];
-            moveType.Stance = npc.CurrentGameStance;
+            moveType.Stance = npc.MovementStanceAt(npc.Transform.Local.Position);
             moveType.Alertness = npc.CurrentAlertness;
             moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
             npc.BroadcastPacket(new SCOneUnitMovementPacket(npc.ObjId, moveType), false);

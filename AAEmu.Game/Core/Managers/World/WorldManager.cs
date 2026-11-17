@@ -34,8 +34,24 @@ public class WorldManager(
     IWorldIdManager worldIdManager,
     Lazy<IZoneManager> zoneManager,
     Lazy<IIndunManager> indunManager,
-    Lazy<IFamilyManager> familyManager) : Singleton<WorldManager>, IWorldManager
+    Lazy<IFamilyManager> familyManager,
+    Physics.Static.NpcGroundResolver groundResolver = null,
+    Physics.Static.StaticGeometryManager staticGeometry = null) : Singleton<WorldManager>, IWorldManager
 {
+    /// <summary>
+    /// Слой высоты НПС (пол кисти → подземный зал → рельеф → навмеш). Внедряется сервисом, чтобы был один
+    /// общий менеджер статической геометрии на процесс.
+    /// </summary>
+    public Physics.Static.NpcGroundResolver NpcGroundResolver { get; set; } =
+        groundResolver ?? new Physics.Static.NpcGroundResolver(new Physics.Static.StaticGeometryManager());
+
+    /// <summary>
+    /// Менеджер статической геометрии (индексы кистей по зонам). Его зоны становятся телами физики, а его полы —
+    /// опорой НПЦ. Null, когда слой не зарегистрирован.
+    /// </summary>
+    public Physics.Static.StaticGeometryManager StaticGeometry { get; } = staticGeometry;
+    public Physics.Static.NpcSpawnGrounding NpcSpawnGrounding { get; } = staticGeometry == null ? null :
+        new Physics.Static.NpcSpawnGrounding(staticGeometry, groundResolver ?? new Physics.Static.NpcGroundResolver(staticGeometry));
     /// <summary>
     /// Default World and Instance ID that will be assigned to all Transforms as a Default value
     /// This is the TemplateId of "main_world"
@@ -369,7 +385,10 @@ public class WorldManager(
     {
         tickManager.OnTick.Subscribe(ActiveRegionTick, TimeSpan.FromSeconds(1));
         tickManager.OnTick.Subscribe(AutoWaterProbeTick, TimeSpan.FromSeconds(10));
+        if (NpcSpawnGrounding != null) tickManager.OnTick.Subscribe(ProcessNpcSpawnGrounding, TimeSpan.FromMilliseconds(100));
     }
+
+    private void ProcessNpcSpawnGrounding(TimeSpan delta) => NpcSpawnGrounding?.Tick();
 
     private static readonly Lock AutoWaterProbeLock = new();
     private static bool _autoWaterProbeEnabled;
@@ -510,6 +529,11 @@ public class WorldManager(
 
         // Create and start the actual physics engine
         world.StartPhysics();
+
+        // The world's physics listens to the static geometry layer: a zone whose brushes get built hands them over
+        // as collision bodies (plan S1).
+        if (StaticGeometry != null)
+            world.Physics?.AttachStaticGeometry(StaticGeometry);
 
         // Quest sphere handling instance
         world.SphereQuestManager = new SphereQuestManager(world);
@@ -756,31 +780,40 @@ public class WorldManager(
     /// <returns></returns>
     public float GetHeight(uint zoneKey, float x, float y, float z)
     {
+        return TryGetHeight(zoneKey, x, y, z, out var height) ? height : 0f;
+    }
+
+    /// <summary>
+    /// Get "floor" height at a position, reporting whether a height was actually found. 0 is a legitimate terrain
+    /// height (the sea-level areas of main_world), so callers that must not treat "no data" as 0 use this.
+    /// </summary>
+    public bool TryGetHeight(uint zoneKey, float x, float y, float z, out float height)
+    {
         // try to find Z first in GeoData, and then in HeightMaps, if not found, leave Z as it is
-        var height = 0f;
+        height = 0f;
         var world = GetWorldTemplateByZoneKey(zoneKey);
 
         if (AppConfiguration.Instance.World.GeoDataMode)
         {
             var position = new Vector3(x, y, z);
-            height = world?.GeoData.GetHeight(position) ?? height;
+            height = world?.GeoData.GetHeight(position) ?? 0f;
         }
 
         if (height != 0f || !AppConfiguration.Instance.HeightMapsEnable)
-        {
-            return height;
-        }
+            return height != 0f;
+
+        if (world == null)
+            return false;
 
         try
         {
-            height = world?.GetHeight(x, y) ?? 0f;
+            return world.TryGetHeight(x, y, out height);
         }
         catch
         {
             height = 0f;
+            return false;
         }
-
-        return height;
     }
 
     /// <summary>
@@ -825,6 +858,28 @@ public class WorldManager(
         return height;
     }
 
+    /// <summary>
+    /// Navmesh height for the layered resolver, if geodata is on. Returned as a provider: the search is a linear scan
+    /// over the cell's navmesh nodes, and the resolver only needs it where the terrain has no data.
+    /// </summary>
+    private Func<float?> NavHeight(NpcAi ai, float x, float y, float z)
+    {
+        if (!AppConfiguration.Instance.World.GeoDataMode)
+            return () => null;
+        return () =>
+        {
+            try
+            {
+                var height = ai.Owner.ParentWorld?.Template?.GeoData?.GetHeight(new Vector3(x, y, z)) ?? 0f;
+                return height > 0f ? height : null;
+            }
+            catch
+            {
+                return null;
+            }
+        };
+    }
+
     public float GetReferenceHeight(NpcAi ai, float x, float y, float z, uint zoneId)
     {
         float finalHeight;
@@ -852,15 +907,34 @@ public class WorldManager(
                 return finalHeight;
         }
 
-        // 3. Terrain height retrieval
-        finalHeight = GetHeight(zoneId, x, y, z);
-        if (finalHeight != 0/* && Math.Abs(worldHeight - Spawner.Position.Z) <= 0.1f*/)
+        // 3. Layered height (plan P4, default since 2026-11-16): brush floors, underground halls, then terrain, and the
+        //    navmesh only where the terrain has no data. With the static geometry switched off the old path is kept.
+        if (AppConfiguration.Instance.World.StaticGeometryEnabled)
         {
-            return finalHeight;
+            var template = GetWorldTemplateByZoneKey(zoneId);
+            if (template != null)
+            {
+                var ground = NpcGroundResolver.Ground(template, zoneId, x, y, z, NavHeight(ai, x, y, z));
+                if (Physics.Static.NpcGroundResolver.IsUsableHeight(ground))
+                    return ground;
+                // Слой не дал годной высоты: падать на Z = 0 нельзя, берём прежний путь.
+            }
         }
 
-        // 4. Take the default height
-        return ai.Owner.Spawner?.Position.Z ?? ai.Owner.Transform.World.Position.Z;
+        // 4. Terrain height retrieval. A height of 0 under the position is real terrain (sea level), not "not found".
+        if (TryGetHeight(zoneId, x, y, z, out finalHeight) && Physics.Static.NpcGroundResolver.IsUsableHeight(finalHeight))
+            return finalHeight;
+
+        // 5. Take the default height: the spawner's, then the unit's own — и ни в коем случае не ноль.
+        var spawnerZ = ai.Owner.Spawner?.Position.Z ?? 0f;
+        if (Physics.Static.NpcGroundResolver.IsUsableHeight(spawnerZ))
+            return spawnerZ;
+        var ownZ = ai.Owner.Transform.World.Position.Z;
+        if (Physics.Static.NpcGroundResolver.IsUsableHeight(ownZ))
+            return ownZ;
+        Logger.Warn("NPC {0} (template {1}): no usable ground height at {2:F1},{3:F1} in zone {4} — keeping {5:F2}",
+            ai.Owner.ObjId, ai.Owner.TemplateId, x, y, zoneId, z);
+        return z;
     }
 
     /// <summary>
@@ -1216,8 +1290,10 @@ public class WorldManager(
 
     public void OnPlayerJoin(Character character)
     {
-        // Turn snow on off 
-        character.SendPacket(new SCSnowingEverywherePacket(IsSnowing));
+        // Turn snow on off
+        // DIAG-3503: disabled for world-enter diagnostics — SCSnowingEverywherePacket was the last
+        // packet received by the client right before its disconnect (possible 3.5 structure mismatch)
+        // character.SendPacket(new SCSnowingEverywherePacket(IsSnowing));
 
         // Family stuff
         if (character.Family > 0)
@@ -1290,12 +1366,13 @@ public class WorldManager(
     /// </summary>
     public void Stop()
     {
+        tickManager.OnTick.UnSubscribe(ProcessNpcSpawnGrounding);
         if (_worlds is not null)
         {
             foreach (var world in _worlds.Values)
             {
                 Logger.Info($"Shutting down {world}");
-                world.Physics?.Stop();
+                world.Physics?.Dispose();
                 world.SpawnManager?.Stop();
                 world.SpawnManager?.DeSpawnAll();
                 world.SpawnManager?.DeleteAllSpawners();
@@ -1310,10 +1387,12 @@ public class WorldManager(
     /// <param name="worldInstanceId"></param>
     public void RemoveWorld(uint worldInstanceId)
     {
-        if (!_worlds.TryRemove(worldInstanceId, out _))
+        if (!_worlds.TryRemove(worldInstanceId, out var world))
         {
             Logger.Info($"[Dungeon] couldn't remove the dungeon id={worldInstanceId}!");
+            return;
         }
+        world.Physics?.Dispose();
     }
 
     /// <summary>

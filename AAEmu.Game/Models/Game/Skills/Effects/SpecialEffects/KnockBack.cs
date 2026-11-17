@@ -90,7 +90,7 @@ public class KnockBack : SpecialEffectAction
         moveType.RotationZ = npc.Transform.Local.ToRollPitchYawSBytesMovement().Item3;
         moveType.Flags = MoveTypeFlags.Stopping | (npc.IsInBattle ? MoveTypeFlags.InCombat : 0);
         moveType.DeltaMovement = new sbyte[3];
-        moveType.Stance = npc.CurrentGameStance;
+        moveType.Stance = npc.MovementStanceAt(new Vector3(npc.Transform.Local.Position.X, npc.Transform.Local.Position.Y, endPos.Z));
         moveType.Alertness = npc.CurrentAlertness;
         moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
         npc.BroadcastPacket(new SCOneUnitMovementPacket(npc.ObjId, moveType), false);

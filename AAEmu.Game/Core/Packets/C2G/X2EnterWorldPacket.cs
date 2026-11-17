@@ -17,6 +17,8 @@ public class X2EnterWorldPacket() : GamePacket(CSOffsets.X2EnterWorldPacket, 5)
         var revision = stream.ReadUInt32();
         var index = stream.ReadUInt32();
 
+        Logger.Debug("[ENTRY-DIAG] X2EnterWorld from {0}: account={1}, from={2}, to={3}, zone={4}, tb={5}, revision={6}, index={7}",
+            Connection.Ip, accountId, pFrom, pTo, zoneId, tb, revision, index);
         EnterWorldManager.Instance.Login(Connection, accountId, cookie);
     }
 }

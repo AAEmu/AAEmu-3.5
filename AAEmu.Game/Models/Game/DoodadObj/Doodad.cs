@@ -157,6 +157,8 @@ public class Doodad : BaseUnit
 
                     CurrentToDTriggers.TryAdd(doodadFuncTod.TodAsHours, doodadFuncTod.NextPhase);
                 }
+                if (ParentWorld is { } world && ReferenceEquals(world.GetDoodad(ObjId), this))
+                    AAEmu.Game.Physics.Static.ShipDoodadCollision.Instance.Upsert(world.Id, this);
             }
         }
     }
@@ -913,7 +915,11 @@ public class Doodad : BaseUnit
         var itemCheck = TagsGameData.Instance.GetIdsByTagId(TagsGameData.TagType.Items, (uint)TagsEnum.TradePackStorageChest);
         if (itemCheck.Contains(ItemTemplateId))
         {
-            stream.Write(OwnerId);       // crafter type
+            stream.Write(OwnerId);     // crafter type
+        }
+        else
+        {
+            stream.Write(0u);          // crafter type is present in every doodad record
         }
 
         return stream;

@@ -274,9 +274,8 @@ public sealed class House : Unit
         for (var i = 0; i < AttachedDoodads.Count; i++)
             doodadIds[i] = AttachedDoodads[i].ObjId;
 
-        for (var i = 0; i < doodadIds.Length; i += SCDoodadsRemovedPacket.MaxCountPerPacket)
+        for (var offset = 0; offset < doodadIds.Length; offset += SCDoodadsRemovedPacket.MaxCountPerPacket)
         {
-            var offset = i * SCDoodadsRemovedPacket.MaxCountPerPacket;
             var length = doodadIds.Length - offset;
             var last = length <= SCDoodadsRemovedPacket.MaxCountPerPacket;
             var temp = new uint[last ? length : SCDoodadsRemovedPacket.MaxCountPerPacket];

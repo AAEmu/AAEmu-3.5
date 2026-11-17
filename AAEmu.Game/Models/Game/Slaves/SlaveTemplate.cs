@@ -8,6 +8,9 @@ public class SlaveTemplate
     public uint Id { get; set; }
     public string Name { get; set; }
     public uint ModelId { get; set; }
+    public System.Numerics.Vector3 ObbSize { get; set; }
+    public int Capacity { get; set; }
+    public float AddedShipMassPerUnit { get; set; }
     public bool Mountable { get; set; }
     public float SpawnXOffset { get; set; }
     public float SpawnYOffset { get; set; }
@@ -18,6 +21,7 @@ public class SlaveTemplate
     public uint SpawnValidAreaRance { get; set; }
     public uint SlaveInitialItemPackId { get; set; }
     public uint SlaveCustomizingId { get; set; }
+    public uint SlaveCollisionDamageId { get; set; }
     public bool Customizable { get; set; }
     public float PortalTime { get; set; }
     public int Hp25DoodadCount { get; set; }

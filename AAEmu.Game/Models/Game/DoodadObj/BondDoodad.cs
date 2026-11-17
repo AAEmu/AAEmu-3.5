@@ -7,7 +7,7 @@ public class BondDoodad : PacketMarshaler
 {
     private Doodad _owner;
     private readonly byte _attachPoint;
-    private readonly byte _kind;
+    private readonly uint _kind;
     private readonly int _space;
     private readonly int _spot;
 
@@ -16,7 +16,7 @@ public class BondDoodad : PacketMarshaler
     public BondDoodad(AttachPointKind attachPoint, BondKind kind, int space, int spot)
     {
         _attachPoint = (byte)attachPoint;
-        _kind = (byte)kind;
+        _kind = (uint)kind;
         _space = space;
         _spot = spot;
     }
@@ -25,7 +25,7 @@ public class BondDoodad : PacketMarshaler
     {
         SetOwner(owner);
         _attachPoint = (byte)attachPoint;
-        _kind = (byte)kind;
+        _kind = (uint)kind;
         _space = space;
         _spot = spot;
     }
@@ -44,9 +44,9 @@ public class BondDoodad : PacketMarshaler
     {
         stream.Write(_attachPoint);
         stream.WriteBc(_owner.ObjId);
-        stream.Write(_kind);
         stream.Write(_space);
         stream.Write(_spot);
+        stream.Write(_kind);
         return stream;
     }
 }

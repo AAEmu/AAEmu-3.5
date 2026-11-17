@@ -24,8 +24,8 @@ public class SCListSkillActiveTypsPacket : GamePacket
         stream.Write((uint)_entries.Length);
         foreach (var entry in _entries)
         {
-            stream.Write((byte)1); // skillType block present
-            stream.Write(entry.SkillId);
+            // sub_397F7260: UInt32 skill type followed by byte active type.
+            stream.Write((uint)entry.SkillId);
             stream.Write(entry.ActiveType);
         }
 

@@ -416,7 +416,7 @@ namespace AAEmu.Commons.Cryptography
             //}
 
             // считываем константу из файла и подставляем в формулу шифрации, если константа не установлена, то она будет 0 и не повлияет на результат
-            //var cry = mul ^ ((uint)MakeSeq(keys) + 0x75A02453) ^ 0xB27645B4; // 3.5.3.0 AAClassic
+            //var cry = mul ^ ((uint)MakeSeq(keys) + 0x7535357E) ^ 0xDBE3545C; // 3.5.3.0 AAClassic
             var cry = mul ^ (MakeSeq(keys) + keys.XorKeyConstant1) ^ keys.XorKeyConstant2;
 
             var seq = keys.CSOffsetSequence;

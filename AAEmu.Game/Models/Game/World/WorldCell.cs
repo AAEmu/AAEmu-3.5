@@ -4,7 +4,6 @@ using AAEmu.Game.IO;
 using AAEmu.Game.Models.ClientData;
 using AAEmu.Game.Models.CryEngine.Loaders;
 using AAEmu.Game.Models.CryEngine.Objects;
-using Jitter2.LinearMath;
 using NLog;
 
 namespace AAEmu.Game.Models.Game.World;
@@ -20,18 +19,12 @@ public class WorldCell
     private readonly Lock _loadLock = new();
     private Vector3 CellOffset { get; set; }
     internal ushort[,] HeightMap { get; private set; }
-    private float MinHeight { get; set; }
     private float MaxHeight { get; set; }
 
     /// <summary>
     /// Bai files data to use in this cell
     /// </summary>
     public BaseBaiLoader[,] BaiLoader { get; set; }
-
-    /// <summary>
-    /// Bounding box for use in Jitter
-    /// </summary>
-    public JBoundingBox BoundingBox { get; private set; }
 
     /// <summary>Prefab tree from cell <c>client/object.dat</c> (CryEngine).</summary>
     public ObjectsFile LoadedObjectDat { get; set; }
@@ -42,11 +35,6 @@ public class WorldCell
         CellY = cellY;
         Template = template;
         CellOffset = new Vector3(CellX * WorldManager.CELL_SIZE, CellY * WorldManager.CELL_SIZE, 0f);
-        // Default bounding box
-        BoundingBox = new JBoundingBox(
-            new JVector(CellOffset.X, 0f, CellOffset.Y), 
-            new JVector(CellOffset.X + WorldManager.CELL_SIZE, 0f, CellOffset.Y + WorldManager.CELL_SIZE)
-            );
         BaiLoader = new BaseBaiLoader[4, 4]
         {
             { null, null, null, null },
@@ -128,9 +116,20 @@ public class WorldCell
     }
 
     /// <summary>
+    /// The cell's heightmap was read from the client data. A cell without it has no heights at all: its grid stays
+    /// zeroed, and a caller must not read that zero as a height (the client uses zero for "no data" too).
+    /// </summary>
+    public bool HasHeightMap { get; private set; }
+
+    /// <summary>
+    /// The coefficient the cell's samples are stored with: the world's one, or the cell's own when the ground is
+    /// higher than the world's coefficient can hold (see <see cref="WorldTemplate.CellCoefficient"/>).
+    /// </summary>
+    public double HeightCoefficient { get; private set; }
+
+    /// <summary>
     /// Loads a given Cell worth of heightmap data
     /// </summary>
-    /// <returns></returns>
     /// <exception cref="NotSupportedException"></exception>
     private bool LoadCellHeightMapFromClientData()
     {
@@ -138,14 +137,18 @@ public class WorldCell
         var heightMapFile = Path.Combine("game", "worlds", Template.Name, "cells", cellFileName, "client", "terrain", "heightmap.dat");
         if (!ClientFileManager.FileExists(heightMapFile))
         {
+            HasHeightMap = false;
             return true;
         }
 
         using var stream = ClientFileManager.GetFileStream(heightMapFile);
         if (stream == null)
         {
+            HasHeightMap = false;
             return true;
         }
+
+        HasHeightMap = true;
 
         // Logger.Debug($"Loading {heightMapFile}");
 
@@ -166,34 +169,49 @@ public class WorldCell
             .Where(x => x.pHMData.Length > 0)
             .ToList();
 
+        // The low-resolution sectors (the terrain stores a smooth sector with fewer samples): NodeCell up-scales
+        // those from their corner patch only, native interpolates the sector's own samples (ArcheageZones' rule).
+        var rawSectors = HeightmapSectors.Read(hmap);
+        float SectorHeight(int sector, ushort unitX, ushort unitY)
+        {
+            if (sector < rawSectors.Count && sector < sortedNodes.Count
+                && rawSectors[sector].Size == sortedNodes[sector].nSize
+                && rawSectors[sector].Size <= HeightmapSectors.SectorResolution)
+                return rawSectors[sector].At(unitX, unitY);
+            return sortedNodes[sector].GetHeight(unitX, unitY);
+        }
+
         // Read nodes into heightmap array
         #region ReadNodes
 
-        MinHeight = float.MaxValue;
+        // The World's coefficient stores 0..1024 m in a ushort: a cell whose ground is higher wraps (the plateau of
+        // zone 154, 1100 m, read as 78 m). Such a cell is quantised over its own range (the zone host's rule).
+        var rawHeights = new float[WorldManager.CELL_HMAP_RESOLUTION, WorldManager.CELL_HMAP_RESOLUTION];
         MaxHeight = 0f;
         for (ushort sectorX = 0; sectorX < WorldManager.SECTORS_PER_CELL; sectorX++) // 16x16 sectors / cell
         for (ushort sectorY = 0; sectorY < WorldManager.SECTORS_PER_CELL; sectorY++)
         for (ushort unitX = 0; unitX < WorldManager.SECTOR_HMAP_RESOLUTION; unitX++) // sector = 32x32 unit size
         for (ushort unitY = 0; unitY < WorldManager.SECTOR_HMAP_RESOLUTION; unitY++)
         {
-            var node = sortedNodes[sectorX * WorldManager.SECTORS_PER_CELL + sectorY];
+            var sector = sectorX * WorldManager.SECTORS_PER_CELL + sectorY;
             var oX = sectorX * WorldManager.SECTOR_HMAP_RESOLUTION + unitX;
             var oY = sectorY * WorldManager.SECTOR_HMAP_RESOLUTION + unitY;
 
-            var height = node.GetHeight(unitX, unitY);
-            var value = (ushort)(height * Template.HeightMaxCoefficient);
+            var height = SectorHeight(sector, unitX, unitY);
+            MaxHeight = MathF.Max(height, MaxHeight);
+            rawHeights[oX, oY] = height;
+        }
 
-            HeightMap[oX, oY] = value;
-            MinHeight = MathF.Min((float)(value / Template.HeightMaxCoefficient), MinHeight);
-            MaxHeight = MathF.Max((float)(value / Template.HeightMaxCoefficient), MaxHeight);
+        HeightCoefficient = WorldTemplate.CellCoefficient(MaxHeight, Template.HeightMaxCoefficient);
+        for (ushort oX = 0; oX < WorldManager.CELL_HMAP_RESOLUTION; oX++)
+        for (ushort oY = 0; oY < WorldManager.CELL_HMAP_RESOLUTION; oY++)
+        {
+            var height = rawHeights[oX, oY];
+            // The zone host stores the samples with a truncating cast into the ushort; a sample below the sea bed
+            // would be undefined there, so the value is clamped instead.
+            HeightMap[oX, oY] = (ushort)Math.Clamp(Math.Floor(height * HeightCoefficient), 0.0, ushort.MaxValue);
         }
         #endregion
-
-        // Update bounding box
-        BoundingBox = new JBoundingBox(
-            new JVector(CellOffset.X, MinHeight, CellOffset.Y), 
-            new JVector(CellOffset.X + WorldManager.CELL_SIZE, MaxHeight, CellOffset.Y + WorldManager.CELL_SIZE)
-        );
 
         var cellFolder = Path.Combine("game", "worlds", Template.Name, "cells", cellFileName);
 
@@ -211,16 +229,11 @@ public class WorldCell
             }
         }
 
-        #region update_physics_hmap
-
-        // Update Physics world's heightmaps
-        // TODO: Merge local heightmap into physics engine
+        // Publish the cell's water volumes to every instance using this template.
         foreach (var worldInstance in WorldManager.Instance.GetWorldsByTemplate(Template.Id))
         {
-            worldInstance.Physics?.UpdateHeightMapFromCellBody(this);
             worldInstance.Water.AddFromCellData(this);
         }
-        #endregion
         return true;
     }
 
@@ -233,13 +246,14 @@ public class WorldCell
     public float GetHeightMapDataInCell(int heightMapDataX, int heightMapDataY)
     {
         if (HeightMap == null ||
-            heightMapDataX < 0 || heightMapDataX > WorldManager.CELL_HMAP_RESOLUTION ||
-            heightMapDataY < 0 || heightMapDataY > WorldManager.CELL_HMAP_RESOLUTION)
+            heightMapDataX < 0 || heightMapDataX >= WorldManager.CELL_HMAP_RESOLUTION ||
+            heightMapDataY < 0 || heightMapDataY >= WorldManager.CELL_HMAP_RESOLUTION)
         {
             return 0f; // out of bounds or not loaded
         }
 
-        return (float)(HeightMap[heightMapDataX, heightMapDataY] / Template.HeightMaxCoefficient);
+        var coefficient = HeightCoefficient > 0f ? HeightCoefficient : Template.HeightMaxCoefficient;
+        return (float)(HeightMap[heightMapDataX, heightMapDataY] / coefficient);
     }
 
     /// <summary>

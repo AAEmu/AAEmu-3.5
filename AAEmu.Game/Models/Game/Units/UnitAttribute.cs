@@ -169,4 +169,9 @@ public enum UnitAttribute : byte
     MagicPenetration = 184,
     HealCriticalMul = 185,
     ExpByLaborPowerMul = 186,
+    PhysicsCollisionDamageMul = 187,
+    Mass = 188,
+    MassMul = 189,
+    PhysicsCollisionArmorMul = 194,
+    ImpactMass = 203,
 }

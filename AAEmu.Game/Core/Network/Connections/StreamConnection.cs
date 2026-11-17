@@ -9,12 +9,18 @@ namespace AAEmu.Game.Core.Network.Connections;
 public class StreamConnection(ISession session)
 {
     private int _requestId = -1;
+    private int _receiveChunkCount;
+    private int _receivedPacketCount;
     private readonly Dictionary<int, Doodad[]> _requests = [];
 
     public uint Id => session.SessionId;
     public IPAddress Ip => session.Ip;
     public GameConnection GameConnection { get; set; }
     public PacketStream LastPacket { get; set; }
+
+    public int IncrementReceiveChunkCount() => Interlocked.Increment(ref _receiveChunkCount);
+
+    public int IncrementReceivedPacketCount() => Interlocked.Increment(ref _receivedPacketCount);
 
     public int GetNextRequestId(Doodad[] doodads)
     {

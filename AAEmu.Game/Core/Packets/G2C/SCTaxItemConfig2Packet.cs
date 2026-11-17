@@ -6,7 +6,7 @@ namespace AAEmu.Game.Core.Packets.G2C;
 public class SCTaxItemConfig2Packet : GamePacket
 {
     private readonly uint _count;
-    private readonly uint _type;
+    private readonly ushort _type; // 3.5.0.3 client: count:i32, [type:u16, declareDominion:bool] x count
     private readonly byte _declareDominion;
 
     public SCTaxItemConfig2Packet(uint count) : base(SCOffsets.SCTaxItemConfig2Packet, 5)

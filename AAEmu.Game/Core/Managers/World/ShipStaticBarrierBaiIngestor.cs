@@ -174,10 +174,13 @@ internal static class ShipStaticBarrierBaiIngestor
                 zMin = waterSurfaceRef + Defaults.ZMinOffsetFromWaterSurface;
                 zMax = waterSurfaceRef + Defaults.ZMaxOffsetFromWaterSurface;
             }
+            // The barrier's own zone, so ShipStaticBarrierInteraction can skip the ones a ship is not in. It used to be
+            // 0 for every barrier, which made that filter a no-op.
+            var zoneKey = ZoneKeyAt(world, pointsXy);
             var dto = new ShipStaticBarrierEntryDto
             {
                 Name = name,
-                ZoneKey = 0u,
+                ZoneKey = zoneKey,
                 ZMin = zMin,
                 ZMax = zMax,
                 HalfThicknessMeters = Defaults.HalfThicknessMeters,
@@ -188,6 +191,19 @@ internal static class ShipStaticBarrierBaiIngestor
             if (ShipStaticBarrier.TryCreate(dto, out var barrier, out _))
                 world.ShipStaticBarriers.Barriers.Add(barrier);
         }
+    }
+
+    /// <summary>
+    /// Zone key of a barrier at its centroid (0 when the centroid is outside the world, which leaves the barrier
+    /// zone-agnostic and therefore always active).
+    /// </summary>
+    private static uint ZoneKeyAt(WorldInstance world, List<List<double>> pointsXy)
+    {
+        if (pointsXy.Count == 0 || world.Template is null)
+            return 0u;
+        var cx = (float)pointsXy.Average(p => p[0]);
+        var cy = (float)pointsXy.Average(p => p[1]);
+        return WorldManager.Instance.GetZoneId(world.Template, cx, cy);
     }
 
     private static bool TryClassifyForShipBarriers(

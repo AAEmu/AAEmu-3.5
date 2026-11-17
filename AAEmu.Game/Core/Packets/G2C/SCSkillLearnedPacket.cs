@@ -8,8 +8,8 @@ public class SCSkillLearnedPacket(Skill skill) : GamePacket(SCOffsets.SCSkillLea
 {
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write((byte)1); // skillType block present
-        stream.Write((ushort)skill.Id);
+        // sub_3993E8B0 reads a UInt32; Block() adds no presence byte.
+        stream.Write(skill.Id);
         return stream;
     }
 }

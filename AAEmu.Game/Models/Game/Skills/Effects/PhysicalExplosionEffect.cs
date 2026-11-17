@@ -7,6 +7,7 @@ using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Physics.Hulls;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects;
 
@@ -33,6 +34,13 @@ public class PhysicalExplosionEffect : EffectTemplate
 
         if (target is Npc npcTarget && npcTarget.Template.NonPushableByActor)
             return;
+
+        if (target.ParentWorld?.Physics is { } physics)
+        {
+            var centre = target.Transform.World.Position;
+            physics.Explode(new HullExplosion((int)target.ParentWorld.Id, target.ObjId,
+                centre.X, centre.Y, centre.Z, Radius, HoleSize, Pressure));
+        }
 
         var casterPos = caster.Transform.World.Position;
         var targetPos = target.Transform.World.Position;
@@ -67,7 +75,7 @@ public class PhysicalExplosionEffect : EffectTemplate
             moveType.RotationZ = npc.Transform.Local.ToRollPitchYawSBytesMovement().Item3;
             moveType.Flags = MoveTypeFlags.Stopping | (npc.IsInBattle ? MoveTypeFlags.InCombat : 0);
             moveType.DeltaMovement = new sbyte[3];
-            moveType.Stance = npc.CurrentGameStance;
+            moveType.Stance = npc.MovementStance();
             moveType.Alertness = npc.CurrentAlertness;
             moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
             npc.BroadcastPacket(new SCOneUnitMovementPacket(npc.ObjId, moveType), false);

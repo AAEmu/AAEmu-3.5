@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Numerics;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
@@ -110,6 +110,25 @@ public class WorldTemplate
     public ConcurrentDictionary<(uint, uint), BaseBaiLoader> PathBaiLoader { get; init; } = new();
 
     /// <summary>
+    /// The coefficient a cell's heights are stored with: the world's one, or the cell's own when the ground is higher
+    /// than the world's coefficient can hold (the zone host's rule).
+    /// </summary>
+    /// <remarks>
+    /// The world's coefficient is <c>ushort.MaxValue / (maxTerrainHeight / 4)</c>, which holds 0..1024 m of main_world.
+    /// A cell whose ground is higher (the plateau of zone 154, 1100 m) would wrap by 1024 m in a ushort — and the
+    /// units standing on it would read 78 m, i.e. under the ground. Such a cell is quantised over its own range.
+    /// </remarks>
+    /// <param name="maxHeight">The cell's highest sample.</param>
+    /// <param name="baseCoefficient">The world's coefficient.</param>
+    /// <param name="highTerrain">Whether the high cells are quantised over their own range (on by default).</param>
+    public static double CellCoefficient(double maxHeight, double baseCoefficient, bool highTerrain = true)
+    {
+        if (!highTerrain || maxHeight <= 0f || baseCoefficient <= 0f)
+            return baseCoefficient;
+        return maxHeight * baseCoefficient > ushort.MaxValue ? ushort.MaxValue / maxHeight : baseCoefficient;
+    }
+
+    /// <summary>
     /// Gets heightmap height at target position (not smoothened)
     /// </summary>
     /// <param name="x"></param>
@@ -117,14 +136,28 @@ public class WorldTemplate
     /// <returns></returns>
     public float GetRawHeightMapHeight(int x, int y)
     {
+        return TryGetRawHeightMapHeight(x, y, out var height) ? height : 0f;
+    }
+
+    /// <summary>
+    /// Same as <see cref="GetRawHeightMapHeight"/>, but reports whether the position actually has heightmap data.
+    /// Height 0 is a legitimate terrain height (sea level areas of main_world), so callers must not read a
+    /// returned 0 as "no data".
+    /// </summary>
+    public bool TryGetRawHeightMapHeight(int x, int y, out float height)
+    {
+        height = 0f;
         var cellX = x / WorldManager.CELL_SIZE;
         var cellY = y / WorldManager.CELL_SIZE;
-        if (cellX < 0 || cellX > CellX || cellY < 0 || cellY > CellY)
-            return 0f; // out of bounds
+        if (cellX < 0 || cellX >= CellX || cellY < 0 || cellY >= CellY)
+            return false; // out of bounds
         var cell = Cells[cellX, cellY].VerifyCellLoaded();
+        if (cell?.HeightMap == null || !cell.HasHeightMap)
+            return false; // no heightmap data for this cell
         var sx = x % WorldManager.CELL_SIZE / 2;
         var sy = y % WorldManager.CELL_SIZE / 2;
-        return (float)(cell.HeightMap[sx, sy] / HeightMaxCoefficient);
+        height = cell.GetHeightMapDataInCell(sx, sy);
+        return true;
     }
 
     /// <summary>
@@ -173,21 +206,31 @@ public class WorldTemplate
     /// <returns></returns>
     public float GetHeight(float x, float y)
     {
-        // return GetRawHeightMapHeight((int)x, (int)y); // <-- the old way we used to do things
+        return TryGetHeight(x, y, out var height) ? height : 0f;
+    }
+
+    /// <summary>
+    /// Same as <see cref="GetHeight(float, float)"/>, but reports whether the map had data under the position.
+    /// A return value of 0 is a legitimate terrain height, so "no data" must be distinguished from it.
+    /// </summary>
+    public bool TryGetHeight(float x, float y, out float height)
+    {
+        height = 0f;
 
         // Get bordering points
         var border = FindNearestSignificantPoints((int)Math.Floor(x), (int)Math.Floor(y));
 
-        // Get heights for these points
-        var heightTl = GetRawHeightMapHeight(border.Left, border.Top);
-        var heightTr = GetRawHeightMapHeight(border.Right, border.Top);
-        var heightBl = GetRawHeightMapHeight(border.Left, border.Bottom);
-        var heightBr = GetRawHeightMapHeight(border.Right, border.Bottom);
+        // All four corners come from the same cell grid: if one has no data, the interpolation has none either.
+        if (!TryGetRawHeightMapHeight(border.Left, border.Top, out var heightTl) ||
+            !TryGetRawHeightMapHeight(border.Right, border.Top, out var heightTr) ||
+            !TryGetRawHeightMapHeight(border.Left, border.Bottom, out var heightBl) ||
+            !TryGetRawHeightMapHeight(border.Right, border.Bottom, out var heightBr))
+            return false;
+
         var offX = (x - border.Left) / 2;
         var offY = (y - border.Top) / 2;
-        var height = Blerp(heightTl, heightTr, heightBl, heightBr, offX, offY); // bilinear interpolation
-
-        return height;
+        height = Blerp(heightTl, heightTr, heightBl, heightBr, offX, offY); // bilinear interpolation
+        return true;
     }
 
     /// <summary>

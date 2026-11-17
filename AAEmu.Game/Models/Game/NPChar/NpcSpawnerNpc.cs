@@ -94,12 +94,27 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         Logger.Trace($"Spawn npc templateId {MemberId} objId {npc.ObjId} from spawnerId {NpcSpawnerTemplateId} at Position: {npcSpawner.Position}");
 
+        var settleOnGround = false;
+        var deferGrounding = false;
+        uint spawnZone = 0;
         if (!npc.CanFly)
         {
-            var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());// WorldManager.Instance.GetHeight(npcSpawner.Position.ZoneId, npcSpawner.Position.X, npcSpawner.Position.Y, npcSpawner.Position.Z);
-            if (Math.Abs(npcSpawner.Position.Z - newZ) < 1f)
+            // The layered ground rules (plan S3): the NPC settles onto the surface under its spawn point — a bridge
+            // deck, a floor indoors — but never teleports across a cliff: a ground more than a few metres away is
+            // ignored and the spawner keeps its own height. The result goes to the instance position (below), never to
+            // the shared spawner: one settled NPC must not drag its whole family onto its own floor.
+            var worldManager = WorldManager.Instance;
+            if (worldManager.StaticGeometry != null && worldManager.NpcGroundResolver != null)
             {
-                npcSpawner.Position.Z = newZ;
+                settleOnGround = true;
+            }
+            else
+            {
+                var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());// WorldManager.Instance.GetHeight(npcSpawner.Position.ZoneId, npcSpawner.Position.X, npcSpawner.Position.Y, npcSpawner.Position.Z);
+                if (Math.Abs(npcSpawner.Position.Z - newZ) < 1f)
+                {
+                    npcSpawner.Position.Z = newZ;
+                }
             }
         }
 
@@ -108,6 +123,31 @@ public class NpcSpawnerNpc : Spawner<Npc>
         {
             Logger.Error($"Can't spawn npc {MemberId} from spawnerId {NpcSpawnerTemplateId}. Transform is null.");
             return null;
+        }
+
+        if (settleOnGround)
+        {
+            var worldManager = WorldManager.Instance;
+            var resolver = worldManager.NpcGroundResolver;
+            var template = npc.ParentWorld.Template;
+            var local = npc.Transform.Local;
+            var position = local.Position;
+            var zoneKey = worldManager.GetZoneId(template, position.X, position.Y);
+            spawnZone = zoneKey;
+            worldManager.StaticGeometry.GetZone(template, zoneKey);
+            // A zone whose geometry is still being read in the background answers with an empty index; the NPC keeps the
+            // spawner's height then, exactly as the soft-degradation rule of the layer asks (plan P4).
+            if (worldManager.StaticGeometry != null && worldManager.StaticGeometry.IsZoneReady(template, zoneKey))
+            {
+                var settledZ = resolver.SettledZ(template, zoneKey, position.X, position.Y, position.Z);
+                // Ноль — не высота: юнит на Z = 0 был бы под землёй. Тогда остаётся высота спавнера.
+                if (Physics.Static.NpcGroundResolver.IsUsableHeight(settledZ) && MathF.Abs(settledZ - position.Z) > 0.01f)
+                    local.SetPosition(position.X, position.Y, settledZ);
+                else if (!Physics.Static.NpcGroundResolver.IsUsableHeight(settledZ))
+                    Logger.Warn("NPC {0} (template {1}) at {2:F1},{3:F1}: no usable ground (spawn {4:F2}, ground {5:F2})",
+                        npc.ObjId, MemberId, position.X, position.Y, position.Z, settledZ);
+            }
+            else deferGrounding = true;
         }
 
         npc.Transform.InstanceId = npc.Transform.InstanceId;
@@ -122,6 +162,7 @@ public class NpcSpawnerNpc : Spawner<Npc>
         npc.Spawner = npcSpawner;
         npc.Spawner.RespawnTime = (int)Random.Shared.Next(npc.Spawner.Template.SpawnDelayMin, npc.Spawner.Template.SpawnDelayMax);
         npc.Spawn();
+        if (deferGrounding) WorldManager.Instance.NpcSpawnGrounding?.Track(npc, spawnZone);
 
         var world = WorldManager.Instance.GetWorld(npc.Transform.InstanceId);
         world.Events.OnUnitSpawn(world, new OnUnitSpawnArgs { Npc = npc });

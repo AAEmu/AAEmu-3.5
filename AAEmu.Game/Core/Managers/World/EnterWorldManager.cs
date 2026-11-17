@@ -29,6 +29,7 @@ public class EnterWorldManager(
     /// List of connected accounts (connection token, accountId)
     /// </summary>
     private readonly Dictionary<uint, ulong> _accounts = [];
+    private readonly object _accountsLock = new();
 
     /// <summary>
     /// Adds an account to the connection list and notifies the login server the client is connected
@@ -39,12 +40,24 @@ public class EnterWorldManager(
     {
         var connection = LoginNetwork.Instance.GetConnection();
         var gsId = AppConfiguration.Instance.Id;
+        var accountAlreadyActive = accountManager.Contains((uint)accountId);
 
-        if (accountManager.Contains((uint)accountId))
+        Logger.Debug("[ENTRY-DIAG] Login handoff received for account {0} on game server {1}: account already active={2}",
+            accountId, gsId, accountAlreadyActive);
+
+        if (accountAlreadyActive)
+        {
+            lock (_accountsLock)
+                _accounts.Remove(connectionId);
             connection.SendPacket(new GLPlayerEnterPacket(connectionId, gsId, 1));
+        }
         else
         {
-            _accounts.Add(connectionId, accountId);
+            // Login connection IDs are leased and reused. A client can disconnect after this
+            // packet but before X2EnterWorld consumes the token, leaving an entry for that ID.
+            // Replace that stale token when the login server reuses the ID.
+            lock (_accountsLock)
+                _accounts[connectionId] = accountId;
             connection.SendPacket(new GLPlayerEnterPacket(connectionId, gsId, 0));
         }
     }
@@ -58,12 +71,22 @@ public class EnterWorldManager(
     /// <param name="token"></param>
     public void Login(GameConnection connection, ulong accountId, uint token)
     {
-        if (_accounts.TryGetValue(token, out var account))
+        ulong account;
+        bool found;
+        lock (_accountsLock)
+        {
+            found = _accounts.TryGetValue(token, out account);
+            if (found && account == accountId)
+                _accounts.Remove(token);
+        }
+
+        Logger.Debug("[ENTRY-DIAG] X2EnterWorld validation from {0}: authorization token found={1}, account matches={2}",
+            connection.Ip, found, found && account == accountId);
+
+        if (found)
         {
             if (account == accountId)
             {
-                _accounts.Remove(token);
-
                 connection.AccountId = (uint)accountId;
                 connection.State = GameState.Lobby;
 
@@ -72,20 +95,25 @@ public class EnterWorldManager(
 
                 var port = AppConfiguration.Instance.StreamNetwork.Port;
                 var gm = connection.GetAttribute("gmFlag") != null;
+                Logger.Debug("[ENTRY-DIAG] X2EnterWorld accepted from {0}; sending response with stream port {1}",
+                    connection.Ip, port);
                 connection.SendPacket(new X2EnterWorldResponsePacket(0, gm, connection.Id, port, connection));
                 connection.SendPacket(new ChangeStatePacket(0));
+                Logger.Debug("[ENTRY-DIAG] X2EnterWorld response and lobby state sent to {0}", connection.Ip);
             }
             else
             {
                 // TODO: Token did not match the expected account (phishing attempt?)
-                Logger.Warn($"Token does not match expected account, Token: {token}, AccountId: {accountId}, Expected AccountId: {account}, IP: {connection.Ip}");
+                Logger.Warn("[ENTRY-DIAG] X2EnterWorld rejected from {0}: authorization token belongs to a different account (account={1})",
+                    connection.Ip, accountId);
                 connection.Shutdown();
             }
         }
         else
         {
             // TODO: Invalid token (hacking attempt?)
-            Logger.Warn($"Invalid token during login attempt, Token: {token}, AccountId: {accountId}, IP: {connection.Ip}");
+            Logger.Warn("[ENTRY-DIAG] X2EnterWorld rejected from {0}: authorization token not found (account={1})",
+                connection.Ip, accountId);
             connection.Shutdown();
         }
     }

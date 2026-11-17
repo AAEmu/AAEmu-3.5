@@ -13,9 +13,8 @@ public class LoginConnectionHandler(
 {
     public override async Task OnConnectedAsync(ConnectionContext connectionContext)
     {
-        logger.LogDebug("Connection from {SessionIP} established, connection ID: {SessionID}",
-            connectionContext.RemoteEndPoint,
-            connectionContext.ConnectionId);
+        logger.LogDebug("[ENTRY-DIAG] Login connection from {SessionIP} established",
+            connectionContext.RemoteEndPoint);
 
         await using var connection = connectionFactory.Create(connectionContext);
         try

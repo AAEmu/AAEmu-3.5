@@ -46,6 +46,11 @@ public class AccountManager(ITickManager tickManager, ITimedRewardsManager timed
     {
         foreach (var gameConnection in _accounts.Values.ToList().Where(gameConnection => gameConnection.LastPing + TimeSpan.FromSeconds(30) < DateTime.UtcNow))
         {
+            var lastPing = gameConnection.LastPing;
+            Logger.Warn(
+                "[NET-DIAG] Ping timeout: session={SessionId}, account={AccountId}, character={CharacterId}, state={State}, lastPingUtc={LastPingUtc:O}, pingAgeSeconds={PingAgeSeconds:F3}, timeoutSeconds=30",
+                gameConnection.Id, gameConnection.AccountId, gameConnection.ActiveChar?.Id, gameConnection.State,
+                lastPing, lastPing == default ? -1 : (DateTime.UtcNow - lastPing).TotalSeconds);
             if (gameConnection.ActiveChar != null)
                 Logger.Trace($"Disconnecting {gameConnection.ActiveChar.Name} due to no network activity");
             gameConnection.Shutdown();

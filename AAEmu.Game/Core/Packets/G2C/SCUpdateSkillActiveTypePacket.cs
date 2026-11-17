@@ -16,8 +16,8 @@ public class SCUpdateSkillActiveTypePacket : GamePacket
 
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write((byte)1); // skillType block present
-        stream.Write(_skillId);
+        // sub_3993F4D0: UInt32 skill type followed by byte active type.
+        stream.Write((uint)_skillId);
         stream.Write(_activeType);
 
         return stream;

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <!-- The sources annotate a few nullable returns without enabling the nullable context. -->
+    <NoWarn>$(NoWarn);CS8632</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    The geometric layer of the zone physics (plan: Docs/Reports/2026-11-15-zone-physics-implementation-plan.md, S3).
+    Self-contained by contract: no reference to AAEmu.Game, Jitter2 or NLog — client files come in through
+    IGeometryFileSource, logs go out through GeometryLog. The game-side glue lives in AAEmu.Game/Physics/Static.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\AAEmu.Commons\AAEmu.Commons.csproj" />
+  </ItemGroup>
+
+</Project>

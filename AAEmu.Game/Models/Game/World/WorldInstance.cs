@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Numerics;
 using AAEmu.Commons.IO;
 using AAEmu.Game.Core.Managers;
@@ -356,7 +356,6 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         Logger.Debug($"Starting physics engine for instance {this}");
         Physics = new PhysicsManager { SimulationWorld = this };
         Physics.Initialize();
-        Physics.InitializeTerrain();
         Physics.StartPhysics();
     }
 
@@ -570,7 +569,10 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         if (obj is Unit unit)
             _units.TryAdd(unit.ObjId, unit);
         if (obj is Doodad doodad)
+        {
             _doodads.TryAdd(doodad.ObjId, doodad);
+            AAEmu.Game.Physics.Static.ShipDoodadCollision.Instance.Upsert(Id, doodad);
+        }
         if (obj is Npc npc)
             _npcs.TryAdd(npc.ObjId, npc);
         if (obj is Character character)
@@ -608,7 +610,10 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         if (obj is Unit)
             res |= _units.TryRemove(obj.ObjId, out _);
         if (obj is Doodad)
+        {
             res |= _doodads.TryRemove(obj.ObjId, out _);
+            AAEmu.Game.Physics.Static.ShipDoodadCollision.Instance.Remove(Id, obj.ObjId);
+        }
         if (obj is Npc)
             res |= _npcs.TryRemove(obj.ObjId, out _);
         if (obj is Character)

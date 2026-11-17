@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Skills;
 
@@ -10,14 +10,8 @@ public class SCBuffStatePacket(Buff buff) : GamePacket(SCOffsets.SCBuffStatePack
 
     public override PacketStream Write(PacketStream stream)
     {
-        // Structure from x2game_dump.dll (SCBuffState_0x04E deserializer @ 0x399438C0):
-        // SkillCaster (type + bc), uint32 casterId, bc targetId, optional uint32 buffId
-        stream.Write(buff.SkillCaster);        // skillCaster
-        stream.Write(buff.Caster?.Id ?? 0);    // casterId
-        stream.WriteBc(buff.Owner.ObjId);      // targetId
-        stream.Write(true);                    // buffId block present
-        stream.Write(buff.Index);              // buffId
-
+        // The 3.5 client reader at 0x39384300 reads no payload for opcode 0x04E.
+        // 0x399438C0 belongs to SCBuffCreated (0x1EE), not this packet.
         return stream;
     }
 

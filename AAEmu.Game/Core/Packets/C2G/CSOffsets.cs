@@ -286,7 +286,7 @@ public static class CSOffsets
     public const ushort CSStartSkillPacket = 0x1A4;
     public const ushort off_39D38344 = 0x119;
     public const ushort CSStopLootingPacket = 0x0A9;
-    public const ushort CSCreateDoodadPacket = 0xfff;
+    public const ushort CSCreateDoodadPacket = 0x10B;
     public const ushort CSNaviTeleportPacket = 0x03F;
     public const ushort CSNaviOpenPortalPacket = 0x17A;
     public const ushort CSNaviOpenBountyPacket = 0x085;

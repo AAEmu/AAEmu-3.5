@@ -10,9 +10,8 @@ public class SCBuffRemovedPacket(uint objId, uint index) : GamePacket(SCOffsets.
     public override PacketStream Write(PacketStream stream)
     {
         // Structure from x2game_dump.dll (SCBuffRemoved_0x175 deserializer @ 0x3993E3D0):
-        // bc objId, optional uint32 index
+        // bc objId, uint32 index. CryNetwork's Block() consumes no wire bytes.
         stream.WriteBc(objId);
-        stream.Write(true); // index block present
         stream.Write(index);
         return stream;
     }

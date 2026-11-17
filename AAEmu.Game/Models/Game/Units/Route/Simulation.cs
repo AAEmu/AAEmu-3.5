@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
@@ -414,7 +414,7 @@ public class Simulation : Patrol
             moveType.DeltaMovement[0] = 0;
             moveType.DeltaMovement[1] = (sbyte)(RunningMode ? 127 : 63);
             moveType.DeltaMovement[2] = 0;
-            moveType.Stance = npc.CurrentGameStance;    // COMBAT = 0x0, IDLE = 0x1
+            moveType.Stance = npc.MovementStanceAt(npc.Transform.Local.Position); // COMBAT = 0x0, IDLE = 0x1, SWIM = 0x9
             moveType.Alertness = npc.CurrentAlertness; // IDLE = 0x0, ALERT = 0x1, COMBAT = 0x2
             moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
 

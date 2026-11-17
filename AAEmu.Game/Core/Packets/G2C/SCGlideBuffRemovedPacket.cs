@@ -1,4 +1,4 @@
-using AAEmu.Commons.Network;
+﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using System.Numerics;
 
@@ -11,9 +11,8 @@ public class SCGlideBuffRemovedPacket(uint objId, uint index, Vector3 position) 
     public override PacketStream Write(PacketStream stream)
     {
         // Structure from x2game_dump.dll (SCGlideBuffRemoved_0x17F deserializer @ 0x3993E460):
-        // bc objId, optional uint32 index, position (9 bytes)
+        // bc objId, uint32 index, position (9 bytes); Block() adds no bytes.
         stream.WriteBc(objId);
-        stream.Write(true); // index block present
         stream.Write(index);
         stream.WritePosition(position);
 

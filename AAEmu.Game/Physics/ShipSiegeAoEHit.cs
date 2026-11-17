@@ -1,13 +1,14 @@
-#nullable enable
+﻿#nullable enable
 
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
-using AAEmu.Game.Physics.Util;
+using System.Numerics;
+using AAEmu.Game.Models.Game.Models;
+using AAEmu.Game.Physics.Hulls;
 using AAEmu.Game.Utils;
-using Jitter2.LinearMath;
 
 namespace AAEmu.Game.Physics;
 
@@ -56,7 +57,7 @@ public static class ShipSiegeAoEHit
                 continue;
             if (!ship.Template.IsABoat())
                 continue;
-            if (ship.RigidBody is null || ship.ShipController?.ShipModel is null)
+            if (ship.PhysicsState is null || ship.ShipModel is null)
                 continue;
             if (!SkillTargetingUtil.IsRelationValid(template.TargetRelation, caster, ship))
                 continue;
@@ -68,40 +69,22 @@ public static class ShipSiegeAoEHit
         }
     }
 
-    /// <summary>
-    /// World horizontal plane matches ship hull math: X with Jitter X, Y with Jitter Z (see <see cref="ShipShipInteraction.GetMassBoxCenterXz"/>).
-    /// </summary>
     public static bool TrySiegePointHitsShipMassBoxXz(float worldX, float worldY, float radius, Slave ship)
     {
-        var body = ship.RigidBody;
-        var model = ship.ShipController?.ShipModel;
-        if (body is null || model is null || !ship.Template.IsABoat())
-            return false;
+        var state = ship.PhysicsState;
+        return state != null && ship.ShipModel != null && CircleHitsHull(worldX, worldY, radius, state.Pose, ship.ShipModel, ship.Scale);
+    }
 
-        ShipShipInteraction.GetMassBoxCenterXz(body, model, ship.Scale, out var cx, out var cz);
-        var rpy = PhysicsUtil.GetYawPitchRollFromMatrix(JMatrix.CreateFromQuaternion(body.Orientation));
-        var bow = rpy.Item1 + MathUtil.HalfPi;
-        var halfLen = model.MassBoxSizeY * ship.Scale * 0.5f;
-        var halfBeam = model.MassBoxSizeX * ship.Scale * 0.5f;
-
-        var px = worldX;
-        var pz = worldY;
-
-        var bx = MathF.Cos(bow);
-        var bz = MathF.Sin(bow);
-        var sx = -MathF.Sin(bow);
-        var sz = MathF.Cos(bow);
-
-        var dx = px - cx;
-        var dz = pz - cz;
-        var u = dx * bx + dz * bz;
-        var v = dx * sx + dz * sz;
-        u = Math.Clamp(u, -halfLen, halfLen);
-        v = Math.Clamp(v, -halfBeam, halfBeam);
-        var qx = cx + u * bx + v * sx;
-        var qz = cz + u * bz + v * sz;
-        var ddx = px - qx;
-        var ddz = pz - qz;
-        return ddx * ddx + ddz * ddz <= radius * radius;
+    public static bool CircleHitsHull(float x, float y, float radius, HullPose pose, ShipModelV1 model, float scale)
+    {
+        var relative = new Vector3(x - (float)pose.X, y - (float)pose.Y, 0f);
+        var local = Vector3.Transform(relative, Quaternion.Conjugate(pose.Rotation));
+        var dx = local.X - model.MassCenterX * scale;
+        var dy = local.Y - model.MassCenterY * scale;
+        var halfWidth = MathF.Max(0.01f, model.MassBoxSizeX * scale * 0.5f);
+        var halfLength = MathF.Max(0.01f, model.MassBoxSizeY * scale * 0.5f);
+        var ox = dx - Math.Clamp(dx, -halfWidth, halfWidth);
+        var oy = dy - Math.Clamp(dy, -halfLength, halfLength);
+        return ox * ox + oy * oy <= radius * radius;
     }
 }

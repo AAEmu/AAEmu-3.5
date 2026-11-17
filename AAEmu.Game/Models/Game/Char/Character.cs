@@ -1670,7 +1670,7 @@ public partial class Character : Unit, ICharacter
 
         if (attachedSlave != null)
         {
-            var shipModel = attachedSlave.ShipController?.ShipModel ?? ModelManager.Instance.GetShipModel(attachedSlave.ModelId);
+            var shipModel = attachedSlave.ShipModel ?? ModelManager.Instance.GetShipModel(attachedSlave.ModelId);
             if (shipModel != null)
             {
                 // Use a fraction of the ship's vertical bounds as a proxy for deck/head level.

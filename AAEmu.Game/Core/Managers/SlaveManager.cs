@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers.Id;
@@ -148,7 +148,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
         var attachPoint = slave.AttachedCharacters.FirstOrDefault(x => x.Value == character).Key;
         if (attachPoint != default)
         {
-            slave.AttachedCharacters.Remove(attachPoint);
+            ((ICollection<KeyValuePair<AttachPointKind, Character>>)slave.AttachedCharacters).Remove(new(attachPoint, character));
             character.Transform.Parent = null;
             character.Transform.StickyParent = null;
             ShipHarpoonRopeController.OnOperatorLeftSlave(slave, character);
@@ -182,6 +182,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             return;
         }
 
+        if (!slave.AttachedCharacters.TryAdd(attachPoint, character)) return;
         character.BroadcastPacket(new SCUnitAttachedPacket(character.ObjId, attachPoint, bondKind, objId), true);
         character.AttachedPoint = attachPoint;
         switch (attachPoint)
@@ -191,7 +192,6 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                 break;
         }
 
-        slave.AttachedCharacters.Add(attachPoint, character);
         character.Transform.Parent = slave.Transform;
         // TODO: move to attach point's position
         character.Transform.Local.SetPosition(0, 0, 0, 0, 0, 0);
@@ -559,14 +559,10 @@ public class SlaveManager(WorldInstance parentWorldInstance)
             var waterAtFinal = spawnWorld?.Water?.GetWaterSurface(summonedSlave.Transform.World.Position, out _) ?? 0f;
             if (waterAtFinal > 0f)
             {
-                var mul = AAEmu.Game.Physics.Forces.Buoyancy.ShipWaterDensityMul;
-                if (mul > 0f)
-                {
-                    var targetSubmerged = 1f / (AAEmu.Game.Physics.Forces.Buoyancy.BaseWaterDensity * mul);
-                    var targetZ = waterAtFinal - targetSubmerged;
-                    if (summonedSlave.Transform.Local.Position.Z < targetZ)
-                        summonedSlave.Transform.Local.SetHeight(targetZ);
-                }
+                var model = ModelManager.Instance.GetShipModel(summonedSlave.ModelId);
+                var targetZ = waterAtFinal - AAEmu.Game.Physics.Hulls.HullModel.For(model).Draft;
+                if (summonedSlave.Transform.Local.Position.Z < targetZ)
+                    summonedSlave.Transform.Local.SetHeight(targetZ);
             }
         }
 

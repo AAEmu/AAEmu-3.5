@@ -1,4 +1,4 @@
-﻿<Project Sdk="Aspire.AppHost.Sdk/13.1.0">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.6.5">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -9,6 +9,7 @@
     <ItemGroup>
       <PackageReference Include="Aspire.Hosting.MySql" />
       <PackageReference Include="MessagePack" />
+      <PackageReference Include="MySqlConnector" />
       <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     </ItemGroup>
   

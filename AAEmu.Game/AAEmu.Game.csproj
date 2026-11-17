@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AAEmu.Commons\AAEmu.Commons.csproj" />
+    <ProjectReference Include="..\AAEmu.Geometry\AAEmu.Geometry.csproj" />
     <InternalsVisibleTo Include="AAEmu.IntegrationTests" />
     <InternalsVisibleTo Include="AAEmu.UnitTests" />
   </ItemGroup>
@@ -80,7 +81,6 @@
   <ItemGroup>
     <PackageReference Include="Discord.Net" />
     <PackageReference Include="Jace" />
-    <PackageReference Include="Jitter2" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />

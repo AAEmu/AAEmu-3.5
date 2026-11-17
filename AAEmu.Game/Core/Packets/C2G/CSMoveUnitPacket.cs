@@ -84,6 +84,7 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
 
                     ship.ThrottleRequest = srmt.Throttle;
                     ship.SteeringRequest = srmt.Steering;
+                    ship.ParentWorld?.Physics?.SetHelm(ship, srmt.Throttle, srmt.Steering);
 
                     // Make sure driver is attached to the ship
                     character.Transform.Parent = ship.Transform;

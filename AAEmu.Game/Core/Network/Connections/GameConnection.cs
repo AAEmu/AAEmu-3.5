@@ -15,6 +15,8 @@ namespace AAEmu.Game.Core.Network.Connections;
 public class GameConnection
 {
     private readonly ISession _session;
+    private int _receiveChunkCount;
+    private int _receivedPacketCount;
 
     public uint Id => _session.SessionId;
     public ulong AccountId { get; set; }
@@ -30,6 +32,10 @@ public class GameConnection
     public Task LeaveTask { get; set; }
     public CancellationTokenSource CancelTokenSource { get; set; }
     public DateTime LastPing { get; set; }
+
+    public int IncrementReceiveChunkCount() => Interlocked.Increment(ref _receiveChunkCount);
+
+    public int IncrementReceivedPacketCount() => Interlocked.Increment(ref _receivedPacketCount);
 
     public GameConnection(ISession session)
     {

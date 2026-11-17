@@ -61,8 +61,17 @@ public class NodeCell
         Init();
         if (!disabledReCalc && Version < 7)
             RescaleToInt();
+        // The samples as the terrain stores them, before the up-scale: a sector with fewer than 33 samples a side
+        // keeps its own (the up-scale reads only its corner patch, see <see cref="UpScale"/>).
+        RawSamples = pHMData;
         UpScale();
     }
+
+    /// <summary>
+    /// The sector's own samples, as the client stores them (before the up-scale): a 64 m sector keeps 33 × 33
+    /// samples 2 m apart, or fewer where the terrain is smooth (17 × 17, 9 × 9, 5 × 5, 2 × 2).
+    /// </summary>
+    public ushort[] RawSamples { get; private set; } = [];
 
     public float RawDataToHeight(uint data)
     {

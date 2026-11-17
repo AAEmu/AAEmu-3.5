@@ -1,4 +1,4 @@
-﻿using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Utils;
@@ -123,7 +123,7 @@ internal class Track : Patrol
             moveType.DeltaMovement[0] = 0;
             moveType.DeltaMovement[1] = 127;
             moveType.DeltaMovement[2] = 0;
-            moveType.Stance = npc.CurrentGameStance;    // COMBAT = 0x0, IDLE = 0x1
+            moveType.Stance = npc.MovementStance();    // COMBAT = 0x0, IDLE = 0x1
             moveType.Alertness = npc.CurrentAlertness; // IDLE = 0x0, ALERT = 0x1, COMBAT = 0x2
             moveType.Time += 50; // has to change all the time for normal motion.
 

@@ -10,7 +10,7 @@ namespace AAEmu.Game.Models.CryEngine.Readers;
 public class AreasMissionReader(System.IO.Stream rawStream, uint zoneId) : BaiReader(rawStream, zoneId)
 {
     private static Logger Logger { get; set; } = LogManager.GetCurrentClassLogger();
-    public static int BaiAreasFileVersion = 21;
+    public static int BaiAreasFileVersion = 22;
 
     public List<AiShape> ForbiddenAreasList { get; } = [];
     public List<SpecialArea> NavigationModifiers { get; } = [];

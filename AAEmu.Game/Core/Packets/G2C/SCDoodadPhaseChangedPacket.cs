@@ -22,16 +22,18 @@ public class SCDoodadPhaseChangedPacket : GamePacket
 
         stream.WriteBc(_doodad.ObjId);
         stream.Write(_doodad.FuncGroupId);
-        stream.Write(_doodad.TimeLeft);    // growing
-        stream.Write(_doodad.PuzzleGroup); // puzzleGroup
+        stream.Write(_doodad.TimeLeft);         // growing
+        stream.Write(_doodad.PuzzleGroup);     // puzzleGroup
         stream.Write(_doodad.ItemTemplateId); // type(id) for backpack e.g. Id=27606 Sturgeon Pack
+        stream.Write(_doodad.FreshnessTime); // freshnessTime
         var itemCheck = TagsGameData.Instance.GetIdsByTagId(TagsGameData.TagType.Items, (uint)TagsEnum.TradePackStorageChest);
         if (itemCheck.Contains(_doodad.ItemTemplateId))
         {
-            stream.Write(_doodad.FreshnessTime); // freshnessTime
-            stream.Write(_doodad.OwnerId);       // type crafter?
-            stream.Write((short)14);             // type
-            stream.Write(_doodad.IsRebuy);       // isRebuy
+            stream.Write(_doodad.OwnerId); // crafter type
+        }
+        else
+        {
+            stream.Write(0u); // crafter type is present in every doodad record
         }
 
         return stream;

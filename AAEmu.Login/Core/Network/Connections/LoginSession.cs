@@ -169,47 +169,57 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
 
     public async Task InitiateEnterWorldAsync(GameServerId gsId, CancellationToken cancellationToken)
     {
-        CancellationTokenSource linkedCts;
-        TaskCompletionSource<EnterWorldResult> tcs;
-        GameServerId expectedGsId;
+        logger.LogDebug("[ENTRY-DIAG] Enter-world flow started for client {ClientIP}, game server {GameServerId}, state {LoginState}",
+            Connection.Ip, gsId, State);
+
+        CancellationTokenSource? linkedCts = null;
+        TaskCompletionSource<EnterWorldResult>? tcs = null;
+        var expectedGsId = default(GameServerId);
+        var gameServerAvailable = gameController.GetGameServer(gsId) is { Active: true };
 
         lock (_lock)
         {
             if (_state != LoginState.Authenticated)
             {
-                logger.LogWarning("Cannot enter world: invalid state {State} for connection {ConnectionId}", _state, Connection.Id);
+                logger.LogWarning("[ENTRY-DIAG] Cannot enter world: invalid state {State} for client {ClientIP}", _state, Connection.Ip);
                 return;
             }
 
-            if (gameController.GetGameServer(gsId) is not { Active: true })
+            if (gameServerAvailable)
             {
-                logger.LogWarning("Cannot enter world: game server {GsId} not available for connection {ConnectionId}", gsId, Connection.Id);
-                return;
+                _state = LoginState.EnteringWorld;
+
+                expectedGsId = gsId;
+                if (gameController.TryGetParentId(gsId, out var parentGsId))
+                {
+                    logger.LogDebug("[ENTRY-DIAG] Mirror game server {MirrorGsId} resolved to parent {ParentGsId} for client {ClientIP}", gsId, parentGsId, Connection.Ip);
+                    expectedGsId = parentGsId;
+                }
+
+                _pendingGsId = expectedGsId;
+
+                _enterWorldCts = CancellationTokenSource.CreateLinkedTokenSource(Connection.ConnectionClosed, cancellationToken);
+                _enterWorldTcs = new TaskCompletionSource<EnterWorldResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                linkedCts = _enterWorldCts;
+                tcs = _enterWorldTcs;
             }
+        }
 
-            _state = LoginState.EnteringWorld;
-
-            expectedGsId = gsId;
-            if (gameController.TryGetParentId(gsId, out var parentGsId))
-            {
-                logger.LogDebug("EnterWorld request for mirror game server {MirrorGsId} resolved to parent {ParentGsId} for connection {ConnectionId}", gsId, parentGsId, Connection.Id);
-                expectedGsId = parentGsId;
-            }
-
-            _pendingGsId = expectedGsId;
-
-            _enterWorldCts = CancellationTokenSource.CreateLinkedTokenSource(Connection.ConnectionClosed, cancellationToken);
-            _enterWorldTcs = new TaskCompletionSource<EnterWorldResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            linkedCts = _enterWorldCts;
-            tcs = _enterWorldTcs;
+        if (!gameServerAvailable)
+        {
+            logger.LogWarning("[ENTRY-DIAG] Cannot enter world: game server {GsId} not available for client {ClientIP}", gsId, Connection.Ip);
+            await Client.SendEnterWorldDeniedAsync(0, cancellationToken);
+            return;
         }
 
         // Send request to the resolved (parent) game server (outside the lock)
+        logger.LogDebug("[ENTRY-DIAG] Forwarding enter-world request for client {ClientIP} to game server {GameServerId}",
+            Connection.Ip, expectedGsId);
         gameController.RequestEnterWorld(Connection.AccountId, Connection.Id, expectedGsId);
 
         // Spawn background task to await response and send result
-        _enterWorldBackgroundTask = RunEnterWorldBackgroundAsync(tcs, linkedCts);
+        _enterWorldBackgroundTask = RunEnterWorldBackgroundAsync(tcs!, linkedCts!);
     }
 
     private async Task RunEnterWorldBackgroundAsync(TaskCompletionSource<EnterWorldResult> tcs,
@@ -221,20 +231,32 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
 
             if (result is { Success: true, Server: not null })
             {
+                var serverIp = result.Server.Host;
+                if (Connection.IsLocallyConnected)
+                    serverIp = Connection.Ip.ToString();
+                logger.LogInformation("[ENTRY-DIAG] Game server {GameServerId} authorized client {ClientIP}; sending world endpoint {GameServerIP}:{GameServerPort}",
+                    result.Server.Id, Connection.Ip, serverIp, result.Server.Port);
                 await Client.SendWorldCookieAsync(result.Server, CancellationToken.None);
+                logger.LogDebug("[ENTRY-DIAG] World-cookie packet sent to {ClientIP} for game server {GameServerId}, endpoint {GameServerIP}:{GameServerPort}",
+                    Connection.Ip, result.Server.Id, serverIp, result.Server.Port);
             }
             else
             {
+                logger.LogWarning("[ENTRY-DIAG] Game server denied entry for client {ClientIP}, result {Result}",
+                    Connection.Ip, result.DenialReason);
                 await Client.SendEnterWorldDeniedAsync(result.DenialReason, CancellationToken.None);
+                logger.LogDebug("[ENTRY-DIAG] Enter-world denial packet sent to {ClientIP}, reason={Reason}",
+                    Connection.Ip, result.DenialReason);
             }
         }
         catch (OperationCanceledException)
         {
-            logger.LogDebug("EnterWorld cancelled for connection {ConnectionId}", Connection.Id);
+            logger.LogDebug("[ENTRY-DIAG] Enter-world wait cancelled for client {ClientIP}; connection closed={ConnectionClosed}",
+                Connection.Ip, Connection.ConnectionClosed.IsCancellationRequested);
         }
         catch (TimeoutException)
         {
-            logger.LogWarning("EnterWorld timed out for connection {ConnectionId}", Connection.Id);
+            logger.LogWarning("[ENTRY-DIAG] Enter-world wait timed out for client {ClientIP}", Connection.Ip);
             try
             {
                 await Client.SendEnterWorldDeniedAsync(0, CancellationToken.None);
@@ -254,6 +276,7 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
                     _state = LoginState.Authenticated;
                 }
             }
+            logger.LogDebug("[ENTRY-DIAG] Enter-world flow finished for client {ClientIP}, state {LoginState}", Connection.Ip, State);
         }
     }
 
@@ -263,12 +286,12 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
         {
             if (_state != LoginState.EnteringWorld)
             {
-                logger.LogDebug("CancelEnterWorld ignored: not in EnteringWorld state for connection {ConnectionId}",
-                    Connection.Id);
+                logger.LogDebug("[ENTRY-DIAG] CancelEnterWorld ignored: client {ClientIP} is not in EnteringWorld state",
+                    Connection.Ip);
                 return;
             }
 
-            logger.LogDebug("Cancelling EnterWorld for connection {ConnectionId}", Connection.Id);
+            logger.LogDebug("[ENTRY-DIAG] Cancelling EnterWorld for client {ClientIP}", Connection.Ip);
 
             // Cancel the CTS to trigger the awaiting task
             _enterWorldCts?.Cancel();
@@ -282,16 +305,16 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
             if (_state != LoginState.EnteringWorld)
             {
                 logger.LogWarning(
-                    "CompleteEnterWorldRequest ignored: not in EnteringWorld state for connection {ConnectionId}",
-                    Connection.Id);
+                    "[ENTRY-DIAG] Enter-world response ignored: session state is {State} for client {ClientIP}",
+                    _state, Connection.Ip);
                 return;
             }
 
             if (_pendingGsId != gsId)
             {
                 logger.LogWarning(
-                    "CompleteEnterWorldRequest ignored: gsId mismatch (expected {Expected}, got {Actual}) for connection {ConnectionId}",
-                    _pendingGsId, gsId, Connection.Id);
+                    "[ENTRY-DIAG] Enter-world response ignored: game server mismatch (expected {Expected}, got {Actual}) for client {ClientIP}",
+                    _pendingGsId, gsId, Connection.Ip);
                 return;
             }
 
@@ -303,6 +326,8 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
                 server = gameController.GetGameServer(gsId);
             }
 
+            logger.LogDebug("[ENTRY-DIAG] Enter-world response received from game server {GameServerId}: success={Success}, result={Result}",
+                gsId, success, result);
             _enterWorldTcs?.TrySetResult(new EnterWorldResult(success, server, result));
         }
     }
@@ -316,7 +341,7 @@ public sealed class LoginSession(ILoginConnection connection, IGameController ga
             if (_state == LoginState.Disconnected)
                 return;
 
-            logger.LogDebug("Session disconnected for connection {ConnectionId}", Connection.Id);
+            logger.LogDebug("[ENTRY-DIAG] Session disconnected for client {ClientIP}", Connection.Ip);
 
             // Cancel any pending enter world operation
             _enterWorldCts?.Cancel();

@@ -117,7 +117,12 @@
     <Project Path="AAEmu.Aspire.AppHost/AAEmu.Aspire.AppHost.csproj" />
     <Project Path="AAEmu.Commons/AAEmu.Commons.csproj" />
     <Project Path="AAEmu.Game/AAEmu.Game.csproj" />
+    <Project Path="AAEmu.Geometry/AAEmu.Geometry.csproj" />
     <Project Path="AAEmu.Login/AAEmu.Login.csproj" />
+  </Folder>
+  <Folder Name="/Tools/">
+    <Project Path="Tools/GeometryProbe/AAEmu.GeometryProbe.csproj" />
+    <Project Path="Tools/WorldConverter/AAEmu.WorldConverter.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="AAEmu.IntegrationTests/AAEmu.IntegrationTests.csproj" />

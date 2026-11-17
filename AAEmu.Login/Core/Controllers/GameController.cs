@@ -181,6 +181,8 @@ public class GameController(
             return;
         }
 
+        logger.LogDebug(
+            "[ENTRY-DIAG] Forwarding LGPlayerEnter to game server {GsId} for account {AccountId}", gsId, accountId);
         gs.SendPacket(new LGPlayerEnterPacket(accountId, connectionId));
     }
 

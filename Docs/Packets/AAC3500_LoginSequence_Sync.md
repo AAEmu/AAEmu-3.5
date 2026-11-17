@@ -97,6 +97,35 @@ dotnet test --filter AAEmu.UnitTests
 - `AAEmu.UnitTests`: **1095 / 1095** проходят.
 - `AAEmu.Login.IntegrationTests` падают с `DockerUnavailableException` в текущем окружении; это не связано с правками пакетов.
 
+## Проверка по десериализаторам x2game_dump.dll 3.5.0.3 (2026-07-18)
+
+Полная сверка всех 53 пакетов сессии входа (из Server.log) с десериализаторами клиента
+(IDB `x2game_dump.dll.i64`, метки `<Name>_0x<opcode>`, функции чтения через `struc_2->Read->*`).
+Опкоды всех 53 пакетов совпадают. Протокол: `AAC3500-diff/docs/2026-07-18-packet-verify-login-sequence.md`.
+
+### Исправлено
+
+| Пакет | Было | Стало | Источник в клиенте |
+| --- | --- | --- | --- |
+| `SCGameRuleConfigPacket` | `type:uint`, `type2:uint`, `peaceMin:short` | `type:ushort`, `type2:ushort`, `peaceMin:int` | sub_3993BE30: `type:u16, pvp:bool, duel:bool` / `type:u16, peaceMin:i32` |
+| `SCTaxItemConfig2Packet` | `type:uint` | `type:ushort` | sub_3992BB20: `count:i32, [type:u16, declareDominion:bool]` |
+| `Portal.Write` (SCCharacterReturnDistricts 0x1BF, SCCharacterPortals 0x1C4) | нет поля `isFavorite` | добавлен `IsFavorite:bool` после `ZRot` | sub_397F3F40: `id:i32, name, zoneId:i32, pos:vec3, zRot:f32, isFavorite:bool` |
+| `SCResultRestrictCheckPacket` | `characterId:u32, code:u8, result:u8` | только `msg:string` | sub_3991D430 (класс опкода 641=0x281) |
+
+### Проверено, расхождений нет
+
+SCInitialConfig, SCAccountInfo, SCChatSpamDelay, SCAccountAttributeConfig, SCLevelRestrictionConfig,
+SCTaxItemConfig, SCInGameShopConfig, SCProtectFaction, SCGetSlotCount, CharacterList (+Character.Write,
+EQUIP_6140), SCRaceCongestion, SCAccountAttributeList, SCResponseUIData (type=u32!), SCAccountWarned,
+SCCheckRaceCongestionResponse, CharacterState, SCCharacterInvenInit/Contents, SCCharacterGamePoints (14×u32),
+SCCompletedQuests (idx=u16!), SCActionSlots, SCQuests/Quest.Write, SCQuestContextUpdated, SCActability,
+SCCountUnreadMail, SCConflictZoneState (lock(u64) в 3.5.0.3 НЕ читается — текущий вариант без lock верен),
+SCSystemFactionList, SCFactionRelationList, SCExpeditionRolePolicyList, SCBuffCreated, SCUnitState,
+SCDetailedTimeOfDay, SCDoodadsCreated (scale присутствует), SCJoinedChatChannel, SCBuffRemoved,
+SCTargetChanged, SCTimeOfDay, SCSnowingEverywhere, SCUnitPoints, SCAddHouse/House.WriteAddHouse,
+SCCharacterReturnDistricts, CSSelectCharacter, CSSpawnCharacter/CharacterVisualOptions, CSSetLpManageCharacter,
+CSRestrictCheck, CSRequestUIData, CSPremiumServiceMsg, CSNotifyInGame(Completed).
+
 ## Что требует дальнейшей работы
 
 1. **`SCUnitStatePacket`** — нужна декомпиляция 3.5-обработчика для точного порядка полей.

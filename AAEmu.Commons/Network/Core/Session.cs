@@ -1,6 +1,8 @@
-﻿using System.Net;
+﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Sockets;
 using NetCoreServer;
+using NLog;
 
 namespace AAEmu.Commons.Network.Core;
 
@@ -18,7 +20,13 @@ public interface ISession
 
 public class Session : TcpSession, ISession
 {
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly Dictionary<string, object> _attributes = [];
+    private long _connectedTimestamp;
+    private long _lastReceiveTimestamp;
+    private long _lastSendTimestamp;
+    private int _closeRequested;
+    private int _lastSocketError;
 
     public IBaseProtocolHandler ProtocolHandler { get; private set; }
     public IPEndPoint RemoteEndPoint { get; private set; }
@@ -35,6 +43,7 @@ public class Session : TcpSession, ISession
         RemoteEndPoint = (IPEndPoint)Socket.RemoteEndPoint;
         SessionId = (uint)RemoteEndPoint.GetHashCode();
         Ip = RemoteEndPoint.Address;
+        _connectedTimestamp = Stopwatch.GetTimestamp();
         ProtocolHandler?.OnConnect(this);
     }
 
@@ -49,20 +58,34 @@ public class Session : TcpSession, ISession
 
     protected override void OnDisconnected()
     {
+        var lastReceive = Interlocked.Read(ref _lastReceiveTimestamp);
+        var lastSend = Interlocked.Read(ref _lastSendTimestamp);
+        s_logger.Info(
+            "[NET-DIAG] TCP disconnected: channel={Channel}, session={SessionId}, transport={TransportId}, remote={Remote}, localCloseRequested={LocalCloseRequested}, lastReportedSocketError={SocketError}, connectedSeconds={ConnectedSeconds:F3}, receiveIdleSeconds={ReceiveIdleSeconds:F3}, sendIdleSeconds={SendIdleSeconds:F3}",
+            ProtocolHandler?.GetType().Name, SessionId, Id, RemoteEndPoint,
+            Volatile.Read(ref _closeRequested) != 0, (SocketError)Volatile.Read(ref _lastSocketError),
+            Stopwatch.GetElapsedTime(_connectedTimestamp).TotalSeconds,
+            lastReceive == 0 ? -1 : Stopwatch.GetElapsedTime(lastReceive).TotalSeconds,
+            lastSend == 0 ? -1 : Stopwatch.GetElapsedTime(lastSend).TotalSeconds);
         ProtocolHandler?.OnDisconnect(this);
     }
 
     protected override void OnReceived(byte[] buffer, long offset, long size)
     {
+        Interlocked.Exchange(ref _lastReceiveTimestamp, Stopwatch.GetTimestamp());
         ProtocolHandler?.OnReceive(this, buffer, (int)offset, (int)size);
     }
 
     protected override void OnSent(long sent, long pending)
     {
+        Interlocked.Exchange(ref _lastSendTimestamp, Stopwatch.GetTimestamp());
     }
 
     protected override void OnError(SocketError error)
     {
+        Interlocked.Exchange(ref _lastSocketError, (int)error);
+        s_logger.Warn("[NET-DIAG] TCP socket error: channel={Channel}, session={SessionId}, transport={TransportId}, remote={Remote}, error={SocketError}",
+            ProtocolHandler?.GetType().Name, SessionId, Id, RemoteEndPoint, error);
     }
 
     public virtual void SendMessage(PacketStream message)
@@ -96,6 +119,11 @@ public class Session : TcpSession, ISession
 
     public void Close()
     {
+        if (Interlocked.Exchange(ref _closeRequested, 1) == 0 && s_logger.IsInfoEnabled)
+        {
+            s_logger.Info("[NET-DIAG] Server requested TCP close: channel={Channel}, session={SessionId}, transport={TransportId}, remote={Remote}, caller={Caller}",
+                ProtocolHandler?.GetType().Name, SessionId, Id, RemoteEndPoint, new StackTrace(1, false).ToString());
+        }
         Disconnect();
     }
 

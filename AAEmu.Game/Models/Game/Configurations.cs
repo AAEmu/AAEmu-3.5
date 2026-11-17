@@ -96,6 +96,30 @@ public class WorldConfig
     public bool PreLoadTerrain { get; set; }
 
     /// <summary>
+    /// Прерывать ли кастование юнита, когда он переходит в поведение движения (разговор, следование, набор
+    /// команд, покой) — как у натива.
+    /// </summary>
+    public bool AiStopCasting { get; set; } = true;
+
+    /// <summary>
+    /// Статическая геометрия клиента (кисти, воксели, прокси) как источник высоты НПС и препятствий.
+    /// По умолчанию включено (2026-11-16): НПЦ стоят на настоящей поверхности (лестницы, мосты, интерьеры),
+    /// а не на высоте навмеша. Выключение возвращает прежнее поведение (высота из навмеша/карты высот).
+    /// </summary>
+    public bool StaticGeometryEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Сколько зон статической геометрии держать в памяти одновременно (LRU). Зона 129 — около 7 МБ мешей.
+    /// </summary>
+    public int StaticGeometryMaxZones { get; set; } = 16;
+
+    /// <summary>
+    /// Стены останавливают наземных НПС (порт <c>WalkerCollision</c>): шаг обрывается за радиус тела до стены и
+    /// скользит вдоль неё. По умолчанию включено; выключатель — <c>AAEMU_WALKER_COLLISION=0</c>.
+    /// </summary>
+    public bool WalkerCollisionEnabled { get; set; } = true;
+
+    /// <summary>
     /// Maximum number of instances that can be created (includes system instances)
     /// </summary>
     public uint MaxInstances { get; set; } = 32;

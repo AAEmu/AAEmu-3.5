@@ -28,6 +28,8 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
     private readonly Dictionary<uint, List<SlaveInitialItems>> _slaveInitialItems = []; // PackId and List<Slot/ItemData>
     private readonly Dictionary<uint, List<SlaveMountSkills>> _slaveMountSkills = [];
     private readonly Dictionary<uint, uint> _repairableSlaves = []; // SlaveId, RepairEffectId
+    private readonly Dictionary<uint, SlaveCollisionDamageDesc> _slaveCollisionDamages = [];
+    public float ShipMassReductionPerSecond { get; private set; }
 
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
@@ -48,6 +50,9 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
                             LocalizationManager.Instance.Get("slaves", "name", reader.GetUInt32("id"),
                                 reader.GetString("name")),
                         ModelId = reader.GetUInt32("model_id"),
+                        ObbSize = new System.Numerics.Vector3(reader.GetFloat("obb_size_x", 0f), reader.GetFloat("obb_size_y", 0f), reader.GetFloat("obb_size_z", 0f)),
+                        Capacity = reader.GetInt32("capacity", 0),
+                        AddedShipMassPerUnit = reader.GetFloat("added_ship_mass_per_unit", 0f),
                         Mountable = reader.GetBoolean("mountable"),
                         SpawnXOffset = reader.GetFloat("spawn_x_offset"),
                         SpawnYOffset = reader.GetFloat("spawn_y_offset"),
@@ -58,6 +63,7 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
                         SpawnValidAreaRance = reader.GetUInt32("spawn_valid_area_range", 0),
                         SlaveInitialItemPackId = reader.GetUInt32("slave_initial_item_pack_id", 0),
                         SlaveCustomizingId = reader.GetUInt32("slave_customizing_id", 0),
+                        SlaveCollisionDamageId = reader.GetUInt32("slave_collision_damage_id", 0),
                         Customizable = reader.GetBoolean("customizable", false),
                         PortalTime = reader.GetFloat("portal_time"),
                         Hp25DoodadCount = reader.GetInt32("hp25_doodad_count"),
@@ -66,6 +72,25 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
                     };
                     _slaveTemplates.Add(template.Id, template);
                 }
+            }
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT id, bottom_gain, front_gain, rear_gain, side_gain FROM slave_collision_damages";
+            command.Prepare();
+            using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+            while (reader.Read())
+            {
+                var desc = new SlaveCollisionDamageDesc
+                {
+                    Id = reader.GetUInt32("id"),
+                    BottomGain = reader.GetFloat("bottom_gain"),
+                    FrontGain = reader.GetFloat("front_gain"),
+                    RearGain = reader.GetFloat("rear_gain"),
+                    SideGain = reader.GetFloat("side_gain")
+                };
+                _slaveCollisionDamages.Add(desc.Id, desc);
             }
         }
 
@@ -351,6 +376,8 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
     {
         return _slaveTemplates.GetValueOrDefault(id);
     }
+
+    public SlaveCollisionDamageDesc GetCollisionDamageDesc(uint id) => _slaveCollisionDamages.GetValueOrDefault(id);
 
     /// <summary>
     /// Loads attachment points from slave_attach_points*.json files

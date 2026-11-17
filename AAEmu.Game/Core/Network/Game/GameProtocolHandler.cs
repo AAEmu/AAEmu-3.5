@@ -42,7 +42,7 @@ public class GameProtocolHandler : BaseProtocolHandler
     /// <param name="session"></param>
     public override void OnConnect(ISession session)
     {
-        Logger.Info($"Connect from {session.Ip} established, session id: {session.SessionId}");
+        Logger.Info($"[ENTRY-DIAG] Game connection from {session.Ip} established, session id: {session.SessionId}");
         try
         {
             var con = new GameConnection(session);
@@ -67,6 +67,12 @@ public class GameProtocolHandler : BaseProtocolHandler
             var con = GameConnectionTable.Instance.GetConnection(session.SessionId);
             if (con != null)
             {
+                var lastPing = con.LastPing;
+                Logger.Info(
+                    "[NET-DIAG] Game session ended: session={SessionId}, account={AccountId}, character={CharacterId}, state={State}, lastPingUtc={LastPingUtc:O}, pingAgeSeconds={PingAgeSeconds:F3}, bufferedBytes={BufferedBytes}",
+                    con.Id, con.AccountId, con.ActiveChar?.Id, con.State, lastPing,
+                    lastPing == default ? -1 : (DateTime.UtcNow - lastPing).TotalSeconds,
+                    con.LastPacket?.Count ?? 0);
                 if (con.ActiveChar != null)
                 {
                     // On crash, force people out of the chat channels so we don't get phantom or duplicates
@@ -88,7 +94,7 @@ public class GameProtocolHandler : BaseProtocolHandler
             Logger.Error(e);
         }
 
-        Logger.Info($"Client from {session.Ip} disconnected");
+        Logger.Info($"[ENTRY-DIAG] Game client from {session.Ip} disconnected");
     }
 
     /// <summary>
@@ -127,6 +133,17 @@ public class GameProtocolHandler : BaseProtocolHandler
     /// <param name="bytes"></param>
     public void OnReceive(GameConnection connection, byte[] buf, int offset, int bytes)
     {
+        var receiveNumber = connection.IncrementReceiveChunkCount();
+        var bufferedBytes = connection.LastPacket?.Count ?? 0;
+        ushort? packetType = null;
+        byte? packetLevel = null;
+        int? frameLength = null;
+        if (receiveNumber <= 5)
+        {
+            Logger.Debug("[ENTRY-DIAG] Game TCP receive #{0} from {1}: bytes={2}, bufferedBefore={3}, state={4}, accountKnown={5}",
+                receiveNumber, connection.Ip, bytes, bufferedBytes, connection.State, connection.AccountId != 0);
+        }
+
         try
         {
             var stream = new PacketStream();
@@ -155,6 +172,7 @@ public class GameProtocolHandler : BaseProtocolHandler
                 var packetLen = len + stream.Pos;
                 if (packetLen <= stream.Count)
                 {
+                    frameLength = packetLen;
                     stream.Rollback();
                     var stream2 = new PacketStream();
                     stream2.Replace(stream, 0, packetLen);
@@ -169,6 +187,7 @@ public class GameProtocolHandler : BaseProtocolHandler
                     stream2.ReadUInt16(); //len
                     stream2.ReadByte(); //unk
                     var level = stream2.ReadByte();
+                    packetLevel = level;
 
                     //byte crc = 0;
                     //byte counter = 0;
@@ -196,6 +215,14 @@ public class GameProtocolHandler : BaseProtocolHandler
                     }
 
                     var type = stream2.ReadUInt16();
+                    packetType = type;
+                    var packetNumber = connection.IncrementReceivedPacketCount();
+                    if (packetNumber <= 8)
+                    {
+                        Logger.Debug("[ENTRY-DIAG] Game packet #{0} from {1}: level={2}, opcode=0x{3:X3}, frameBytes={4}, state={5}, accountKnown={6}",
+                            packetNumber, connection.Ip, level, type, packetLen, connection.State, connection.AccountId != 0);
+                    }
+
                     _packets[level].TryGetValue(type, out var classType);
                     if (classType == null)
                     {
@@ -220,7 +247,9 @@ public class GameProtocolHandler : BaseProtocolHandler
         catch (Exception e)
         {
             connection?.Shutdown();
-            Logger.Error(e);
+            Logger.Error(e,
+                "[ENTRY-DIAG] Game packet processing failed from {IP}: receive={ReceiveNumber}, level={Level}, opcode=0x{Opcode:X3}, frameBytes={FrameBytes}, state={State}",
+                connection?.Ip, receiveNumber, packetLevel, packetType, frameLength, connection?.State);
         }
     }
 

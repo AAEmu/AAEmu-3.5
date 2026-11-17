@@ -10,7 +10,7 @@ public class SCSkillStoppedPacket(uint unitObjId, uint skillId) : GamePacket(SCO
     public override PacketStream Write(PacketStream stream)
     {
         stream.WriteBc(unitObjId);
-        stream.Write((byte)1); // skillType block present
+        // CryNetwork's skillType Block() adds no presence byte.
         stream.Write(skillId);
         return stream;
     }

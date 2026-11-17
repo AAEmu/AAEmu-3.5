@@ -117,7 +117,29 @@ public abstract class NpcAi
         Logger.Trace($"Npc {Owner.TemplateId}:{Owner.ObjId} leaving behavior {_currentBehavior?.GetType().Name ?? "none"}, Entering behavior {behavior?.GetType().Name ?? "none"}");
         _currentBehavior?.Exit();
         _currentBehavior = behavior;
+        StopCastingOnMovementBehavior(behavior);
         _currentBehavior?.Enter();
+    }
+
+    /// <summary>
+    /// Натив прерывает кастование юнита, когда тот переходит в поведение движения (разговор, следование за
+    /// юнитом или путём, набор команд, покой): каст идёт в сторону, а не в сторону цели.
+    /// </summary>
+    /// <remarks>
+    /// Порог из правил зонного хоста (<c>AAEMU_ZONE_AI_STOP_CASTING=0</c> отключает). Боевые поведения и
+    /// «умирание» кастование не прерывают: там оно и нужно.
+    /// </remarks>
+    private void StopCastingOnMovementBehavior(Behavior behavior)
+    {
+        if (!AppConfiguration.Instance.World.AiStopCasting)
+            return;
+        if (behavior is not (TalkBehavior or FollowUnitBehavior or FollowPathBehavior or RunCommandSetBehavior or IdleBehavior))
+            return;
+        if (Owner.ActiveSkillController == null && Owner.SkillTask == null)
+            return;
+        // InterruptSkills() ends the cast and tells the client (SCCastingStopped + SCSkillEnded), so the cast bar
+        // of the NPC drops with it.
+        Owner.InterruptSkills();
     }
 
     protected void SetCurrentBehavior(BehaviorKind kind)

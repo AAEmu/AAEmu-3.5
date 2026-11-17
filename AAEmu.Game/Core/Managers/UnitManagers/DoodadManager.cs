@@ -106,6 +106,8 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
         using (var connection2 = SQLite.CreateConnection("Data", "compact.server.table.sqlite3"))
         using (var connection = SQLite.CreateConnection())
         {
+            AAEmu.Game.Physics.Static.ShipDoodadCollision.Instance.SetCatalog(
+                AAEmu.Game.Physics.Static.ShipDoodadModelCatalog.Load(connection));
             #region doodad_funcs
 
             Logger.Info("Loading doodad functions ...");

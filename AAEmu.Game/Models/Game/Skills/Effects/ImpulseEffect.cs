@@ -7,6 +7,7 @@ using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Physics.Hulls;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects;
 
@@ -42,6 +43,17 @@ public class ImpulseEffect : EffectTemplate
 
         if (target is Npc npcTarget && npcTarget.Template.NonPushableByActor)
             return;
+
+        if (target is Slave { Template: { } template } ship && template.IsABoat())
+        {
+            var sourcePosition = caster == target ? (Vector3?)null : caster.Transform.World.Position;
+            ship.ParentWorld?.Physics?.ApplyImpulse(ship, new HullImpulse(
+                new Vector3(VelImpulseX, VelImpulseY, VelImpulseZ),
+                new Vector3(AngvelImpulseX, AngvelImpulseY, AngvelImpulseZ),
+                new Vector3(ImpulseX, ImpulseY, ImpulseZ),
+                new Vector3(AngImpulseX, AngImpulseY, AngImpulseZ)), sourcePosition);
+            return;
+        }
 
         // Impulse vector is in caster→target local space.
         // Use positional (Impulse) + velocity (VelImpulse) as combined displacement.
@@ -80,7 +92,7 @@ public class ImpulseEffect : EffectTemplate
             moveType.RotationZ = npc.Transform.Local.ToRollPitchYawSBytesMovement().Item3;
             moveType.Flags = MoveTypeFlags.Stopping | (npc.IsInBattle ? MoveTypeFlags.InCombat : 0);
             moveType.DeltaMovement = new sbyte[3];
-            moveType.Stance = npc.CurrentGameStance;
+            moveType.Stance = npc.MovementStanceAt(new Vector3(npc.Transform.Local.Position.X, npc.Transform.Local.Position.Y, endPos.Z));
             moveType.Alertness = npc.CurrentAlertness;
             moveType.Time = (uint)(DateTime.UtcNow - DateTime.UtcNow.Date).TotalMilliseconds;
             npc.BroadcastPacket(new SCOneUnitMovementPacket(npc.ObjId, moveType), false);

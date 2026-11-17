@@ -16,7 +16,7 @@ public class StreamProtocolHandler : BaseProtocolHandler
 
     public override void OnConnect(ISession session)
     {
-        Logger.Info("Connect from {0} established, session id: {1}", session.Ip.ToString(), session.SessionId.ToString());
+        Logger.Info("[ENTRY-DIAG] Stream connection from {0} established, session id: {1}", session.Ip.ToString(), session.SessionId.ToString());
         try
         {
             var con = new StreamConnection(session);
@@ -44,7 +44,7 @@ public class StreamProtocolHandler : BaseProtocolHandler
             Logger.Error(e);
         }
 
-        Logger.Info("Client from {0} disconnected", session.Ip.ToString());
+        Logger.Info("[ENTRY-DIAG] Stream client from {0} disconnected", session.Ip.ToString());
     }
 
     public override void OnReceive(ISession session, byte[] buf, int offset, int bytes)
@@ -65,6 +65,17 @@ public class StreamProtocolHandler : BaseProtocolHandler
 
     public void OnReceive(StreamConnection connection, byte[] buf, int offset, int bytes)
     {
+        var receiveNumber = connection.IncrementReceiveChunkCount();
+        var bufferedBytes = connection.LastPacket?.Count ?? 0;
+        int? packetNumber = null;
+        uint? packetType = null;
+        int? frameLength = null;
+        if (receiveNumber <= 5)
+        {
+            Logger.Debug("[ENTRY-DIAG] Stream TCP receive #{0} from {1}: bytes={2}, bufferedBefore={3}, gameAccountKnown={4}",
+                receiveNumber, connection.Ip, bytes, bufferedBytes, connection.GameConnection is { AccountId: not 0 });
+        }
+
         try
         {
             var stream = new PacketStream();
@@ -94,6 +105,7 @@ public class StreamProtocolHandler : BaseProtocolHandler
                 var packetLen = len + stream.Pos;
                 if (packetLen <= stream.Count)
                 {
+                    frameLength = packetLen;
                     stream.Rollback();
                     var stream2 = new PacketStream();
                     stream2.Replace(stream, 0, packetLen);
@@ -108,6 +120,15 @@ public class StreamProtocolHandler : BaseProtocolHandler
 
                     stream2.ReadUInt16(); //len
                     var type = stream2.ReadUInt16();
+                    packetType = type;
+                    packetNumber = connection.IncrementReceivedPacketCount();
+                    if (packetNumber.Value <= 3)
+                    {
+                        Logger.Debug("[ENTRY-DIAG] Stream packet #{0} from {1}: opcode=0x{2:X3}, frameBytes={3}, gameAccountKnown={4}",
+                            packetNumber.Value, connection.Ip, type, packetLen,
+                            connection.GameConnection is { AccountId: not 0 });
+                    }
+
                     _packets.TryGetValue(type, out var classType);
                     if (classType == null)
                     {
@@ -131,7 +152,9 @@ public class StreamProtocolHandler : BaseProtocolHandler
         catch (Exception e)
         {
             connection?.Shutdown();
-            Logger.Error(e);
+            Logger.Error(e,
+                "[ENTRY-DIAG] Stream packet processing failed from {IP}: receive={ReceiveNumber}, packet={PacketNumber}, opcode=0x{Opcode:X3}, frameBytes={FrameBytes}",
+                connection?.Ip, receiveNumber, packetNumber, packetType, frameLength);
         }
     }
 

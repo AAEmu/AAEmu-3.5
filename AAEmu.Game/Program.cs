@@ -294,6 +294,15 @@ public static class Program
                 services.AddSingleton<ZoneManager>();
                 services.AddSingleton<IZoneManager>(sp => sp.GetRequiredService<ZoneManager>());
 
+                // -- Static geometry (plan P4): per-world brush index and the NPC ground rules built on it --
+                services.AddSingleton<AAEmu.Geometry.Abstractions.IGeometryFileSource>(
+                    _ => new AAEmu.Game.Physics.Static.ClientFileCollisionAssetSource());
+                services.AddSingleton<AAEmu.Game.Physics.Static.StaticGeometryManager>(sp =>
+                    new AAEmu.Game.Physics.Static.StaticGeometryManager(
+                        sp.GetRequiredService<AAEmu.Geometry.Abstractions.IGeometryFileSource>(),
+                        Math.Max(1, AppConfiguration.Instance.World.StaticGeometryMaxZones)));
+                services.AddSingleton<AAEmu.Game.Physics.Static.NpcGroundResolver>();
+
                 // -- Singleton<T>-based managers (AAEmu.Game.Core.Managers.Stream) --
                 services.AddSingleton<UccManager>();
                 services.AddSingleton<IUccManager>(sp => sp.GetRequiredService<UccManager>());
