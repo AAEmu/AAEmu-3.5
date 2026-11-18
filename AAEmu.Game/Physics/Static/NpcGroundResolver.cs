@@ -1,4 +1,5 @@
 ﻿#nullable enable
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Geometry;
 
@@ -16,9 +17,7 @@ namespace AAEmu.Game.Physics.Static;
 /// 4. навмеш <c>.bai</c> — где карты высот нет или она далеко от НПС, а слой навигации рядом;
 /// 5. текущая высота НПС (ничего не нашли).
 /// </para>
-/// Отличие от их реализации: навмеш у нас — ближайший узел <c>.bai</c> (<c>AiGeoDataManager</c>), а не треугольник,
-/// поэтому он остаётся последним источником и запрашивается лениво (поиск узла — линейный скан);
-/// «структурные полы» (waypoints залов) не переносятся.
+/// Навмеш: треугольная проекция (<c>NavMeshGround</c>, см. <c>AAEMU_TRIANGLE_NAV</c>) с запасным путём по узлам .bai.
 /// </summary>
 public sealed class NpcGroundResolver(StaticGeometryManager geometry)
 {
@@ -68,10 +67,23 @@ public sealed class NpcGroundResolver(StaticGeometryManager geometry)
     public float Ground(WorldTemplate template, uint zoneKey, float x, float y, float reference, Func<float?>? navHeight = null)
     {
         zoneKey = ZoneAt(template, zoneKey, x, y);
-        var floor = BrushOrTerrain(template, zoneKey, x, y, reference, navHeight, out _);
+        var floor = BrushOrTerrain(template, zoneKey, x, y, reference, navHeight, out var onBrush);
         // Плывущий НПЦ сохраняет свою высоту (натив так и делает) — земля под ним не подтягивает.
         if (Afloat(template, zoneKey, x, y, reference))
             return reference;
+        if (StructureFloorRules.Enabled && !onBrush && template.GeoData is { } geo)
+        {
+            // Зал под холмом у края: рельеф выше юнита, structure waypoint ниже brush/terrain (Zones zone 246).
+            if (Geometry.StaticCollision.UndergroundStructureFloorsEnabled
+                && floor > reference + StepUpMetres
+                && TerrainHeight(template, x, y, out var overTerrain) && overTerrain > reference + StepUpMetres
+                && geo.TryStructureFloor(x, y, reference, StructureFloorRules.FlatMetres, StructureFloorRules.RiseMetres, out var hall)
+                && hall < floor - StepUpMetres)
+                return hall;
+            if (geo.TryStructureFloor(x, y, reference, StructureFloorRules.FlatMetres, StructureFloorRules.RiseMetres, out var structure)
+                && structure > floor + StructureFloorRules.MinLiftMetres)
+                return structure;
+        }
         return floor;
     }
 
@@ -81,11 +93,13 @@ public sealed class NpcGroundResolver(StaticGeometryManager geometry)
         onBrush = false;
         var onTerrain = TerrainHeight(template, x, y, out var terrain);
         // Юнит намного ниже карты высот (пещера, зал под холмом): пол под ним, но никогда рельеф над ним.
-        if (onTerrain && terrain - reference > NearBandMetres)
+        // Выключатель — их `MovementRules.UndergroundFloorsEnabled`.
+        if (onTerrain && Geometry.StaticCollision.UndergroundFloorsEnabled && terrain - reference > NearBandMetres)
             return UndergroundFloor(template, zoneKey, x, y, reference, navHeight, out onBrush);
 
-        // Без карты высот полосы под кистью нет: тогда нижняя граница — полоса вокруг юнита.
-        var below = onTerrain ? terrain : reference - NearBandMetres;
+        // Без карты высот полосы под кистью нет: тогда нижняя граница — полоса вокруг юнита. С картой луч
+        // останавливается на высоте покоя рельефа (их `terrain - GroundRestOffsetMetres`): пол ниже неё — не пол.
+        var below = onTerrain ? terrain - GroundRestOffsetMetres : reference - NearBandMetres;
         if (geometry.TryFloor(template, zoneKey, x, y, reference + StepUpMetres, below, out var floor))
         {
             floor += BrushRestOffsetMetres;
@@ -96,15 +110,17 @@ public sealed class NpcGroundResolver(StaticGeometryManager geometry)
             }
         }
 
+        var meshZ = navHeight?.Invoke();
+        // Порядок как у Zones GroundResolver.BrushOrTerrain: рельеф, если юнит на нём или навмеш далеко от ног.
         if (onTerrain)
         {
-            if (MathF.Abs(terrain - reference) > NearBandMetres && navHeight is { } nearbyProvider &&
-                nearbyProvider() is { } nearby && IsUsableHeight(nearby) && MathF.Abs(nearby - reference) <= NearBandMetres)
-                return nearby;
-            return terrain;
+            if (meshZ is not { } navZ || !IsUsableHeight(navZ)
+                || MathF.Abs(terrain - reference) <= NearBandMetres
+                || MathF.Abs(navZ - reference) > NearBandMetres)
+                return terrain;
         }
-        // Навмеш спрашивается последним и лениво: поиск узла в .bai — линейный скан по узлам ячейки.
-        if (navHeight is { } provider && provider() is { } mesh && IsUsableHeight(mesh))
+
+        if (meshZ is { } mesh && IsUsableHeight(mesh))
             return mesh;
         return reference;
     }
@@ -118,8 +134,17 @@ public sealed class NpcGroundResolver(StaticGeometryManager geometry)
         onBrush = geometry.TryFloor(template, zoneKey, x, y, reference + StepUpMetres, reference - NearBandMetres, out var floor);
         if (onBrush && IsUsableHeight(floor))
             return floor + BrushRestOffsetMetres;
+        // Пол зала по structure waypoint-ам — только при включённом подземном структурном поле (их гейт).
+        if (Geometry.StaticCollision.UndergroundStructureFloorsEnabled && StructureFloorRules.Enabled && template.GeoData is { } geo
+            && geo.TryStructureFloor(x, y, reference, StructureFloorRules.FlatMetres, StructureFloorRules.RiseMetres, out var structure))
+            return structure;
+        // Слой навмеша берётся только из полосы «рядом»: далёкий слой — не пол под юнитом (их правило), иначе
+        // подземный НПЦ телепортируется на чужой ярус.
         if (navHeight is { } provider && provider() is { } mesh && IsUsableHeight(mesh) && MathF.Abs(mesh - reference) <= NearBandMetres)
             return mesh;
+        if (template.GeoData is { } geodata && geodata.TryGroundNear(x, y, reference, out var near)
+            && IsUsableHeight(near) && MathF.Abs(near - reference) <= NearBandMetres)
+            return near;
         return reference;
     }
 

@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.v2.Params.Almighty;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units;
@@ -11,6 +12,7 @@ public class FollowPathBehavior : BaseCombatBehavior
 {
     public AlmightyNpcAiParams _aiParams;
     private bool _enter;
+    private DateTime? _patrolStartAfterUtc;
 
     public override void Enter()
     {
@@ -28,8 +30,19 @@ public class FollowPathBehavior : BaseCombatBehavior
         Ai.Param = Ai.Owner.Template.AiParams;
 
         Ai.Owner.IsInPatrol = true;
-        Ai.Owner.Simulation.MoveToPathEnabled = true;
-        Ai.Owner.Simulation.GoToPath(Ai.Owner, true);
+        // Patrol legs: <see cref="AiPathHandler"/> only; <see cref="Simulation.GoToPath"/> must stay off (Zones follow_path).
+        if (Ai.Owner.Simulation != null)
+            Ai.Owner.Simulation.MoveToPathEnabled = false;
+        if (Ai.PathHandler.AiPathPoints.Count > 0 && Ai.PathHandler.AiPathPointsRemaining.Count == 0)
+        {
+            Ai.PathHandler.AiPathLooping = true;
+            Ai.PathHandler.TargetPosition = Vector3.Zero;
+        }
+
+        Ai.Owner.ResetWalkerProgress();
+        _patrolStartAfterUtc = PathWalkerRules.WalksGroupPlacementPath(Ai.Owner)
+            ? DateTime.UtcNow.AddMilliseconds(PathWalkerRules.StartDelayMs)
+            : null;
 
         _enter = true;
     }
@@ -43,6 +56,9 @@ public class FollowPathBehavior : BaseCombatBehavior
         //   return;
 
         //_aiParams = aiParams;
+
+        if (_patrolStartAfterUtc is { } notBefore && DateTime.UtcNow < notBefore)
+            return;
 
         if (!UpdateTarget())
             Ai.Owner.SetTarget(null);
@@ -65,10 +81,14 @@ public class FollowPathBehavior : BaseCombatBehavior
 
         if (!Ai.PathHandler.RunCurrentPath(delta))
         {
-            Ai.GoToIdle();
+            if (Ai.PathHandler.HasPathMovementData())
+                Ai.GoToDefaultBehavior();
+            else
+                Ai.GoToIdle();
         }
 
-        if (Ai.PathHandler.TargetPosition == Vector3.Zero && Ai.PathHandler.AiPathPoints.Count <= 0 && Ai.PathHandler.AiPathPointsRemaining.Count <= 0)
+        if (Ai.PathHandler.TargetPosition == Vector3.Zero && Ai.PathHandler.AiPathPoints.Count <= 0
+            && Ai.PathHandler.AiPathPointsRemaining.Count <= 0)
         {
             Ai.GoToIdle();
         }
@@ -126,6 +146,9 @@ public class FollowPathBehavior : BaseCombatBehavior
     public override void Exit()
     {
         _enter = false;
+        _patrolStartAfterUtc = null;
+        Ai.Owner.IsInPatrol = false;
+        Ai.Owner.ResetWalkerProgress();
     }
 
     /* Unused Code (May be removed later)

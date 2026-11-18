@@ -1,5 +1,7 @@
 ﻿using System.Numerics;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.AI.v2.Framework;
 using AAEmu.Game.Models.Game.AI.v2.Params.Flytrap;
 using AAEmu.Game.Models.Game.Models;
@@ -85,51 +87,69 @@ public class FlytrapAttackBehavior : Behavior
         var moveDistanceZ = gimmick.Template.Gravity * (delta.Milliseconds / 1000.0f);
         var distanceToTarget = MathUtil.CalculateDistance(gimmickPosition, gimmick.Target, true);
 
-        if (AppConfiguration.Instance.World.GeoDataMode)
+        if (PathPlanningRules.UseNavPathPlanner)
         {
-            // we will find the path to the abuser only if the target coordinates have changed
-            if (Ai.PathNode?.FoundPath?.Count == 0 && target != null && Ai.PathNode?.EndPointPos != null)
+            var chaseGoal = target.Transform.World.Position;
+            if (Ai.PathNode != null && target is Unit unitTarget)
             {
-                //if (!Ai.PathNode.pos2.Equals(new Point(target.Transform.World.Position.X, target.Transform.World.Position.Y, target.Transform.World.Position.Z)))
-                if (Math.Abs((Ai.PathNode.EndPointPos - target.Transform.World.Position).Length()) <= Ai.Owner.ModelSize)
+                if (CombatChaseRules.ShouldReplanPath(Ai.CombatApproachMoving, Ai.LastChasePlanUtc, Ai.LastChasePlanTarget, chaseGoal))
                 {
-                    // let's find the path to the abuser
-                    Ai.Owner.FindPath((Unit)target);
-                    // remember the new target coordinates
-                    Ai.PathNode.EndPointPos = new Vector3(target.Transform.World.Position.X, target.Transform.World.Position.Y, target.Transform.World.Position.Z);
-                    gimmick.Target = target.Transform.World.Position;
+                    Ai.Owner.FindPath(unitTarget);
+                    Ai.LastChasePlanUtc = DateTime.UtcNow;
+                    Ai.LastChasePlanTarget = chaseGoal;
+                    gimmick.Target = chaseGoal;
                 }
             }
-            // moving along the route points
-            if (Ai.PathNode?.FoundPath?.Count > 0 && !Ai.PathNode.FoundPath.Peek().Equals(Vector3.Zero))
+
+            if (Ai.Owner.IsWalkerStuck())
             {
-                // take the point to which we are moving
-                var routePoint = new Vector3(Ai.PathNode.Position.X, Ai.PathNode.Position.Y, Ai.PathNode.Position.Z);
-                // recalculate the distance, since the path is divided into points
-                var distanceToPoint = MathUtil.CalculateDistance(gimmickPosition, routePoint, true);
+                gimmick.StopMovement();
+                Ai.CombatApproachMoving = false;
+                Ai.Owner.ResetWalkerProgress();
+                if (Ai.PathNode is { FoundPath.Count: > 0 })
+                    Ai.PathNode.FoundPath.Dequeue();
+            }
+
+            if (Ai.PathNode is { FoundPath.Count: > 0 } && !Ai.PathNode.FoundPath.Peek().Equals(Vector3.Zero))
+            {
+                var nextPathPoint = AiUtils.SnapPathPoint(Ai, Ai.PathNode.FoundPath.Peek());
+                var distToWaypoint = MathUtil.CalculateDistance(gimmickPosition, nextPathPoint, true);
+                if (distToWaypoint < CombatChaseRules.ChaseWaypointArrivalMetres)
+                {
+                    Ai.PathNode.FoundPath.Dequeue();
+                    if (Ai.PathNode.FoundPath.TryPeek(out var peek) && !peek.Equals(Vector3.Zero))
+                        nextPathPoint = AiUtils.SnapPathPoint(Ai, peek);
+                }
+
+                var distanceToPoint = MathUtil.CalculateDistance(gimmickPosition, nextPathPoint, true);
                 if (distanceToPoint > range)
                 {
-                    gimmick.MoveTowards(routePoint, moveDistance, moveDistanceZ);
+                    gimmick.MoveTowards(nextPathPoint, moveDistance, moveDistanceZ);
+                    Ai.CombatApproachMoving = true;
+                }
+                else if (Ai.PathNode.FoundPath.Count <= 1)
+                {
+                    Ai.PathNode.FoundPath.Dequeue();
+                    gimmick.StopMovement();
+                    Ai.CombatApproachMoving = false;
                 }
                 else
                 {
-                    // take the next point to which we are moving
-                    if (Ai.PathNode.FoundPath.Count <= 0)
-                    {
-                        Ai.Owner.StopMovement();
-                        Ai.PathNode.FoundPath = [];
-                        return;
-                    }
-
-                    Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
+                    Ai.PathNode.CurrentTargetPos = AiUtils.SnapPathPoint(Ai, Ai.PathNode.FoundPath.Dequeue());
                 }
             }
-            else // we move straight to the final point
+            else
             {
                 if (distanceToTarget > range)
+                {
                     gimmick.MoveTowards(finalPoint, moveDistance, moveDistanceZ);
+                    Ai.CombatApproachMoving = true;
+                }
                 else
+                {
                     gimmick.StopMovement();
+                    Ai.CombatApproachMoving = false;
+                }
             }
         }
         else // we move straight to the final point
@@ -153,7 +173,7 @@ public class FlytrapAttackBehavior : Behavior
             if (Ai.AlreadyTargeted)
                 return true;
 
-            if (AppConfiguration.Instance.World.GeoDataMode)
+            if (PathPlanningRules.UseNavPathPlanner)
             {
                 // включена геодата и не основной мир
                 // geodata enabled and not the main world

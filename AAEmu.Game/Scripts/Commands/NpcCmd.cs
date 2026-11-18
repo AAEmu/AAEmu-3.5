@@ -18,6 +18,7 @@ public class NpcCmd : SubCommandBase, ICommand, ICommandV2
         CallPrefix = $"{CommandManager.CommandPrefix}{CommandNames[0]}";
 
         Register(new NpcInformationSubCommand(), "info");
+        Register(new NpcGroundSubCommand(), "ground");
         Register(new NpcPositionSubCommand(), "position", "pos");
         Register(new NpcSaveSubCommand(), "save");
         Register(new NpcSpawnSubCommand(), "spawn");

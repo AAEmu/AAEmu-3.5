@@ -1,14 +1,19 @@
 using System.Numerics;
 
+using AAEmu.Commons.IO;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
+using AAEmu.Game.Models.Game.AI.v2.Framework;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.Game.World.Transform;
+using AAEmu.Game.Physics.Static;
 using AAEmu.Game.Models.Tasks.Npcs;
 using AAEmu.Game.Models.Tasks.UnitMove;
 using AAEmu.Game.Utils;
@@ -51,20 +56,22 @@ public class Simulation : Patrol
     public bool MoveToPathEnabled { get; set; }   // флаг движения по пути
     public bool MoveToForward { get; set; }       // направление движения да - вперед, нет - назад
     public bool RunningMode { get; set; }         // режим движения да - бежать, нет - идти
+    /// <summary>Designer <c>Rec._Speed</c> when route synced from <see cref="SyncFromAiPath"/>.</summary>
+    public float PathSpeedMultiplier { get; set; } = 1f;
     public int MoveStepIndex { get; set; }        // текущ. чекпоинт (куда бежим сейчас)
     private Vector3 OldPos { get; set; } = Vector3.Zero;
     //*******************************************************
-    private const string RecordFilesPath = @"./Data/Path/"; // путь где хранятся наши файлы
-    private const string RecordFileExt = @".path"; // расширение по умолчанию
-    private const string MoveFilesPath = @"./Data/Path/"; // путь где хранятся наши файлы
-    private const string MoveFileExt = @".path"; // расширение по умолчанию
+    private static string RecordFilesPath => System.IO.Path.Combine(FileManager.AppPath, "Data", "Path");
+    private const string RecordFileExt = ".path";
+    private static string MoveFilesPath => System.IO.Path.Combine(FileManager.AppPath, "Data", "Path");
+    private const string MoveFileExt = ".path";
     public string MoveFileName { get; set; } = string.Empty; // имя файла для маршрута
     public string MoveFileName2 { get; set; } = string.Empty; // имя файла для маршрута
 
     //Not used
     //private float MovingDistance = 0.25f; //0.3f;
 
-    private readonly float RangeToCheckPoint = 0.5f; // дистанция до чекпоинта при которой считается , что мы достигли оного
+    private static int PathArrivalMetres => (int)MathF.Ceiling(PathFollowRules.FollowPathEndAccuracy);
     private readonly int MoveTrigerDelay = 1000;     // срабатывание таймера на движение  0,8 сек
 
     private uint SkillId { get; set; }
@@ -296,10 +303,14 @@ public class Simulation : Patrol
         //Character.SendMessage($"[MoveTo] found nearest checkpoint #{i} run there ...");
         MoveToPathEnabled = true;
         MoveStepIndex = i;
+        npc.IsInPatrol = true;
+        npc.ResetWalkerProgress();
         //Logger.Warn($"checkpoint #{i}");
         //Character.SendMessage($"[MoveTo] checkpoint #{i}");
         var s = MovePath[MoveStepIndex];
         TargetPosition = new Vector3(ExtractValue(s, 1), ExtractValue(s, 2), ExtractValue(s, 3));
+        if (npc.Ai != null)
+            TargetPosition = AiUtils.SnapPathPoint(npc.Ai, TargetPosition);
         if (Math.Abs(OldPos.X - TargetPosition.X) > tolerance && Math.Abs(OldPos.Y - TargetPosition.Y) > tolerance && Math.Abs(OldPos.Z - TargetPosition.Z) > tolerance)
         {
             OldPos = new Vector3(TargetPosition.X, TargetPosition.Y, TargetPosition.Z);
@@ -340,10 +351,14 @@ public class Simulation : Patrol
         //Character.SendMessage($"[MoveTo] found nearest checkpoint #{i} run there ...");
         MoveToPathEnabled = true;
         MoveStepIndex = i;
+        npc.IsInPatrol = true;
+        npc.ResetWalkerProgress();
         //Logger.Warn($"checkpoint #{i}");
         //Character.SendMessage($"[MoveTo] checkpoint #{i}");
         var s = MovePath[MoveStepIndex];
         TargetPosition = new Vector3(ExtractValue(s, 1), ExtractValue(s, 2), ExtractValue(s, 3));
+        if (npc.Ai != null)
+            TargetPosition = AiUtils.SnapPathPoint(npc.Ai, TargetPosition);
         if (Math.Abs(OldPos.X - TargetPosition.X) > tolerance && Math.Abs(OldPos.Y - TargetPosition.Y) > tolerance && Math.Abs(OldPos.Z - TargetPosition.Z) > tolerance)
         {
             OldPos = new Vector3(TargetPosition.X, TargetPosition.Y, TargetPosition.Z);
@@ -353,9 +368,18 @@ public class Simulation : Patrol
 
     public void MoveTo(Simulation sim, Npc npc, Vector3 target)
     {
+        if (npc.Ai != null)
+            target = AiUtils.SnapPathPoint(npc.Ai, target);
+
         var move = false;
-        var distance = npc.BaseMoveSpeed * (100 / 1000.0f);
-        distance *= npc.MoveSpeedMul; // Apply speed modifier
+        float distance;
+        if (npc.Ai != null)
+            distance = PathFollowRules.LegMetresPerSecond(npc.Ai, PathSpeedMultiplier) * (100 / 1000.0f);
+        else
+        {
+            distance = npc.BaseMoveSpeed * PathSpeedMultiplier * (100 / 1000.0f);
+            distance *= npc.MoveSpeedMul;
+        }
         if (distance < 0.01f)
         {
             // take the next point to move to it
@@ -364,7 +388,7 @@ public class Simulation : Patrol
         }
 
         var dist = MathUtil.CalculateDistance(npc.Transform.World.Position, target, true);
-        if (dist > RangeToCheckPoint)
+        if (dist > 0.5f)
         {
             move = true;
         }
@@ -373,6 +397,14 @@ public class Simulation : Patrol
             // moving to the point #
             if (npc.ActiveSkillController != null && npc.ActiveSkillController.State != SCState.Ended)
             {
+                return;
+            }
+
+            if (npc.IsWalkerStuck())
+            {
+                npc.StopMovement();
+                npc.ResetWalkerProgress();
+                OnMove(npc);
                 return;
             }
 
@@ -388,14 +420,18 @@ public class Simulation : Patrol
 
             var travelDist = Math.Min(targetDist, distance);
 
-            // TODO: Implement proper use for Transform.World.AddDistanceToFront)
-            var (newX, newY, newZ) = PositionAndRotation.AddDistanceToFront(travelDist, targetDist, npc.Transform.Local.Position, target);
+            var next = npc.StepAlongGround(npc.Transform.Local.Position, target, travelDist, targetDist, out var blockedByWall);
+            if (blockedByWall && MathF.Abs(next.X - oldPosition.X) + MathF.Abs(next.Y - oldPosition.Y) < 1e-3f)
+                return;
+            npc.Transform.Local.SetPosition(next.X, next.Y, next.Z);
+            npc.RecordWalkerStep(blockedByWall,
+                MathF.Sqrt(MathF.Pow(next.X - oldPosition.X, 2) + MathF.Pow(next.Y - oldPosition.Y, 2)),
+                travelDist);
 
-            newZ = WorldManager.Instance.GetReferenceHeight(npc.Ai, newX, newY, newZ, npc.Transform.ZoneId);
-            npc.Transform.Local.SetPosition(newX, newY, newZ);
-
+            var horizontalStep = MathF.Sqrt(MathF.Pow(next.X - oldPosition.X, 2) + MathF.Pow(next.Y - oldPosition.Y, 2));
             var angle = MathUtil.CalculateAngleFrom(npc.Transform.Local.Position, target);
-            var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());
+            var animSpeed = Npc.MovementAnimSpeedQuant(horizontalStep, blockedByWall);
+            var (velX, velY) = MathUtil.AddDistanceToFront(animSpeed, 0, 0, (float)angle.DegToRad());
             npc.Transform.Local.SetRotationDegree(0f, 0f, (float)angle - 90);
             var (rx, ry, rz) = npc.Transform.Local.ToRollPitchYawSBytesMovement();
 
@@ -412,7 +448,7 @@ public class Simulation : Patrol
 
             moveType.DeltaMovement = new sbyte[3];
             moveType.DeltaMovement[0] = 0;
-            moveType.DeltaMovement[1] = (sbyte)(RunningMode ? 127 : 63);
+            moveType.DeltaMovement[1] = animSpeed > 0f ? (sbyte)(RunningMode ? 127 : 63) : (sbyte)0;
             moveType.DeltaMovement[2] = 0;
             moveType.Stance = npc.MovementStanceAt(npc.Transform.Local.Position); // COMBAT = 0x0, IDLE = 0x1, SWIM = 0x9
             moveType.Alertness = npc.CurrentAlertness; // IDLE = 0x0, ALERT = 0x1, COMBAT = 0x2
@@ -500,7 +536,7 @@ public class Simulation : Patrol
         }
         TargetPosition = Path[MoveStepIndex];
 
-        if (!PosInRange(npc, TargetPosition, 3))
+        if (!PosInRange(npc, TargetPosition, PathArrivalMetres))
         {
             RepeatMove(this, npc, TargetPosition);
             return;
@@ -677,6 +713,27 @@ public class Simulation : Patrol
         }
     }
 
+    /// <summary>Quest/script moves: register snapped designer or legacy route for <see cref="GoToPath2"/>.</summary>
+    public void RegisterAiRoute(string pathKey, IEnumerable<Vector3> worldPoints)
+    {
+        if (string.IsNullOrWhiteSpace(pathKey))
+            pathKey = "default";
+        var route = worldPoints.ToList();
+        Paths[pathKey] = route;
+        MovePath = route.ConvertAll(p => $"|{p.X}|{p.Y}|{p.Z}|");
+        Path = route;
+        MoveFileName = pathKey;
+    }
+
+    public void SyncFromAiPath(NpcAi ai, string pathKey)
+    {
+        if (ai.PathHandler.AiPathPoints.Count <= 0)
+            return;
+        PathSpeedMultiplier = ai.PathHandler.AiPathSpeed > 0f ? ai.PathHandler.AiPathSpeed : 1f;
+        var route = ai.PathHandler.AiPathPoints.Select(p => AiUtils.SnapPathPoint(ai, p.Position));
+        RegisterAiRoute(pathKey, route);
+    }
+
     private void AddPaths()
     {
         var route = new List<Vector3>();
@@ -684,6 +741,12 @@ public class Simulation : Patrol
         {
             var xyz = new Vector3(ExtractValue(s, 1), ExtractValue(s, 2), ExtractValue(s, 3));
             route.Add(xyz);
+        }
+
+        if (Npc?.Ai is { } ai)
+        {
+            for (var i = 0; i < route.Count; i++)
+                route[i] = AiUtils.SnapPathPoint(ai, route[i]);
         }
 
         Paths.TryAdd(MoveFileName, route);

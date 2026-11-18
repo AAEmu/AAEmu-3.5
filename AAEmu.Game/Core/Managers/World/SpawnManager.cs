@@ -5,6 +5,7 @@ using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.GameData;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.CommonFarm.Static;
 using AAEmu.Game.Models.Game.DoodadObj;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
@@ -17,6 +18,7 @@ using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.Game.World.Transform;
+using AAEmu.Game.Services;
 using AAEmu.Game.Utils;
 
 using NLog;
@@ -54,9 +56,60 @@ public class SpawnManager(WorldInstance parentWorld)
 
     public List<Task> SpawnTasks { get; init; } = [];
 
+    /// <summary>True when an authored <c>spawnerId</c> from <c>npc_spawners.g</c> is already registered.</summary>
+    public bool HasClientSpawnerId(uint spawnerId) =>
+        NpcSpawners.Values.SelectMany(s => s).Any(s => s.SpawnerId == spawnerId);
+
+    /// <summary>True when <c>npc_spawners.g</c> already registered a placement at XY (json is fallback).</summary>
+    public bool HasNpcSpawnerNear(uint unitId, float worldX, float worldY, float tolerance = 2f)
+    {
+        foreach (var spawner in NpcSpawners.Values.SelectMany(s => s))
+        {
+            if (spawner.UnitId != unitId)
+                continue;
+            if (MathF.Abs(spawner.Position.X - worldX) < tolerance && MathF.Abs(spawner.Position.Y - worldY) < tolerance)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Remove a json/manual spawner at XY when client placement must win (reload/tools).</summary>
+    public bool TryRemoveNpcSpawnerNear(uint unitId, float worldX, float worldY, float tolerance = 2f)
+    {
+        lock (NpcSpawners)
+        {
+            var removed = false;
+            foreach (var key in NpcSpawners.Keys.ToList())
+            {
+                var list = NpcSpawners[key];
+                for (var i = list.Count - 1; i >= 0; i--)
+                {
+                    var spawner = list[i];
+                    if (spawner.UnitId != unitId)
+                        continue;
+                    if (MathF.Abs(spawner.Position.X - worldX) < tolerance
+                        && MathF.Abs(spawner.Position.Y - worldY) < tolerance)
+                    {
+                        list.RemoveAt(i);
+                        removed = true;
+                    }
+                }
+
+                if (list.Count == 0)
+                    NpcSpawners.Remove(key);
+            }
+
+            return removed;
+        }
+    }
+
     /// <summary>
     /// Adds an NPC spawner to the manager.
     /// </summary>
+    private int CountNpcSpawnersByPlacementSource(bool designerFromClientG) =>
+        NpcSpawners.Values.SelectMany(list => list).Count(s => s.HasDesignerPlacementFrame == designerFromClientG);
+
     public void AddNpcSpawner(NpcSpawner npcSpawner)
     {
         lock (NpcSpawners)
@@ -121,6 +174,14 @@ public class SpawnManager(WorldInstance parentWorld)
                 }
 
                 NpcSpawners.TryAdd(_nextId, spawners);
+            }
+            else if (npcSpawner is { Template: not null, SpawnableNpcs.Count: > 0 })
+            {
+                // Client npc_spawners.g (and similar): template already filled; tick via ActiveRegionTick.
+                npcSpawner.ParentWorld = World;
+                if (npcSpawner.SpawnerId == 0 && npcSpawner.NpcSpawnerIds.Count > 0)
+                    npcSpawner.SpawnerId = npcSpawner.NpcSpawnerIds[0];
+                NpcSpawners.TryAdd(_nextId++, [npcSpawner]);
             }
             else
             {
@@ -271,9 +332,20 @@ public class SpawnManager(WorldInstance parentWorld)
         Logger.Info($"Loading spawn data for {World} ...");
         var worldPath = Path.Combine(FileManager.AppPath, "Data", "Worlds", World.Template.Name);
 
-        // Load NPC Spawns
+        // NPC spawn: client npc_spawners.g (Zones) first; npc_spawns.json fills the rest.
         Logger.Debug($"Loading NPC spawn data for {World} ...");
+        ClientNpcSpawnerLoader.LoadNpcSpawners(this, World);
+        if (ZoneNpcSpawnRules.AuthoritativeFromClientG && World.ZoneNpcSpawn != null)
+            World.ZoneNpcSpawn.PopulateAtLoad();
+
         _ = LoadNpcSpawns(worldPath);
+        var clientG = World.ZoneNpcSpawn is { PlacementCount: > 0 } zoneOrchestrator
+            ? zoneOrchestrator.PlacementCount
+            : CountNpcSpawnersByPlacementSource(designerFromClientG: true);
+        var jsonFallback = CountNpcSpawnersByPlacementSource(designerFromClientG: false);
+        Logger.Info(
+            "NPC spawn pipeline for {0}: {1} npc_spawners.g → npc.xml → AiPathHandler; {2} npc_spawns.json fallback",
+            World, clientG, jsonFallback);
 
         // Load Doodad spawns
         Logger.Debug($"Loading Doodad spawn data for {World} ...");
@@ -332,6 +404,9 @@ public class SpawnManager(WorldInstance parentWorld)
             return false;
         }
         npcFiles = ReverseSpawnFiles(npcFiles);
+        var clientSpawnerZones = ClientNpcSpawnerLoader.Enabled
+            ? ClientNpcSpawnerLoader.DiscoverZonesWithClientSpawners(World)
+            : [];
         foreach (var jsonFileName in npcFiles)
         {
             if (!File.Exists(jsonFileName))
@@ -353,14 +428,30 @@ public class SpawnManager(WorldInstance parentWorld)
                     entry++;
                     npcSpawnerFromFile.ParentWorld = World;
 
-                    // Check for duplication by UnitId and Position
-                    if (NpcSpawners.Values.SelectMany(spawners => spawners)
-                        .Any(spawner => spawner.UnitId == npcSpawnerFromFile.UnitId &&
-                                        Math.Abs(spawner.Position.X - npcSpawnerFromFile.Position.X) < 2f &&
-                                        Math.Abs(spawner.Position.Y - npcSpawnerFromFile.Position.Y) < 2f
-                                        ))
+                    // Fallback only: designer patrols and placements already registered from npc_spawners.g.
+                    if (PathWalkerRules.JsonPatrolSupersededByClient(npcSpawnerFromFile.FollowPath,
+                            clientSpawnerZones, ClientNpcSpawnerLoader.Enabled))
                     {
-                        Logger.Trace($"Duplicate NPC spawner found in {jsonFileName} (UnitId: {npcSpawnerFromFile.UnitId}, Position: {npcSpawnerFromFile.Position})");
+                        Logger.Trace(
+                            "Skipping json npc {0} with {1} — superseded by npc_spawners.g",
+                            npcSpawnerFromFile.UnitId, npcSpawnerFromFile.FollowPath);
+                        continue;
+                    }
+
+                    if (npcSpawnerFromFile.SpawnerId > 0 && HasClientSpawnerId(npcSpawnerFromFile.SpawnerId))
+                    {
+                        Logger.Trace(
+                            "Skipping json npc {0} — spawnerId {1} from npc_spawners.g",
+                            npcSpawnerFromFile.UnitId, npcSpawnerFromFile.SpawnerId);
+                        continue;
+                    }
+
+                    if (HasNpcSpawnerNear(npcSpawnerFromFile.UnitId, npcSpawnerFromFile.Position.X,
+                            npcSpawnerFromFile.Position.Y))
+                    {
+                        Logger.Trace(
+                            "Skipping json fallback duplicate (UnitId: {0}, Position: {1})",
+                            npcSpawnerFromFile.UnitId, npcSpawnerFromFile.Position);
                         continue;
                     }
                     if (!NpcManager.Instance.Exist(npcSpawnerFromFile.UnitId))
@@ -1043,10 +1134,22 @@ public class SpawnManager(WorldInstance parentWorld)
                 {
                     if (obj.Respawn >= DateTime.UtcNow)
                         continue;
-                    if (obj is Npc npc)
+                    if (obj is Npc { Spawner: not null } npc)
                     {
-                        //npc.Spawner.Respawn(npc);
-                        npc.Spawner.SetSpawnScheduled(false); // in the Update() method, enable spawn
+                        var spawner = npc.Spawner;
+                        var world = npc.ParentWorld;
+                        if (ZoneNpcSpawnRules.AuthoritativeFromClientG
+                            && spawner.ZonePopulationManaged
+                            && world.ZoneNpcSpawn?.OwnsPlacement(spawner.SpawnerId) == true)
+                        {
+                            spawner.SetSpawnScheduled(false);
+                            world.ZoneNpcSpawn.EnqueueRespawn(spawner);
+                        }
+                        else
+                        {
+                            //npc.Spawner.Respawn(npc);
+                            spawner.SetSpawnScheduled(false); // in the Update() method, enable spawn
+                        }
                     }
 
                     if (obj is Doodad doodad)

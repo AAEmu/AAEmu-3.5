@@ -29,6 +29,15 @@ public class HoldPositionBehavior : BaseCombatBehavior
         if (!Validate())
             return;
 
+        // У HoldPosition-НПС с загруженным designer/legacy path — сначала FollowPath, не залипание после Talk/Idle.
+        if (!CheckFollowPath() && !string.IsNullOrWhiteSpace(Ai.Owner.Spawner?.FollowPath))
+            Ai.EnsureFollowPathLoaded();
+        if (CheckFollowPath())
+        {
+            Ai.GoToFollowPath();
+            return;
+        }
+
         InitializeHoldPosition();
         _isInitialized = true;
     }

@@ -1,6 +1,7 @@
 ﻿using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.Units.Route;
 using AAEmu.Game.Models.Game.World;
 
@@ -108,13 +109,12 @@ public class NpcSpawnerNpc : Spawner<Npc>
             {
                 settleOnGround = true;
             }
-            else
+            else if (npcSpawner.ParentWorld is { } parentWorld)
             {
-                var newZ = npcSpawner.ParentWorld.Template.GeoData.GetHeight(npcSpawner.Position.AsPositionVector());// WorldManager.Instance.GetHeight(npcSpawner.Position.ZoneId, npcSpawner.Position.X, npcSpawner.Position.Y, npcSpawner.Position.Z);
-                if (Math.Abs(npcSpawner.Position.Z - newZ) < 1f)
-                {
-                    npcSpawner.Position.Z = newZ;
-                }
+                var pos = npcSpawner.Position;
+                var refined = NpcSpawnHeightRules.Refine(parentWorld, pos.ZoneId, pos.X, pos.Y, pos.Z);
+                if (Physics.Static.NpcGroundResolver.IsUsableHeight(refined))
+                    npcSpawner.Position.Z = refined;
             }
         }
 
@@ -139,7 +139,9 @@ public class NpcSpawnerNpc : Spawner<Npc>
             // spawner's height then, exactly as the soft-degradation rule of the layer asks (plan P4).
             if (worldManager.StaticGeometry != null && worldManager.StaticGeometry.IsZoneReady(template, zoneKey))
             {
-                var settledZ = resolver.SettledZ(template, zoneKey, position.X, position.Y, position.Z);
+                var settledZ = resolver.SettledZ(template, zoneKey, position.X, position.Y, position.Z,
+                    NpcWorldFooting.TryGetStreamSpawnHeight(npc, position),
+                    WorldManager.NavHeightForSpawn(template, position.X, position.Y, position.Z));
                 // Ноль — не высота: юнит на Z = 0 был бы под землёй. Тогда остаётся высота спавнера.
                 if (Physics.Static.NpcGroundResolver.IsUsableHeight(settledZ) && MathF.Abs(settledZ - position.Z) > 0.01f)
                     local.SetPosition(position.X, position.Y, settledZ);
@@ -152,27 +154,34 @@ public class NpcSpawnerNpc : Spawner<Npc>
 
         npc.Transform.InstanceId = npc.Transform.InstanceId;
 
+        npc.Spawner = npcSpawner;
+
         if (npc.Ai != null)
         {
             npc.Ai.HomePosition = npc.Transform.World.Position;
             npc.Ai.IdlePosition = npc.Ai.HomePosition;
+            if (!string.IsNullOrWhiteSpace(npcSpawner.FollowPath)
+                && !npc.Ai.TryLoadFollowPath(npcSpawner))
+            {
+                var hint = npcSpawner.FollowPath.StartsWith("AIPath_", StringComparison.OrdinalIgnoreCase)
+                    ? " (expected in level_design/zone/*/editor/npc.xml + client .g spawn)"
+                    : " (set AAEMU_LEGACY_DISK_PATH=1 only for old Data/Path names)";
+                Logger.Warn("Failed to load follow path {0} for NPC {1} ({2}){3}",
+                    npcSpawner.FollowPath, npc.TemplateId, npc.ObjId, hint);
+            }
             npc.Ai.GoToSpawn();
         }
-
-        npc.Spawner = npcSpawner;
         npc.Spawner.RespawnTime = (int)Random.Shared.Next(npc.Spawner.Template.SpawnDelayMin, npc.Spawner.Template.SpawnDelayMax);
         npc.Spawn();
+        if (!deferGrounding)
+            NpcFootingRules.TryBindUnseenFloor(npc);
         if (deferGrounding) WorldManager.Instance.NpcSpawnGrounding?.Track(npc, spawnZone);
 
         var world = WorldManager.Instance.GetWorld(npc.Transform.InstanceId);
         world.Events.OnUnitSpawn(world, new OnUnitSpawnArgs { Npc = npc });
         npc.Simulation = new Simulation(npc);
-
-        if (npc.Ai != null && !string.IsNullOrWhiteSpace(npcSpawner.FollowPath))
-        {
-            if (!npc.Ai.LoadAiPathPoints(npcSpawner.FollowPath, false))
-                Logger.Warn($"Failed to load {npcSpawner.FollowPath} for NPC {npc.TemplateId} ({npc.ObjId})");
-        }
+        if (npc.Ai != null && PathFollowRules.ShouldMirrorPathInSimulation(npcSpawner.FollowPath))
+            npc.Simulation.SyncFromAiPath(npc.Ai, npcSpawner.FollowPath);
 
         npcs.Add(npc);
         return npcs;

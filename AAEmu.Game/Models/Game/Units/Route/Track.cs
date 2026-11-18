@@ -106,10 +106,8 @@ internal class Track : Patrol
             {
                 moveType.Z = 95.5993f;
             }
-            else // other
-            {
-                moveType.Z = npc.ParentWorld.Template.GeoData.GetHeight(npc.Transform.World.Position); // WorldManager.Instance.GetHeight(npc.Transform);
-            }
+            else
+                moveType.Z = npc.Transform.Local.Position.Z;
 
             // looks in the direction of movement
             var angle = MathUtil.CalculateAngleFrom(npc.Transform.World.Position, npc.CurrentTarget.Transform.World.Position);

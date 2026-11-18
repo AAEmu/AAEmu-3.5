@@ -54,7 +54,7 @@ public class BuffTests
         await Assert.That(buff.Skill).IsEqualTo(skill);
         await Assert.That(buff.StartTime).IsEqualTo(startTime);
         await Assert.That(buff.EndTime).IsEqualTo(DateTime.MinValue);
-        await Assert.That(buff.AbLevel).IsEqualTo(1u);
+        await Assert.That(buff.AbLevel).IsEqualTo((ushort)1);
         await Assert.That(buff.State).IsEqualTo(EffectState.Created);
         await Assert.That(buff.InUse).IsFalse();
         await Assert.That(buff.Duration).IsEqualTo(0);
@@ -189,7 +189,7 @@ public class BuffTests
         buff.AbLevel = 10;
 
         // Assert
-        await Assert.That(buff.AbLevel).IsEqualTo(10);
+        await Assert.That(buff.AbLevel).IsEqualTo((ushort)10);
     }
 
     #endregion

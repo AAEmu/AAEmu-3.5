@@ -4,6 +4,8 @@ using System.Numerics;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.AI.v2.Framework;
 using AAEmu.Game.Models.Game.AI.v2.Params;
 using AAEmu.Game.Models.Game.AI.v2.Params.Almighty;
@@ -142,71 +144,92 @@ public abstract class BaseCombatBehavior : Behavior
         }
 
         var distanceToTarget = Ai.Owner.GetDistanceTo(target, true);
+        var chaseStart = CombatChaseRules.ChaseStartRange(range, Ai.CombatApproachMoving);
+        var chaseStop = CombatChaseRules.ChaseStopRange(range);
 
-        if (AppConfiguration.Instance.World.GeoDataMode && target != null)
+        if (Ai.Owner.IsWalkerStuck())
         {
-            if (Ai.PathNode?.EndPointPos != null && Ai.PathNode != null)
-            {
-                // If not at target position (take model size error margin), then calculate new target route position
-                if (Math.Abs((Ai.PathNode.EndPointPos - target.Transform.World.Position).Length()) <= Ai.Owner.ModelSize)
-                {
-                    var stopWatch = new Stopwatch();
-                    stopWatch.Start();
-                    Ai.Owner.FindPath((Unit)target);
-                    stopWatch.Stop();
-                    // Toss warning if it took a long time
-                    if (stopWatch.Elapsed.Ticks >= TimeSpan.TicksPerMillisecond)
-                        Logger.Warn($"FindPath took {stopWatch.Elapsed} for Ai.Owner.ObjId:{Ai.Owner.ObjId}, Owner.TemplateId {Ai.Owner.TemplateId} @ {Ai.Owner.Transform}");
-                    // Save the target's new coordinates
-                    Ai.PathNode.EndPointPos =  new Vector3(target.Transform.World.Position.X, target.Transform.World.Position.Y, target.Transform.World.Position.Z);
-                }
-            }
+            Ai.Owner.StopMovement();
+            Ai.CombatApproachMoving = false;
+            Ai.Owner.ResetWalkerProgress();
+            if (Ai.PathNode is { FoundPath.Count: > 0 })
+                Ai.PathNode.FoundPath.Dequeue();
+        }
 
-            // If there is a PathNode set, and we still have a target, then find the next point to move to
+        var chaseGoal = AiUtils.SnapWalkTarget(Ai, target.Transform.World.Position);
+
+        void StopChaseAndFace()
+        {
+            Ai.Owner.StopMovement();
+            Ai.CombatApproachMoving = false;
+            Ai.Owner.LookTowards(target.Transform.World.Position);
+        }
+
+        void PlanChaseIfNeeded()
+        {
+            if (!CombatChaseRules.ShouldReplanPath(Ai.CombatApproachMoving, Ai.LastChasePlanUtc, Ai.LastChasePlanTarget, chaseGoal))
+                return;
+            var stopWatch = Stopwatch.StartNew();
+            Ai.Owner.FindPath((Unit)target);
+            stopWatch.Stop();
+            if (stopWatch.Elapsed.Ticks >= TimeSpan.TicksPerMillisecond)
+                Logger.Warn($"FindPath took {stopWatch.Elapsed} for Ai.Owner.ObjId:{Ai.Owner.ObjId}, Owner.TemplateId {Ai.Owner.TemplateId} @ {Ai.Owner.Transform}");
+            Ai.LastChasePlanUtc = DateTime.UtcNow;
+            Ai.LastChasePlanTarget = chaseGoal;
+        }
+
+        if (PathPlanningRules.UseNavPathPlanner && target != null)
+        {
             if (Ai.PathNode != null)
-            {
-                if (Ai.PathNode.FoundPath.Count > 0 && !Ai.PathNode.FoundPath.Peek().Equals(Vector3.Zero))
-                {
-                    var nextPathPoint = Ai.PathNode.FoundPath.Peek();
-                    distanceToTarget = MathUtil.CalculateDistance(Ai.Owner.Transform.World.Position, nextPathPoint, true);
-                    if (distanceToTarget > range)
-                    {
-                        Ai.Owner.MoveTowards(nextPathPoint, (float)speed, moveFlags, range);
-                    }
-                    else
-                    {
-                        if (Ai.PathNode.FoundPath.Count <= 0)
-                        {
-                            Ai.Owner.StopMovement();
-                            Ai.PathNode.FoundPath = [];
-                            return;
-                        }
+                PlanChaseIfNeeded();
 
-                        Ai.PathNode.CurrentTargetPos = Ai.PathNode.FoundPath.Dequeue();
-                    }
+            if (Ai.PathNode is { FoundPath.Count: > 0 } && !Ai.PathNode.FoundPath.Peek().Equals(Vector3.Zero))
+            {
+                var nextPathPoint = AiUtils.SnapPathPoint(Ai, Ai.PathNode.FoundPath.Peek());
+                var distToWaypoint = MathUtil.CalculateDistance(Ai.Owner.Transform.World.Position, nextPathPoint, true);
+                if (distToWaypoint < CombatChaseRules.ChaseWaypointArrivalMetres)
+                {
+                    Ai.PathNode.FoundPath.Dequeue();
+                    if (Ai.PathNode.FoundPath.TryPeek(out var peek) && !peek.Equals(Vector3.Zero))
+                        nextPathPoint = AiUtils.SnapPathPoint(Ai, peek);
+                }
+
+                distanceToTarget = MathUtil.CalculateDistance(Ai.Owner.Transform.World.Position, nextPathPoint, true);
+                if (distanceToTarget > chaseStart)
+                {
+                    Ai.Owner.MoveTowards(nextPathPoint, (float)speed, moveFlags, chaseStop);
+                    Ai.CombatApproachMoving = true;
+                }
+                else if (Ai.PathNode.FoundPath.Count <= 1)
+                {
+                    Ai.PathNode.FoundPath.Dequeue();
+                    StopChaseAndFace();
                 }
                 else
                 {
-                    if (distanceToTarget > range)
-                        Ai.Owner.MoveTowards(target.Transform.World.Position, (float)speed, moveFlags, range);
-                    else
-                        Ai.Owner.StopMovement();
+                    Ai.PathNode.CurrentTargetPos = AiUtils.SnapPathPoint(Ai, Ai.PathNode.FoundPath.Dequeue());
                 }
             }
             else
             {
-                if (distanceToTarget > range)
-                    Ai.Owner.MoveTowards(target.Transform.World.Position, (float)speed, moveFlags);
+                if (distanceToTarget > chaseStart)
+                {
+                    Ai.Owner.MoveTowards(chaseGoal, (float)speed, moveFlags, chaseStop);
+                    Ai.CombatApproachMoving = true;
+                }
                 else
-                    Ai.Owner.StopMovement();
+                    StopChaseAndFace();
             }
         }
         else
         {
-            if (distanceToTarget > range && target != null)
-                Ai.Owner.MoveTowards(target.Transform.World.Position, (float)speed, moveFlags);
+            if (distanceToTarget > chaseStart && target != null)
+            {
+                Ai.Owner.MoveTowards(chaseGoal, (float)speed, moveFlags, chaseStop);
+                Ai.CombatApproachMoving = true;
+            }
             else
-                Ai.Owner.StopMovement();
+                StopChaseAndFace();
         }
     }
 
@@ -303,14 +326,19 @@ public abstract class BaseCombatBehavior : Behavior
         {
             //Ai.Owner.LookTowards(abuser.Transform.World.Position); // Prevents archers from escaping (they spin around all the time)
 
-            if (AppConfiguration.Instance.World.GeoDataMode)
+            if (PathPlanningRules.UseNavPathPlanner)
             {
                 if (Ai.Owner.UnitIsVisible(abuser) && !abuser.IsDead)
                 {
                     if (Ai.Owner.CurrentAggroTarget != abuser && !Ai.AlreadyTargeted)
                     {
-                        // TODO: find the path to abuser
-                        Ai.Owner.FindPath(abuser);
+                        var goal = AiUtils.SnapWalkTarget(Ai, abuser.Transform.World.Position);
+                        if (CombatChaseRules.ShouldReplanPath(Ai.CombatApproachMoving, Ai.LastChasePlanUtc, Ai.LastChasePlanTarget, goal))
+                        {
+                            Ai.Owner.FindPath(abuser);
+                            Ai.LastChasePlanUtc = DateTime.UtcNow;
+                            Ai.LastChasePlanTarget = goal;
+                        }
                     }
                     Ai.Owner.CurrentAggroTarget = abuser;
                     Ai.Owner.SetTarget(abuser);
@@ -356,8 +384,8 @@ public abstract class BaseCombatBehavior : Behavior
         if (_pipeName == "phase_dragon_ground" || _phaseType == 1) // "PHASE_DRAGON_GROUND = 1;"
         {
             // try to find Z first in GeoData, and then in HeightMaps, if not found, leave Z as it is
-            var updZ = Ai.Owner.ParentWorld.Template.GeoData.GetHeight(Ai.Owner.Transform.World.Position); // WorldManager.Instance.GetHeight(Ai.Owner.Transform.ZoneId, Ai.Owner.Transform.Local.Position.X, Ai.Owner.Transform.Local.Position.Y, Ai.Owner.Transform.Local.Position.Z);
-            Ai.Owner.Transform.Local.SetHeight(updZ);
+            var pos = Ai.Owner.Transform.Local.Position;
+            Ai.Owner.Transform.Local.SetHeight(Ai.Owner.ResolveWalkHeight(pos.X, pos.Y));
         }
         else if (_pipeName == "phase_dragon_fly_hovering" || _phaseType == 2) // "PHASE_DRAGON_HOVERING = 2;"
         {

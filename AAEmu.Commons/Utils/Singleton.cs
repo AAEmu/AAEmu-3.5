@@ -64,4 +64,36 @@ public abstract class Singleton<T> where T : class
                 null, null, null) as T;
         }
     }
+
+    /// <summary>
+    /// The instance when it can be had — from the DI container, or from a parameterless constructor — and false when
+    /// neither is possible (a unit test without a host, or a caller running before the container is built). Unlike
+    /// <see cref="Instance"/>, never throws: for a caller that has a sensible answer without the manager.
+    /// </summary>
+    public static bool TryGetInstance(out T instance)
+    {
+        instance = s_instance;
+        if (instance != null)
+            return true;
+
+        if (SingletonContainer.ServiceProvider?.GetService<T>() is { } fromDi)
+        {
+            lock (typeof(T))
+            {
+                s_instance ??= fromDi;
+            }
+
+            instance = s_instance;
+            return true;
+        }
+
+        if (typeof(T).GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null, Type.EmptyTypes, null) == null)
+            return false;
+
+        OnInit();
+        instance = s_instance;
+        return instance != null;
+    }
 }

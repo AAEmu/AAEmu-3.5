@@ -1,5 +1,8 @@
 ﻿using System.Globalization;
 using System.Numerics;
+
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.AI.v2.Framework;
 using AAEmu.Game.Utils;
 
@@ -43,17 +46,16 @@ public class AiPathHandler(NpcAi aiOwner)
     public bool RunCurrentPath(TimeSpan delta)
     {
         // Queue empty? refill!
+        // Refill closed routes each time the queue drains (designer PathType 0); do not clear AiPathLooping here.
         if (AiPathPointsRemaining.Count <= 0 && AiPathPoints.Count > 0 && AiPathLooping)
         {
-            AiPathLooping = false;
             foreach (var aiPathPoint in AiPathPoints)
-            {
                 AiPathPointsRemaining.Enqueue(aiPathPoint);
-            }
         }
 
         // Are we there yet?
-        if (TargetPosition != Vector3.Zero && MathUtil.CalculateDistance(TargetPosition, Owner.Owner.Transform.World.Position, true) < Owner.Owner.Template.Scale)
+        var arrival = MathF.Max(Owner.Owner.Template.Scale, PathFollowRules.PatrolWaypointArrivalMetres);
+        if (TargetPosition != Vector3.Zero && MathUtil.CalculateDistance(TargetPosition, Owner.Owner.Transform.World.Position, true) < arrival)
         {
             TargetPosition = Vector3.Zero;
         }
@@ -90,18 +92,25 @@ public class AiPathHandler(NpcAi aiOwner)
             // Set next move point if it's not zero
             if (!nextPos.Position.Equals(Vector3.Zero))
             {
-                TargetPosition = nextPos.Position;
+                TargetPosition = AiUtils.SnapPathPoint(Owner, nextPos.Position);
+                Owner.Owner.ResetWalkerProgress();
             }
         }
 
         // We know where to go? Then go that direction
         if (TargetPosition != Vector3.Zero)
         {
-            var moveSpeed = Owner.GetRealMovementSpeed(AiPathSpeed);
-            // var moveFlags = Owner.GetRealMovementFlags(moveSpeed);
+            if (Owner.Owner.IsWalkerStuck())
+            {
+                Owner.Owner.StopMovement();
+                Owner.Owner.ResetWalkerProgress();
+                TargetPosition = Vector3.Zero;
+                return HasUnhandledPathMovementData();
+            }
+
+            var moveSpeed = (double)PathFollowRules.LegMetresPerSecond(Owner, AiPathSpeed);
             moveSpeed *= delta.Milliseconds / 1000.0;
             Owner.Owner.MoveTowards(TargetPosition, (float)moveSpeed, AiPathActorFlags);
-            // Owner.Owner.MoveTowards(TargetPosition, AiPathSpeed * Owner.Owner.BaseMoveSpeed * (delta.Milliseconds / 1000.0f), AiPathStanceFlags);
 
             // Move the idle "home" location along with the path, so it doesn't immediately trigger a return to home state when going into combat
             Owner.IdlePosition = Owner.Owner.Transform.World.Position;
@@ -119,4 +128,5 @@ public class AiPathHandler(NpcAi aiOwner)
     {
         return AiPathPointsRemaining.Count > 0 || (AiPathLooping && AiPathPoints.Count > 0);
     }
+
 }

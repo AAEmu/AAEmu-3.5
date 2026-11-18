@@ -12,6 +12,7 @@ using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.Tasks.World;
+using AAEmu.Game.Services;
 
 using Newtonsoft.Json;
 
@@ -41,6 +42,10 @@ public class NpcSpawner : Spawner<Npc>
     public uint Count { get; set; } = 1;
 
     public List<uint> NpcSpawnerIds { get; set; } = [];
+
+    /// <summary>ArcheageZones population: no player-radius spawn/despawn in <see cref="Update"/>.</summary>
+    public bool ZonePopulationManaged { get; set; }
+
     public NpcSpawnerTemplate Template { get; set; }
     public List<NpcSpawnerNpc> SpawnableNpcs { get; set; } = []; // List of NPCs that can be spawned
     public ConcurrentDictionary<uint, List<Npc>> SpawnedNpcs { get; set; } = new(); // <SpawnerId, List of spawned NPCs>
@@ -84,7 +89,7 @@ public class NpcSpawner : Spawner<Npc>
                     DespawnNpcs();
                     didAction = true;
                 }
-                else if (!IsPlayerInSpawnRadius() && CurrentSpawnCount > 0)
+                else if (!ZonePopulationManaged && !IsPlayerInSpawnRadius() && CurrentSpawnCount > 0)
                 {
                     //Logger.Debug($"[SpawnerId={SpawnerId}, UnitId={UnitId}] Despawning NPCs...");
                     DespawnNpcsNow();
@@ -108,6 +113,23 @@ public class NpcSpawner : Spawner<Npc>
     /// <summary>
     /// Determines whether the NPCs can be despawned based on schedule and current presence.
     /// </summary>
+    /// <summary>Game-hour windows only (no player-radius despawn).</summary>
+    public void TickZonePopulationSchedule()
+    {
+        try
+        {
+            lock (_spawnLock)
+            {
+                if (CanDespawnNpcs())
+                    DespawnNpcs();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Zone schedule tick failed SpawnerId={0}", SpawnerId);
+        }
+    }
+
     public bool CanDespawnNpcs()
     {
         if (!IsDespawningScheduleEnabled(SpawnerId))
@@ -673,6 +695,7 @@ public class NpcSpawner : Spawner<Npc>
             lock (_spawnLock)
             {
                 RemoveNpcFromSpawnedList(npc);
+                TryZoneRespawnAfterCorpseRemoved(npc);
                 UnregisterAndDeleteNpc(npc);
                 IsDespawnScheduled = false;
             }
@@ -681,6 +704,24 @@ public class NpcSpawner : Spawner<Npc>
         {
             Logger.Error(ex, $"Failed to despawn NPC {npc.TemplateId}.");
         }
+    }
+
+    private void TryZoneRespawnAfterCorpseRemoved(Npc npc)
+    {
+        if (ZoneNpcSpawnRules.RespawnFromDeathEnabled || !ZonePopulationManaged)
+            return;
+        if (RespawnTime <= 0 || AreOtherNpcsInSpawnZone().Item2 + _scheduledCount >= Template.MaxPopulation)
+            return;
+        var world = npc.ParentWorld;
+        if (world?.ZoneNpcSpawn?.OwnsPlacement(SpawnerId) != true)
+            return;
+
+        IncrementCount(true);
+        var delay = TimeSpan.FromSeconds(RespawnTime);
+        if (ZoneNpcSpawnRules.MinPopulationEnabled)
+            world.ZoneNpcSpawn.EnqueueMinPopulationRespawn(this);
+        else
+            world.ZoneNpcSpawn.EnqueueRespawn(this, delay);
     }
 
     private static void UnregisterAndDeleteNpc(Npc npc)
@@ -736,8 +777,12 @@ public class NpcSpawner : Spawner<Npc>
         {
             lock (_spawnLock)
             {
+                var zoneManaged = ZonePopulationManaged
+                    && npc.ParentWorld?.ZoneNpcSpawn?.OwnsPlacement(SpawnerId) == true;
+                var scheduleFromDeath = !zoneManaged || ZoneNpcSpawnRules.RespawnFromDeathEnabled;
+
                 // Если условия позволяют, планируем респаун
-                if (RespawnTime > 0 && AreOtherNpcsInSpawnZone().Item2 + _scheduledCount < Template.MaxPopulation)
+                if (scheduleFromDeath && RespawnTime > 0 && AreOtherNpcsInSpawnZone().Item2 + _scheduledCount < Template.MaxPopulation)
                 {
                     // Планируем респаун и обновляем _scheduledCount
                     IncrementCount(true);
@@ -765,12 +810,24 @@ public class NpcSpawner : Spawner<Npc>
                 // Adds the NPC to the despawn list
                 npc.ParentWorld.SpawnManager.AddDespawn(npc);
                 //Logger.Info($"Added NPC {UnitId}:{SpawnerId}:{npc.ObjId} to despawn list, scheduledCount={_scheduledCount}");
+                TryZoneMinPopulationTopUp(npc);
             }
         }
         catch (Exception ex)
         {
             Logger.Error(ex, $"Failed to process despawn for NPC {UnitId}:{SpawnerId}:{npc.ObjId}.");
         }
+    }
+
+    private void TryZoneMinPopulationTopUp(Npc npc)
+    {
+        if (!ZonePopulationManaged || !ZoneNpcSpawnRules.RespawnFromDeathEnabled)
+            return;
+        var world = npc.ParentWorld;
+        if (world?.ZoneNpcSpawn?.OwnsPlacement(SpawnerId) != true)
+            return;
+
+        world.ZoneNpcSpawn.EnqueueMinPopulationRespawn(this);
     }
 
     private void DoDespawnNow(Npc npc)
@@ -1019,7 +1076,17 @@ public class NpcSpawner : Spawner<Npc>
 
         IsSpawnScheduled = false;
 
-        var scheduleStatus = GameScheduleManager.Instance.GetPeriodStatusNpc((int)SpawnerId);
+        // Нет менеджера расписаний (тест без хоста, ранний старт) — расписания пусты: остаётся окно времени спавна.
+        if (!GameScheduleManager.TryGetInstance(out var schedules))
+        {
+            if (!IsWithinSpawnTime())
+                return false;
+            RespawnDenied = true;
+            IsSpawnScheduled = true;
+            return true;
+        }
+
+        var scheduleStatus = schedules.GetPeriodStatusNpc((int)SpawnerId);
         switch (scheduleStatus)
         {
             case GameScheduleManager.PeriodStatus.InProgress:

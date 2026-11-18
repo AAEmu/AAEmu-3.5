@@ -120,6 +120,17 @@ public class WorldConfig
     public bool WalkerCollisionEnabled { get; set; } = true;
 
     /// <summary>
+    /// Читать <c>npc_spawners.g</c> из ClientData / <c>Data/Worlds</c>. Env <c>AAEMU_CLIENT_NPC_SPAWN=0</c> отключает.
+    /// </summary>
+    public bool ClientNpcSpawnEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Ограничить загрузку <c>.g</c> этими zone key (например 129 Solzreed). Пусто = все зоны.
+    /// Переменная <c>AAEMU_CLIENT_SPAWN_ZONES</c> имеет приоритет.
+    /// </summary>
+    public List<uint> ClientNpcSpawnZoneKeys { get; set; } = [];
+
+    /// <summary>
     /// Maximum number of instances that can be created (includes system instances)
     /// </summary>
     public uint MaxInstances { get; set; } = 32;

@@ -1,4 +1,5 @@
-﻿using AAEmu.Game.Models.Game.Models;
+﻿using AAEmu.Game.Models.Game.AI.Utils;
+using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units.Movements;
 
 namespace AAEmu.Game.Models.Game.AI.v2.Behaviors.Common;
@@ -11,6 +12,7 @@ public class FollowUnitBehavior : BaseCombatBehavior
     {
         Ai.Owner.CurrentGameStance = GameStanceType.Relaxed;
         Ai.Owner.CurrentAlertness = MoveTypeAlertness.Idle;
+        Ai.Owner.ResetWalkerProgress();
         _enter = true;
     }
 
@@ -35,6 +37,13 @@ public class FollowUnitBehavior : BaseCombatBehavior
             return;
         }
 
+        if (Ai.Owner.IsWalkerStuck())
+        {
+            Ai.Owner.StopMovement();
+            Ai.Owner.ResetWalkerProgress();
+            return;
+        }
+
         var targetDistance = Ai.Owner.GetDistanceTo(Ai.AiFollowUnitObj, true);
 
         var followSpeedMultiplier = (float)Math.Min(5.0, targetDistance / 1.5);
@@ -42,7 +51,8 @@ public class FollowUnitBehavior : BaseCombatBehavior
         var moveSpeed = Ai.GetRealMovementSpeed(Ai.Owner.BaseMoveSpeed) * followSpeedMultiplier;
         var moveFlags = Ai.GetRealMovementFlags(moveSpeed);
         moveSpeed *= delta.Milliseconds / 1000.0;
-        Ai.Owner.MoveTowards(Ai.AiFollowUnitObj.Transform.World.Position, (float)moveSpeed, moveFlags);
+        var goal = AiUtils.SnapWalkTarget(Ai, Ai.AiFollowUnitObj.Transform.World.Position);
+        Ai.Owner.MoveTowards(goal, (float)moveSpeed, moveFlags);
         Ai.IdlePosition = Ai.Owner.Transform.World.Position;
     }
 

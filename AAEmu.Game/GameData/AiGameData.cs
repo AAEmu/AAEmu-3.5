@@ -1,6 +1,7 @@
 ﻿using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.GameData.Framework;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.Enums;
 using AAEmu.Game.Models.Game.AI.v2.Params;
 using AAEmu.Game.Utils.DB;
@@ -19,6 +20,7 @@ public class AiGameData : Singleton<AiGameData>, IGameDataLoader
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     private Dictionary<uint, AiParams> _aiParams;
+    private Dictionary<uint, (float? Min, float? Max)> _roamingDistances = [];
     private Dictionary<uint, List<AiCommands>> _aiCommands;
     private Dictionary<uint, AiCommandSets> _aiCommandSets;
     private readonly Dictionary<int, NpcChatBubble> _npcChatBubbles = new();
@@ -28,6 +30,13 @@ public class AiGameData : Singleton<AiGameData>, IGameDataLoader
     {
         if (_aiParams.TryGetValue(id, out var value))
             return value;
+        return null;
+    }
+
+    public (float? Min, float? Max)? GetRoamingDistances(uint paramId)
+    {
+        if (_roamingDistances.TryGetValue(paramId, out var range))
+            return range;
         return null;
     }
 
@@ -41,6 +50,7 @@ public class AiGameData : Singleton<AiGameData>, IGameDataLoader
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _aiParams = new Dictionary<uint, AiParams>();
+        _roamingDistances = new Dictionary<uint, (float? Min, float? Max)>();
         _aiCommands = new Dictionary<uint, List<AiCommands>>();
         _aiCommandSets = new Dictionary<uint, AiCommandSets>();
 
@@ -73,12 +83,16 @@ public class AiGameData : Singleton<AiGameData>, IGameDataLoader
                 while (reader.Read())
                 {
                     var id = reader.GetUInt32("id");
+                    var data = reader.IsDBNull("ai_param") ? string.Empty : reader.GetString("ai_param");
+                    var roaming = NpcRoamingParamsParser.Parse(data);
+                    if (roaming.Min != null || roaming.Max != null)
+                        _roamingDistances[id] = roaming;
+
                     if (!fileTypeToId.TryGetValue(id, out var fileType))
                         continue;
 
                     try
                     {
-                        var data = reader.IsDBNull("ai_param") ? string.Empty : reader.GetString("ai_param");
                         var aiParams = AiParams.CreateByType(fileType, data);
 #pragma warning disable CA1508 // Avoid dead conditional code
                         if (aiParams != null)

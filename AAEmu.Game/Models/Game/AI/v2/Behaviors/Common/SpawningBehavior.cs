@@ -1,4 +1,5 @@
 ﻿using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.v2.Params.Almighty;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Skills;
@@ -55,7 +56,20 @@ public class SpawningBehavior : BaseCombatBehavior
             }
         }
 
-        // TODO: This follows the game's way of doing it. This will need code later, obviously
+        if (!Ai.PathHandler.HasPathMovementData() && !string.IsNullOrWhiteSpace(Ai.Owner.Spawner?.FollowPath))
+            Ai.EnsureFollowPathLoaded();
+
+        if (Ai.PathHandler.HasPathMovementData() && PathWalkerRules.ShouldEnterFollowPath(Ai.Owner))
+        {
+            Ai.Owner.Simulation?.MoveToPathEnabled = false;
+            Ai.GoToDefaultBehavior();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(Ai.Owner.Spawner?.FollowPath))
+            Logger.Warn("NPC {0} template {1}: follow path {2} not loaded after spawn",
+                Ai.Owner.ObjId, Ai.Owner.TemplateId, Ai.Owner.Spawner.FollowPath);
+
         Ai.GoToRunCommandSet();
     }
 

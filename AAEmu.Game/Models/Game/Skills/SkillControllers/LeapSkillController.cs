@@ -175,12 +175,18 @@ public class LeapSkillController : SkillController
         var moveType = (UnitMoveType)MoveType.GetType(MoveTypeEnum.Unit);
         var travelDist = Math.Min(targetDist, distance);
 
-        var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, Owner.Transform.Local.Position, _endPosition);
-        Owner.Transform.Local.SetPosition(newX, newY, newZ);
+        var currentPos = Owner.Transform.Local.Position;
+        Vector3 next;
+        if (Owner is Npc leapNpc)
+            next = leapNpc.StepAlongGround(currentPos, _endPosition, travelDist, targetDist, out _);
+        else
+        {
+            var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, currentPos, _endPosition);
+            var updZ = Owner.ParentWorld.Template.GeoData.GetHeight(new Vector3(newX, newY, newZ));
+            next = Math.Abs(newZ - updZ) < 1f ? new Vector3(newX, newY, updZ) : new Vector3(newX, newY, newZ);
+        }
 
-        var updZ = Owner.ParentWorld.Template.GeoData.GetHeight(Owner.Transform.World.Position);
-        if (Math.Abs(newZ - updZ) < 1f)
-            Owner.Transform.Local.SetHeight(updZ);
+        Owner.Transform.Local.SetPosition(next.X, next.Y, next.Z);
 
         var angle = MathUtil.CalculateAngleFrom(Owner.Transform.Local.Position, _endPosition);
         var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());

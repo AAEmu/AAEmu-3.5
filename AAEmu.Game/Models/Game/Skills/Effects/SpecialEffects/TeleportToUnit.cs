@@ -57,19 +57,15 @@ public class TeleportToUnit : SpecialEffectAction
                 // StopMovement, so the original code was effectively a no-op for NPC pulls.
                 var oldPosition = npc.Transform.Local.ClonePosition();
 
-                var endZ = targetPosition.Z;
-                var groundZ = npc.ParentWorld?.Template.GeoData.GetHeight(new Vector3(endX, endY, endZ)) ?? 0f;
-                if (groundZ > 0 && Math.Abs(endZ - groundZ) < 5f)
-                    endZ = groundZ;
+                var endPos = npc.SnapDisplacementPosition(new Vector3(endX, endY, targetPosition.Z));
+                npc.Transform.Local.SetPosition(endPos.X, endPos.Y, endPos.Z);
 
-                npc.Transform.Local.SetPosition(endX, endY, endZ);
-
-                npc.BroadcastPacket(new SCBlinkUnitPacket(npc.ObjId, 0f, 0f, endX, endY, endZ), false);
+                npc.BroadcastPacket(new SCBlinkUnitPacket(npc.ObjId, 0f, 0f, endPos.X, endPos.Y, endPos.Z), false);
 
                 var moveType = (UnitMoveType)MoveType.GetType(MoveTypeEnum.Unit);
-                moveType.X = endX;
-                moveType.Y = endY;
-                moveType.Z = endZ;
+                moveType.X = endPos.X;
+                moveType.Y = endPos.Y;
+                moveType.Z = endPos.Z;
                 moveType.VelX = 0;
                 moveType.VelY = 0;
                 moveType.VelZ = 0;

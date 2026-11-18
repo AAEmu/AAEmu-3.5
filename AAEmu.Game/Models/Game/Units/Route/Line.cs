@@ -119,10 +119,8 @@ public class Line : Patrol
         {
             moveType.Z = 95.5993f;
         }
-        else // other
-        {
-            moveType.Z = npc.ParentWorld.Template.GeoData.GetHeight(npc.Transform.World.Position);// WorldManager.Instance.GetHeight(npc.Transform);
-        }
+        else
+            moveType.Z = npc.Transform.Local.Position.Z;
 
         // looks in the direction of movement
         var angle = MathUtil.CalculateAngleFrom(npc.Transform.Local.Position.X, npc.Transform.Local.Position.Y, Position.X, Position.Y);

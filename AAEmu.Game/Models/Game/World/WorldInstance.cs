@@ -11,6 +11,7 @@ using AAEmu.Game.Models.Game.Indun;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Services;
 
 using NLog;
 
@@ -96,6 +97,11 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
     /// Manager that handles spawns for this instance
     /// </summary>
     public SpawnManager SpawnManager { get; set; }
+
+    /// <summary>
+    /// ArcheageZones-style <c>npc_spawners.g</c> population (queue at load, no player-radius spawn).
+    /// </summary>
+    public ZoneNpcSpawnOrchestrator? ZoneNpcSpawn { get; set; }
     /// <summary>
     /// Manager that handles vehicle spawns for this instance
     /// </summary>

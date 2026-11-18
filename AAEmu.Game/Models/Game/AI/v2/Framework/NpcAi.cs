@@ -1,7 +1,9 @@
 ﻿using System.Numerics;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.AStar;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.AI.v2.Behaviors.Common;
 using AAEmu.Game.Models.Game.AI.v2.Controls;
 using AAEmu.Game.Models.Game.AI.v2.Params;
@@ -29,6 +31,15 @@ public abstract class NpcAi
     public Vector3 HomePosition { get; set; }
     public AiParams Param { get; set; }
     public PathNode PathNode { get; set; }
+
+    /// <summary>Идёт ли сейчас сближение в бою (для гистерезиса дистанции и ChaseReplan).</summary>
+    public bool CombatApproachMoving { get; set; }
+
+    /// <summary>Время последнего <see cref="NPChar.Npc.FindPath"/> в погоне.</summary>
+    public DateTime LastChasePlanUtc { get; set; } = DateTime.MinValue;
+
+    /// <summary>Цель, к которой строился последний боевой маршрут.</summary>
+    public Vector3 LastChasePlanTarget { get; set; }
 
     private readonly Dictionary<BehaviorKind, Behavior> _behaviors;
     private readonly Dictionary<Behavior, List<Transition>> _transitions;
@@ -294,6 +305,12 @@ $"Trying to set Npc {Owner.TemplateId}:{Owner.ObjId} current behavior, but it is
 
     public virtual void GoToDefaultBehavior()
     {
+        if (PathHandler.HasPathMovementData() && PathWalkerRules.ShouldEnterFollowPath(Owner))
+        {
+            GoToFollowPath();
+            return;
+        }
+
         if (_defaultBehavior != null)
             SetCurrentBehavior(_defaultBehavior);
     }
@@ -330,17 +347,127 @@ $"Trying to set Npc {Owner.TemplateId}:{Owner.ObjId} current behavior, but it is
         _defaultBehavior = behavior;
     }
 
-    public bool LoadAiPathPoints(string aiPathFileName, bool addToQueueOnly)
+    /// <summary>Designer <c>npc.xml</c>; optional legacy <c>Data/Path/*.path</c> when <c>AAEMU_LEGACY_DISK_PATH=1</c>.</summary>
+    public bool TryLoadFollowPath(NpcSpawner spawner) =>
+        TryLoadDesignerPath(spawner.FollowPath, false)
+        || (PathFollowRules.AllowsLegacyDiskPath(spawner.FollowPath)
+            && LoadLegacyAiPathPoints(spawner.FollowPath, false));
+
+    /// <summary>Re-load spawner follow path when designer or legacy load failed at spawn.</summary>
+    public bool EnsureFollowPathLoaded()
+    {
+        if (PathHandler.HasPathMovementData())
+            return true;
+        var spawner = Owner?.Spawner;
+        if (spawner == null || string.IsNullOrWhiteSpace(spawner.FollowPath))
+            return false;
+        if (!TryLoadFollowPath(spawner))
+            return false;
+        if (PathFollowRules.ShouldMirrorPathInSimulation(spawner.FollowPath))
+            Owner.Simulation?.SyncFromAiPath(this, spawner.FollowPath);
+        return true;
+    }
+
+    public bool LoadAiPathPoints(string aiPathFileName, bool addToQueueOnly) =>
+        TryLoadDesignerPath(aiPathFileName, addToQueueOnly)
+        || (PathFollowRules.AllowsLegacyDiskPath(aiPathFileName)
+            && LoadLegacyAiPathPoints(aiPathFileName, addToQueueOnly));
+
+    private bool TryLoadDesignerPath(string pathName, bool addToQueueOnly)
+    {
+        if (Owner == null || string.IsNullOrWhiteSpace(pathName))
+            return false;
+
+        var spawner = Owner.Spawner;
+        var world = spawner?.ParentWorld ?? Owner.ParentWorld;
+        if (world?.Template == null)
+            return false;
+
+        float worldX;
+        float worldY;
+        float worldZ;
+        uint zoneKey;
+        var pointNo = 0;
+        if (spawner != null)
+        {
+            worldX = spawner.Position.X;
+            worldY = spawner.Position.Y;
+            worldZ = spawner.Position.Z;
+            zoneKey = spawner.Position.ZoneId;
+            if (string.Equals(pathName, spawner.FollowPath, StringComparison.OrdinalIgnoreCase))
+                pointNo = spawner.PathPointNo;
+        }
+        else
+        {
+            var pos = Owner.Transform.World.Position;
+            worldX = pos.X;
+            worldY = pos.Y;
+            worldZ = pos.Z;
+            zoneKey = WorldManager.Instance.GetZoneId(world.Template, worldX, worldY);
+        }
+
+        var lookupZone = zoneKey;
+        if (PathFollowRules.TryParseZoneKeyFromPathName(pathName, out var pathZone))
+            lookupZone = pathZone;
+
+        if (lookupZone == 0)
+            return false;
+
+        AiPathsManager.Instance.EnsureDesignerZoneLoaded(world.Template.Name, lookupZone);
+
+        var originX = 0f;
+        var originY = 0f;
+        if (world.Template.XmlWorldZones?.TryGetValue(lookupZone, out var zone) == true)
+        {
+            originX = zone.OriginX * 1024f;
+            originY = zone.OriginY * 1024f;
+        }
+
+        Vector3 spawnLocal;
+        if (spawner is { HasDesignerPlacementFrame: true })
+        {
+            spawnLocal = new Vector3(
+                spawner.PlacementAnchorLocal.X,
+                spawner.PlacementAnchorLocal.Y,
+                spawner.PlacementSpawnLocal.Z);
+        }
+        else
+            spawnLocal = new Vector3(worldX - originX, worldY - originY, worldZ);
+
+        return LoadDesignerPathPoints(world.Template.Name, lookupZone, originX, originY, pathName, spawnLocal, pointNo,
+            addToQueueOnly);
+    }
+
+    private bool LoadLegacyAiPathPoints(string aiPathFileName, bool addToQueueOnly)
     {
         var points = AiPathsManager.Instance.LoadAiPathPoints(aiPathFileName);
         if (points.Count <= 0)
             return false;
 
+        if (Owner != null)
+        {
+            for (var i = 0; i < points.Count; i++)
+            {
+                var point = points[i];
+                if (point.Position == Vector3.Zero)
+                    continue;
+                points[i] = new Controls.AiPathPoint
+                {
+                    Position = AiUtils.SnapPathPoint(this, point.Position),
+                    Action = point.Action,
+                    Param = point.Param
+                };
+            }
+        }
+
         if (!addToQueueOnly)
         {
             PathHandler.AiPathPoints.Clear();
-            PathHandler.AiPathLooping = true; // Set to true to trigger initial loading, need to enable it again in the .path file
+            PathHandler.AiPathLooping = true;
+            PathHandler.AiPathSpeed = 1f;
+            PathHandler.AiPathActorFlags = 4;
             PathHandler.AiPathPoints.AddRange(points);
+            PublishPathToSimulation(aiPathFileName);
         }
         else
         {
@@ -351,6 +478,84 @@ $"Trying to set Npc {Owner.TemplateId}:{Owner.ObjId} current behavior, but it is
         }
 
         return true;
+    }
+
+    /// <summary>Patrol from <c>level_design/zone/{zoneKey}/editor/npc.xml</c> (spawn-local layout + zone origin).</summary>
+    public bool LoadDesignerPathPoints(string worldName, uint zoneKey, float zoneOriginWorldX, float zoneOriginWorldY,
+        string pathName, Vector3 spawnLocal, int pointNo, bool addToQueueOnly)
+    {
+        IReadOnlyCollection<uint>? searchZones = Owner?.ParentWorld?.Template?.XmlWorldZones is { } zones
+            ? [.. zones.Keys]
+            : null;
+        if (!AiPathsManager.Instance.TryLoadDesignerPathPoints(worldName, zoneKey, pathName, spawnLocal, pointNo,
+                out var points, out var speed, out var loops, out var resolvedZoneKey, searchZones))
+            return false;
+
+        if (Owner?.ParentWorld?.Template?.XmlWorldZones?.TryGetValue(resolvedZoneKey, out var pathZone) == true)
+        {
+            zoneOriginWorldX = pathZone.OriginX * 1024f;
+            zoneOriginWorldY = pathZone.OriginY * 1024f;
+        }
+
+        PathHandler.AiPathSpeed = speed > 0f ? speed : 1f;
+        if (Owner != null && PathWalkerRules.WalksGroupPlacementPath(Owner))
+            PathHandler.AiPathSpeed *= PathWalkerRules.CruiseFactor;
+        PathHandler.AiPathActorFlags = speed < 1f ? (byte)5 : (byte)4;
+        for (var i = 0; i < points.Count; i++)
+        {
+            var point = points[i];
+            points[i] = new Controls.AiPathPoint
+            {
+                Position = new System.Numerics.Vector3(
+                    point.Position.X + zoneOriginWorldX,
+                    point.Position.Y + zoneOriginWorldY,
+                    point.Position.Z),
+                Action = point.Action,
+                Param = point.Param
+            };
+        }
+
+        if (Owner != null)
+        {
+            for (var i = 0; i < points.Count; i++)
+            {
+                var point = points[i];
+                if (point.Position == System.Numerics.Vector3.Zero)
+                    continue;
+                points[i] = new Controls.AiPathPoint
+                {
+                    Position = AiUtils.SnapPathPoint(this, point.Position),
+                    Action = point.Action,
+                    Param = point.Param
+                };
+            }
+
+            if (!addToQueueOnly)
+                points = PathFollowRules.TrimLookAhead(points, Owner.Transform.World.Position);
+        }
+
+        if (!addToQueueOnly)
+        {
+            PathHandler.AiPathPoints.Clear();
+            PathHandler.AiPathLooping = loops;
+            PathHandler.AiPathPoints.AddRange(points);
+            PublishPathToSimulation(pathName);
+        }
+        else
+        {
+            foreach (var point in points)
+                PathHandler.AiPathPointsRemaining.Enqueue(point);
+        }
+
+        return true;
+    }
+
+    private void PublishPathToSimulation(string pathKey)
+    {
+        if (!PathFollowRules.ShouldMirrorPathInSimulation(pathKey))
+            return;
+        if (Owner?.Simulation is { } sim)
+            sim.SyncFromAiPath(this, pathKey);
     }
 
     public bool DoFollowDefaultNearestNpc()

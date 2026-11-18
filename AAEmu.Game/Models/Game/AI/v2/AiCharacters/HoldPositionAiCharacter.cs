@@ -51,4 +51,11 @@ public class HoldPositionAiCharacter : NpcAi
     {
         SetCurrentBehavior(BehaviorKind.Attack);
     }
+
+    public override void GoToDefaultBehavior()
+    {
+        if (!PathHandler.HasPathMovementData())
+            EnsureFollowPathLoaded();
+        base.GoToDefaultBehavior();
+    }
 }

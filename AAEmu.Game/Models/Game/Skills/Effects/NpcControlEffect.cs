@@ -1,5 +1,6 @@
 ﻿using AAEmu.Game.Core.Packets;
 using AAEmu.Game.GameData;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.Enums;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills.Templates;
@@ -43,6 +44,9 @@ public class NpcControlEffect : EffectTemplate
                 case NpcControlCategory.FollowPath:
                     {
                         if (targetNpc.IsInPatrol) { break; }
+                        if (TryQuestDesignerFollowPath(targetNpc, ParamString))
+                            break;
+
                         targetNpc.IsInPatrol = true;
                         if (targetNpc.Simulation != null)
                         {
@@ -95,6 +99,9 @@ public class NpcControlEffect : EffectTemplate
                             if (!string.IsNullOrEmpty(fileName))
                             {
                                 if (targetNpc.IsInPatrol) { return; }
+                                if (TryQuestDesignerFollowPath(targetNpc, fileName))
+                                    break;
+
                                 targetNpc.IsInPatrol = true;
                                 if (targetNpc.Simulation != null)
                                 {
@@ -113,5 +120,25 @@ public class NpcControlEffect : EffectTemplate
                     throw new NotSupportedException(nameof(CategoryId));
             }
         }
+    }
+
+    /// <summary>
+    /// Designer/AIPath routes use <see cref="AiPathHandler"/> (Zones follow_path); <see cref="Units.Route.Simulation"/> only for legacy disk paths.
+    /// </summary>
+    private static bool TryQuestDesignerFollowPath(Npc npc, string pathName)
+    {
+        if (string.IsNullOrWhiteSpace(pathName) || npc.Ai == null)
+            return false;
+        if (!PathFollowRules.QuestFollowPathEnabled)
+            return false;
+        if (PathFollowRules.ShouldMirrorPathInSimulation(pathName))
+            return false;
+        if (!npc.Ai.LoadAiPathPoints(pathName, addToQueueOnly: true))
+            return false;
+
+        npc.IsInPatrol = true;
+        npc.Simulation?.MoveToPathEnabled = false;
+        npc.Ai.GoToFollowPath();
+        return true;
     }
 }

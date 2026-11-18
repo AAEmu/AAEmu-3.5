@@ -1,4 +1,5 @@
 ﻿using AAEmu.Commons.Utils;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Models.Game.Faction;
@@ -424,10 +425,8 @@ public abstract class Behavior
         _maxWeaponRange = (float)maxRangeCheck;
     }
 
-    public bool CheckFollowPath()
-    {
-        return Ai.PathHandler.HasPathMovementData();
-    }
+    public bool CheckFollowPath() =>
+        Ai.PathHandler.HasPathMovementData() && PathWalkerRules.ShouldEnterFollowPath(Ai.Owner);
 
     public Behavior SetDefaultBehavior()
     {

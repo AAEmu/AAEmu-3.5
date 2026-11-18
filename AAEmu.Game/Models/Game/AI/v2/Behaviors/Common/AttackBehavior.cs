@@ -1,4 +1,5 @@
-﻿using AAEmu.Commons.Utils;
+﻿using System.Numerics;
+using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Skills.Static;
@@ -13,6 +14,11 @@ public class AttackBehavior : BaseCombatBehavior
 
     public override void Enter()
     {
+        Ai.CombatApproachMoving = false;
+        Ai.LastChasePlanUtc = DateTime.MinValue;
+        Ai.LastChasePlanTarget = Vector3.Zero;
+        Ai.PathNode?.FoundPath.Clear();
+        Ai.Owner.ResetWalkerProgress();
         Ai.Owner.InterruptSkills();
         Ai.Owner.CurrentGameStance = GameStanceType.Combat;
         Ai.Owner.CurrentAlertness = MoveTypeAlertness.Combat;

@@ -15,7 +15,7 @@ namespace AAEmu.Game.Physics.Static;
 /// скользит вдоль неё, пока скорость не угаснет, и замирает.
 /// </para>
 /// <para>
-/// Правило: наземный шаг (обход, строй, возврат домой; не погоня, не бегство после боя, не патруль, не плавание)
+/// Правило: наземный шаг (обход, строй, погоня, возврат домой; не патруль <c>follow_path</c>, не плавание)
 /// проверяется двумя лучами по кистям зоны — на <see cref="KneeMetres"/> и <see cref="ChestMetres"/> над ногами.
 /// Стена (треугольник круче 60°) обрывает шаг за радиус тела до себя, остаток шага скользит вдоль стены; скольжение
 /// во вторую стену останавливается там. Выключатель: <c>World.WalkerCollisionEnabled</c> (и
@@ -56,6 +56,12 @@ public static class WalkerCollision
     /// <summary>Границы радиуса тела: радиус модели, зажатый (натив встаёт в 0,40–0,74 м от стены, p25–p75).</summary>
     public const float MinRadiusMetres = 0.3f;
     public const float MaxRadiusMetres = 0.6f;
+
+    /// <summary>Walk без обрезки roam-пайпа обрывается после стольких миллисекунд без прогресса (натив ~1.21 с p50).</summary>
+    public const long StuckEndMs = 1_200;
+
+    /// <summary>Ниже этой горизонтальной скорости (м/с) идущий считается «без прогресса».</summary>
+    public const float StuckSpeed = 0.15f;
 
     /// <summary>Радиус тела идущего: радиус актёрской модели, зажатый в <see cref="MinRadiusMetres"/>..<see cref="MaxRadiusMetres"/>.</summary>
     public static float Radius(float actorRadius) => Math.Clamp(actorRadius, MinRadiusMetres, MaxRadiusMetres);

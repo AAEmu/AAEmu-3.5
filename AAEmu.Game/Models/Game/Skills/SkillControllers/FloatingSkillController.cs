@@ -3,6 +3,7 @@
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.NPChar;
+using AAEmu.Game.Physics.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
@@ -296,6 +297,13 @@ public class FloatingSkillController : SkillController
 
     private float GetGroundHeight()
     {
+        if (Owner is Npc npc)
+        {
+            var pos = Owner.Transform.World.Position;
+            var z = npc.ResolveWalkHeight(pos.X, pos.Y);
+            return NpcGroundResolver.IsUsableHeight(z) ? z : _startZ;
+        }
+
         var geoZ = Owner.ParentWorld.Template.GeoData.GetHeight(Owner.Transform.World.Position);
         return geoZ > 0 ? geoZ : _startZ;
     }
@@ -327,13 +335,17 @@ public class FloatingSkillController : SkillController
 
         var travelDist = Math.Min(targetDist, distance);
 
-        var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(
-            travelDist, targetDist, currentPos, _endPosition);
-        Owner.Transform.Local.SetPosition(newX, newY, newZ);
-
-        var updZ = Owner.ParentWorld.Template.GeoData.GetHeight(Owner.Transform.World.Position);
-        if (Math.Abs(newZ - updZ) < 1f)
-            Owner.Transform.Local.SetHeight(updZ);
+        if (Owner is Npc npc)
+        {
+            var next = npc.StepAlongGround(currentPos, _endPosition, travelDist, targetDist, out _);
+            Owner.Transform.Local.SetPosition(next.X, next.Y, next.Z);
+        }
+        else
+        {
+            var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(
+                travelDist, targetDist, currentPos, _endPosition);
+            Owner.Transform.Local.SetPosition(newX, newY, newZ);
+        }
 
         var angle = MathUtil.CalculateAngleFrom(Owner.Transform.Local.Position, _endPosition);
         var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());

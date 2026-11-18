@@ -6,6 +6,7 @@ using System.Xml;
 using AAEmu.Commons.Exceptions;
 using AAEmu.Commons.IO;
 using AAEmu.Commons.Utils;
+using AAEmu.Game.Core.Managers.Bots.Navigation;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World.Debug;
@@ -22,6 +23,7 @@ using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.Game.World.Transform;
+using AAEmu.Game.Services;
 using AAEmu.Game.Utils.DB;
 
 using NLog;
@@ -386,9 +388,17 @@ public class WorldManager(
         tickManager.OnTick.Subscribe(ActiveRegionTick, TimeSpan.FromSeconds(1));
         tickManager.OnTick.Subscribe(AutoWaterProbeTick, TimeSpan.FromSeconds(10));
         if (NpcSpawnGrounding != null) tickManager.OnTick.Subscribe(ProcessNpcSpawnGrounding, TimeSpan.FromMilliseconds(100));
+        if (ZoneNpcSpawnRules.AuthoritativeFromClientG)
+            tickManager.OnTick.Subscribe(ZoneNpcSpawnTick, TimeSpan.FromMilliseconds(ZoneNpcSpawnRules.TickMs));
     }
 
     private void ProcessNpcSpawnGrounding(TimeSpan delta) => NpcSpawnGrounding?.Tick();
+
+    private void ZoneNpcSpawnTick(TimeSpan _)
+    {
+        foreach (var world in _worlds.Values)
+            world.ZoneNpcSpawn?.Tick();
+    }
 
     private static readonly Lock AutoWaterProbeLock = new();
     private static bool _autoWaterProbeEnabled;
@@ -864,13 +874,24 @@ public class WorldManager(
     /// </summary>
     private Func<float?> NavHeight(NpcAi ai, float x, float y, float z)
     {
+        var template = ai.Owner.ParentWorld?.Template;
+        if (template != null && NavMeshGround.IsEnabled)
+        {
+            var nav = new NavMeshGround(template);
+            var reference = z;
+            return () => nav.TryGroundNear(x, y, reference, out var near) ? near : null;
+        }
+
         if (!AppConfiguration.Instance.World.GeoDataMode)
             return () => null;
         return () =>
         {
             try
             {
-                var height = ai.Owner.ParentWorld?.Template?.GeoData?.GetHeight(new Vector3(x, y, z)) ?? 0f;
+                var geo = template?.GeoData;
+                if (geo != null && geo.TryGroundNear(x, y, z, out var near))
+                    return near;
+                var height = geo?.GetHeight(new Vector3(x, y, z)) ?? 0f;
                 return height > 0f ? height : null;
             }
             catch
@@ -879,6 +900,29 @@ public class WorldManager(
             }
         };
     }
+
+    /// <summary>Nav height for spawn settling when <see cref="NavMeshGround"/> or geodata is on.</summary>
+    internal static Func<float?>? NavHeightForSpawn(WorldTemplate template, float x, float y, float referenceZ)
+    {
+        if (NavMeshGround.IsEnabled)
+        {
+            var nav = new NavMeshGround(template);
+            return () => nav.TryGroundNear(x, y, referenceZ, out var near) ? near : null;
+        }
+
+        if (!AppConfiguration.Instance.World.GeoDataMode || template.GeoData is not { } geo)
+            return null;
+        return () =>
+        {
+            if (geo.TryGroundNear(x, y, referenceZ, out var near))
+                return near;
+            var height = geo.GetHeight(new Vector3(x, y, referenceZ));
+            return height > 0f ? height : null;
+        };
+    }
+
+    private static float ApplyNpcFooting(NpcAi ai, float referenceZ, float groundZ) =>
+        NpcFootingRules.KeepUnseenFloor(ai.Owner.UnseenFloorZ, referenceZ, groundZ) ?? groundZ;
 
     public float GetReferenceHeight(NpcAi ai, float x, float y, float z, uint zoneId)
     {
@@ -898,32 +942,37 @@ public class WorldManager(
             return finalHeight;
         }
 
-        // 2. For HoldPositionBehavior and IdleBehavior, the height is taken from the spawner.
-        switch (ai.GetCurrentBehavior())
+        // 2. Hold position never leaves spawn Z (x2ai). Idle/roam use layered P4 like combat.
+        if (ai.GetCurrentBehavior() is HoldPositionBehavior)
         {
-            case HoldPositionBehavior:
-            case IdleBehavior:
-                finalHeight = ai.Owner.Spawner.Position.Z;
-                return finalHeight;
+            finalHeight = ai.Owner.Spawner.Position.Z;
+            return finalHeight;
         }
 
         // 3. Layered height (plan P4, default since 2026-11-16): brush floors, underground halls, then terrain, and the
         //    navmesh only where the terrain has no data. With the static geometry switched off the old path is kept.
         if (AppConfiguration.Instance.World.StaticGeometryEnabled)
         {
-            var template = GetWorldTemplateByZoneKey(zoneId);
+            var template = ai.Owner.ParentWorld?.Template ?? GetWorldTemplateByZoneKey(zoneId);
             if (template != null)
             {
-                var ground = NpcGroundResolver.Ground(template, zoneId, x, y, z, NavHeight(ai, x, y, z));
+                var zoneKey = template == ai.Owner.ParentWorld?.Template
+                    ? GetZoneId(template, x, y)
+                    : zoneId;
+                var ground = NpcGroundResolver.Ground(template, zoneKey, x, y, z, NavHeight(ai, x, y, z));
                 if (Physics.Static.NpcGroundResolver.IsUsableHeight(ground))
-                    return ground;
+                    return ApplyNpcFooting(ai, z, ground);
                 // Слой не дал годной высоты: падать на Z = 0 нельзя, берём прежний путь.
             }
         }
 
+        var lookupZone = zoneId;
+        if (ai.Owner.ParentWorld?.Template is { } parentTemplate)
+            lookupZone = GetZoneId(parentTemplate, x, y);
+
         // 4. Terrain height retrieval. A height of 0 under the position is real terrain (sea level), not "not found".
-        if (TryGetHeight(zoneId, x, y, z, out finalHeight) && Physics.Static.NpcGroundResolver.IsUsableHeight(finalHeight))
-            return finalHeight;
+        if (TryGetHeight(lookupZone, x, y, z, out finalHeight) && Physics.Static.NpcGroundResolver.IsUsableHeight(finalHeight))
+            return ApplyNpcFooting(ai, z, finalHeight);
 
         // 5. Take the default height: the spawner's, then the unit's own — и ни в коем случае не ноль.
         var spawnerZ = ai.Owner.Spawner?.Position.Z ?? 0f;

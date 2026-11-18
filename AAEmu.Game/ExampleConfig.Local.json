@@ -16,5 +16,9 @@
         "Sources": [
             "C:\\Users\\username\\Downloads\\Trion_1.2_(r208022)_BROC_FULL_PATCHED_CLIENT\\game_pak"
         ]
+    },
+    "World": {
+        "ClientNpcSpawnEnabled": true,
+        "ClientNpcSpawnZoneKeys": [ 129, 179 ]
     }
 }

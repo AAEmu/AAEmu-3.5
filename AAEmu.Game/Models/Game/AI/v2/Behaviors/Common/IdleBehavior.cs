@@ -1,4 +1,6 @@
 ﻿using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Units;
@@ -27,6 +29,14 @@ public class IdleBehavior : BaseCombatBehavior
         if (!Validate())
             return;
 
+        if (!CheckFollowPath() && !string.IsNullOrWhiteSpace(Ai.Owner.Spawner?.FollowPath))
+            Ai.EnsureFollowPathLoaded();
+        if (CheckFollowPath())
+        {
+            Ai.GoToFollowPath();
+            return;
+        }
+
         InitializeIdleState();
         _isInitialized = true;
         //Logger.Debug($"Unit {Ai.Owner.ObjId}:{Ai.Owner.TemplateId} entered idle state");
@@ -40,6 +50,14 @@ public class IdleBehavior : BaseCombatBehavior
         Ai.Owner.InterruptSkills();
         Ai.Owner.StopMovement();
         Ai.Owner.SetTarget(null);
+
+        var pos = Ai.Owner.Transform.World.Position;
+        var snapped = AiUtils.SnapWalkTarget(Ai, pos);
+        if (MathF.Abs(snapped.Z - pos.Z) > 0.02f)
+        {
+            Ai.Owner.Transform.Local.SetPosition(pos.X, pos.Y, snapped.Z);
+            Ai.Owner.StopMovement();
+        }
 
         if (Ai.Owner.CurrentTarget != null)
             Ai.Owner.SendPacketToPlayers([Ai.Owner.CurrentTarget], new SCAggroTargetChangedPacket(Ai.Owner.ObjId, 0));
@@ -87,6 +105,10 @@ public class IdleBehavior : BaseCombatBehavior
         else if (CheckFollowPath())
         {
             Ai.GoToFollowPath();
+        }
+        else if (RoamLeashRules.ShouldReturnHome(Ai))
+        {
+            Ai.GoToReturn();
         }
         else
         {

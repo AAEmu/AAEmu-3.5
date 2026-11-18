@@ -161,13 +161,17 @@ public class WanderingSkillController : SkillController
 
         var travelDist = Math.Min(distToWaypoint, distance);
 
-        var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(
-            travelDist, distToWaypoint, currentPos, _currentWaypoint);
-        Owner.Transform.Local.SetPosition(newX, newY, newZ);
-
-        var updZ = Owner.ParentWorld.Template.GeoData.GetHeight(Owner.Transform.World.Position);
-        if (updZ > 0 && Math.Abs(newZ - updZ) < 3f)
-            Owner.Transform.Local.SetHeight(updZ);
+        if (Owner is Npc npc)
+        {
+            var next = npc.StepAlongGround(currentPos, _currentWaypoint, travelDist, distToWaypoint, out _);
+            Owner.Transform.Local.SetPosition(next.X, next.Y, next.Z);
+        }
+        else
+        {
+            var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(
+                travelDist, distToWaypoint, currentPos, _currentWaypoint);
+            Owner.Transform.Local.SetPosition(newX, newY, newZ);
+        }
 
         var angle = MathUtil.CalculateAngleFrom(Owner.Transform.Local.Position, _currentWaypoint);
         var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());

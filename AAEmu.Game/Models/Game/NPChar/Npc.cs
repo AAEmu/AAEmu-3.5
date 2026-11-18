@@ -4,6 +4,8 @@ using System.Numerics;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.AI;
+using AAEmu.Game.Models.Game.AI.Utils;
 using AAEmu.Game.Models.Game.AI.v2.Behaviors.Common;
 using AAEmu.Game.Models.Game.AI.v2.Framework;
 using AAEmu.Game.Models.Game.Char;
@@ -1187,6 +1189,12 @@ public partial class Npc : Unit
         if (distance < 0.01f)
             return false;
 
+        if (IsWalkerStuck())
+        {
+            StopMovement();
+            return false;
+        }
+
         if (Buffs.HasEffectsMatchingCondition(e =>
                 e.Template.Stun
                 || e.Template.Sleep
@@ -1226,42 +1234,23 @@ public partial class Npc : Unit
 
         var travelDist = Math.Min(targetDist, distance);
 
-        // TODO: Implement proper use for Transform.World.AddDistanceToFront
-        var (newX, newY, newZ) = World.Transform.PositionAndRotation.AddDistanceToFront(travelDist, targetDist, Transform.Local.Position, other);
-
-        // Plan P6/W4: walls stop a walker (WalkerCollision). The step is clipped a body radius short of the wall and
-        // the rest of it slides along the wall; a step that has nothing left to walk is skipped, and the next tick
-        // retries from the same place. The probe is this NPC's own "nothing near" cache.
-        if (!CanFly && WorldManager.Instance.NpcGroundResolver is { } walls)
+        var next = StepAlongGround(Transform.Local.Position, other, travelDist, targetDist, out var blockedByWall);
+        if (blockedByWall && MathF.Abs(next.X - oldPosition.X) + MathF.Abs(next.Y - oldPosition.Y) < 1e-3f)
         {
-            var clipped = walls.ClipWalk(
-                ParentWorld.Template,
-                Transform.ZoneId,
-                Transform.Local.Position,
-                new Vector3(newX, newY, newZ),
-                WalkerCollision.Radius(ModelSize),
-                _walkerProbe ??= new WalkerCollision.Probe(),
-                out var blockedByWall);
-            if (blockedByWall)
-            {
-                newX = clipped.X;
-                newY = clipped.Y;
-                // Pressed against the wall with the whole step eaten by it: stand still instead of reporting a move.
-                if (MathF.Abs(newX - Transform.Local.Position.X) + MathF.Abs(newY - Transform.Local.Position.Y) < 1e-3f)
-                    return false;
-            }
+            RecordWalkerStep(blockedByWall, 0f, travelDist);
+            return false;
         }
 
-        var targetPositionZ = WorldManager.Instance.GetReferenceHeight(Ai, newX, newY, newZ, Transform.ZoneId);
-        // Ноль — не высота: юнит, поставленный на Z = 0, оказывается под землёй. Тогда остаёмся там, где были.
-        if (!Physics.Static.NpcGroundResolver.IsUsableHeight(targetPositionZ))
-        {
-            targetPositionZ = Transform.Local.Position.Z;
-        }
-        Transform.Local.SetPosition(newX, newY, targetPositionZ);
+        Transform.Local.SetPosition(next.X, next.Y, next.Z);
+        var horizontalStep = MathF.Sqrt(MathF.Pow(next.X - oldPosition.X, 2) + MathF.Pow(next.Y - oldPosition.Y, 2));
+        RecordWalkerStep(blockedByWall, horizontalStep, travelDist);
+        var targetPositionZ = next.Z;
+        var newX = next.X;
+        var newY = next.Y;
 
         var angle = MathUtil.CalculateAngleFrom(Transform.Local.Position, other);
-        var (velX, velY) = MathUtil.AddDistanceToFront(4000, 0, 0, (float)angle.DegToRad());
+        var animSpeed = MovementAnimSpeedQuant(horizontalStep, blockedByWall);
+        var (velX, velY) = MathUtil.AddDistanceToFront(animSpeed, 0, 0, (float)angle.DegToRad());
         Transform.Local.SetRotationDegree(0f, 0f, (float)angle - 90);
         var (rx, ry, rz) = Transform.Local.ToRollPitchYawSBytesMovement();
 
@@ -1279,7 +1268,7 @@ public partial class Npc : Unit
 
         moveType.DeltaMovement = new sbyte[3];
         moveType.DeltaMovement[0] = 0;
-        moveType.DeltaMovement[1] = 127;
+        moveType.DeltaMovement[1] = animSpeed > 0f ? (sbyte)127 : (sbyte)0;
         moveType.DeltaMovement[2] = 0;
         moveType.Stance = MovementStance(newX, newY, targetPositionZ);    // COMBAT = 0x0, IDLE = 0x1
         moveType.Alertness = CurrentAlertness;
@@ -1313,15 +1302,16 @@ public partial class Npc : Unit
         var template = ParentWorld?.Template;
         if (template == null)
             return stance;
+        var zoneKey = world.GetZoneId(template, x, y);
         var resolver = world.NpcGroundResolver;
         if (stance == GameStanceType.Fly)
         {
             // Летящий юнит под водой (рыба над уровнем моря) плывёт.
-            return resolver.TryWaterSurface(template, Transform.ZoneId, x, y, z, out var surface) && surface > z
+            return resolver.TryWaterSurface(template, zoneKey, x, y, z, out var surface) && surface > z
                 ? GameStanceType.Swim
                 : stance;
         }
-        return resolver.WaterStanceAt(template, Transform.ZoneId, x, y, z) == WaterStance.Swim
+        return resolver.WaterStanceAt(template, zoneKey, x, y, z) == WaterStance.Swim
             ? GameStanceType.Swim
             : stance;
     }
@@ -1417,22 +1407,26 @@ public partial class Npc : Unit
 
     public void FindPath(Unit abuser)
     {
-        Ai.PathNode.StartPointPos = new Vector3(Ai.Owner.Transform.World.Position.X, Ai.Owner.Transform.World.Position.Y, Ai.Owner.Transform.World.Position.Z);
-        Ai.PathNode.EndPointPos = new Vector3(abuser.Transform.World.Position.X, abuser.Transform.World.Position.Y, abuser.Transform.World.Position.Z);
+        Ai.PathNode.StartPointPos = AiUtils.SnapPathPoint(Ai, Transform.World.Position);
+        var targetPos = abuser.Transform.World.Position;
+        var footZ = Transform.World.Position.Z;
+        var zoneAtTarget = ParentWorld?.Template is { } tpl
+            ? WorldManager.Instance.GetZoneId(tpl, targetPos.X, targetPos.Y)
+            : Transform.ZoneId;
+        var groundZ = WorldManager.Instance.GetReferenceHeight(Ai, targetPos.X, targetPos.Y, footZ, zoneAtTarget);
+        Ai.PathNode.EndPointPos = new Vector3(targetPos.X, targetPos.Y, groundZ);
 
-        Ai.PathNode.ZoneKey = Ai.Owner.Transform.ZoneId;
-        var resList = Ai.PathNode.FindPath(Ai.Owner.ParentWorld, Ai.PathNode.StartPointPos, Ai.PathNode.EndPointPos);
-        resList.Add(abuser.Transform.World.Position);
-        var reducedPath = ParentWorld.Template.GeoData.ReducePath(resList, 10);
-        Ai.PathNode.FoundPath = reducedPath;
-        if (abuser is Character player)
+        Ai.PathNode.ZoneKey = ParentWorld?.Template is { } worldTpl
+            ? WorldManager.Instance.GetZoneId(worldTpl, Transform.World.Position.X, Transform.World.Position.Y)
+            : Transform.ZoneId;
+        var resList = Ai.PathNode.FindPath(ParentWorld, Ai.PathNode.StartPointPos, Ai.PathNode.EndPointPos);
+        if (resList.Count == 0)
         {
-            player.SendMessage($"Aggro from {Ai.Owner.ObjId}, getting attack path in {Ai.PathNode.FoundPath.Count}/{resList.Count} steps");
-            foreach (var v3 in Ai.PathNode.FoundPath)
-            {
-                player.SendMessage($"Path step -> {v3}");
-            }
+            Ai.PathNode.FoundPath.Clear();
+            return;
         }
+
+        Ai.PathNode.FoundPath = AiUtils.BuildPathQueue(Ai, ParentWorld, resList, Ai.PathNode.EndPointPos);
     }
 
     /// <summary>

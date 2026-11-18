@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.AI.Enums;
 using AAEmu.Game.Models.Game.AI.v2.Controls;
 using AAEmu.Game.Models.Game.AI.v2.Params;
@@ -41,8 +42,7 @@ public class RunCommandSetBehavior : BaseCombatBehavior
             return;
         }
 
-        Ai.GoToIdle();
-        // Ai.GoToDefaultBehavior();
+        Ai.GoToDefaultBehavior();
     }
 
     public override void Exit()
@@ -80,6 +80,8 @@ public class RunCommandSetBehavior : BaseCombatBehavior
                 Logger.Warn($"AI Command: {aiCommand.CmdId} not implemented, NPC {Ai.Owner.ObjId} ({Ai.Owner.TemplateId}), CommandSet {aiCommand.CmdSetId}, P1 {aiCommand.Param1}, P2 {aiCommand.Param2}");
                 break;
             case AiCommandCategory.FollowPath:
+                if (!PathFollowRules.QuestFollowPathEnabled)
+                    break;
                 Ai.LoadAiPathPoints(Ai.AiFileName, aiCommand.Param1 == 1);
                 if (aiCommand.Param1 == 1)
                 {

@@ -54,11 +54,8 @@ public class Blink : SpecialEffectAction
             var endY = newPos.Local.Position.Y;
             var endZ = newPos.Local.Position.Z;
 
-            var groundZ = npc.ParentWorld.Template.GeoData.GetHeight(new Vector3(endX, endY, endZ));
-            if (groundZ > 0 && Math.Abs(endZ - groundZ) < 5f)
-                endZ = groundZ;
-
-            npc.Transform.Local.SetPosition(endX, endY, endZ);
+            var endPos = npc.SnapDisplacementPosition(new Vector3(endX, endY, endZ));
+            npc.Transform.Local.SetPosition(endPos.X, endPos.Y, endPos.Z);
 
             npc.BroadcastPacket(new SCBlinkUnitPacket(npc.ObjId, value1, value2, endX, endY, endZ), false);
 

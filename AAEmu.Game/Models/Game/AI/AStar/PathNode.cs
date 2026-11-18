@@ -4,6 +4,11 @@ using System.Collections.ObjectModel;
 using System.Numerics;
 
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Managers.Bots.Navigation;
+
+using static AAEmu.Game.Core.Managers.Bots.Navigation.NavReasons;
+using AAEmu.Game.Models.Game;
+using AAEmu.Game.Models.Game.AI;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Utils;
 
@@ -73,6 +78,40 @@ public class PathNode
     /// <returns></returns>
     public List<Vector3> FindPath(WorldInstance world, Vector3 start, Vector3 goal)
     {
+        EndPointPos = goal;
+        if (NavMeshGround.IsEnabled && world.Template is { } template)
+        {
+            var nav = new NavMeshGround(template);
+            if (LegPlannerRules.TryStructureLeg(nav, start, goal, out var structureLeg))
+            {
+                Position = structureLeg[0];
+                CurrentTargetPos = structureLeg[0];
+                return structureLeg;
+            }
+
+            var options = LegPlannerRules.ForLeg(start, goal);
+            var report = nav.Plan(start, goal, options);
+            if (report.Path?.Waypoints is { Count: >= 2 } waypoints)
+            {
+                var list = waypoints.ToList();
+                list[0] = start with { Z = list[0].Z };
+                list[^1] = goal with { Z = list[^1].Z };
+                list = AiGeoDataManager.DouglasPeuckerReduction(list, 2.0);
+                if (list.Count > 0)
+                {
+                    Position = list[0];
+                    CurrentTargetPos = list[0];
+                }
+
+                return list;
+            }
+
+            var unreachable = report.Reason == Unreachable
+                || report.Reason?.StartsWith("unreachable", StringComparison.Ordinal) == true;
+            if (LegPlannerRules.TryStraightLeg(start, goal, nav, unreachable, out var straight))
+                return straight;
+        }
+
         // Find the nearest point from the start point in the list of geodata points and start the search from it.
         var posStart = world.Template.GeoData.FindСlosestToTheCurrent(ZoneKey, new Vector3(start.X, start.Y, start.Z));
         if (posStart != null)

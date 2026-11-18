@@ -129,12 +129,26 @@ public class SkillManagerLoadTests
             s_repoDataDir = FindRepositoryDataDir();
         }
 
-        var repoDataDir = s_repoDataDir;
+        var sourceDataDir = s_repoDataDir;
         var destinationDataDir = Path.Combine(FileManager.AppPath, "Data");
         Directory.CreateDirectory(destinationDataDir);
 
-        File.Copy(Path.Combine(repoDataDir, "compact.sqlite3"), Path.Combine(destinationDataDir, "compact.sqlite3"), true);
-        File.Copy(Path.Combine(repoDataDir, "compact.server.table.sqlite3"), Path.Combine(destinationDataDir, "compact.server.table.sqlite3"), true);
+        // Под тестовым хостом FileManager.AppPath — каталог AAEmu.Game: в процессе загружена сборка сервера,
+        // и у неё есть EntryPoint, так что AppPath берётся по ней, а не по тестовому выходу. Источник и
+        // приёмник тогда совпадают, а File.Copy(source, destination, true) с одним и тем же путём обрезает
+        // файл и пишет нули — 139 МБ базы превращались в нули прямо посреди прогона.
+        CopyDataFile(sourceDataDir, destinationDataDir, "compact.sqlite3");
+        CopyDataFile(sourceDataDir, destinationDataDir, "compact.server.table.sqlite3");
+    }
+
+    private static void CopyDataFile(string sourceDataDir, string destinationDataDir, string fileName)
+    {
+        var source = Path.GetFullPath(Path.Combine(sourceDataDir, fileName));
+        var destination = Path.GetFullPath(Path.Combine(destinationDataDir, fileName));
+        if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
+            return; // уже на месте: копировать файл сам на себя нельзя
+
+        File.Copy(source, destination, true);
     }
 
     private static string FindRepositoryDataDir()

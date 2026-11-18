@@ -114,6 +114,51 @@ public class NpcGroundResolverTests
         await Assert.That(height).IsEqualTo(104.9f).Within(0.01f);
     }
 
+    /// <summary>Терраса: карта высот вокруг (100, 100) стоит на 100 м, остальное «нет данных».</summary>
+    private static WorldTemplate TemplateWithTerrainAt100()
+    {
+        var template = Template();
+        template.CellX = template.CellY = 1;
+        var cell = new WorldCell(0, 0, template);
+        var samples = new ushort[WorldManager.CELL_HMAP_RESOLUTION, WorldManager.CELL_HMAP_RESOLUTION];
+        samples[50, 50] = ushort.MaxValue; // 100 m with the coefficient below
+        typeof(WorldCell).GetProperty(nameof(WorldCell.HeightMap), BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(cell, samples);
+        typeof(WorldCell).GetProperty(nameof(WorldCell.HeightCoefficient))!.SetValue(cell, ushort.MaxValue / 100f);
+        typeof(WorldCell).GetProperty(nameof(WorldCell.HasHeightMap))!.SetValue(cell, true);
+        typeof(WorldCell).GetProperty(nameof(WorldCell.Loaded))!.SetValue(cell, true);
+        template.Cells[0, 0] = cell;
+        return template;
+    }
+
+    [Test]
+    public async Task Ground_UnderTheHeightmap_KeepsTheUnitsOwnHeight()
+    {
+        // Пещера/зал под холмом: юнит в 12 м под картой высот. Рельеф над ним — не опора (их GroundResolver
+        // .UndergroundFloor), иначе НПЦ поднимается на поверхность холма сквозь камень.
+        var template = TemplateWithTerrainAt100();
+        var geometry = new StaticGeometryManager(new MemoryFiles(new Dictionary<string, byte[]>()));
+        await geometry.EnsureZoneAsync(template, 137);
+        var resolver = new NpcGroundResolver(geometry);
+
+        var height = resolver.Ground(template, 137, 100f, 100f, 88f);
+
+        await Assert.That(height).IsEqualTo(88f).Within(0.01f);
+    }
+
+    [Test]
+    public async Task Ground_UnderTheHeightmap_TakesTheFloorBeneathTheUnit()
+    {
+        // Тот же зал, но под юнитом пол кисти (верх 87 м): подземный юнит встаёт на него, а не на рельеф.
+        var template = TemplateWithTerrainAt100();
+        var geometry = NewManager(centerZ: 86f);
+        await geometry.EnsureZoneAsync(template, 137);
+        var resolver = new NpcGroundResolver(geometry);
+
+        var height = resolver.Ground(template, 137, 100f, 100f, 88f);
+
+        await Assert.That(height).IsEqualTo(87f).Within(0.01f);
+    }
+
     [Test]
     public async Task Ground_UsesDestinationZoneGeometryAtZoneBoundary()
     {

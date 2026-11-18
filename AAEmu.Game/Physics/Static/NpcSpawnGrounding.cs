@@ -1,6 +1,7 @@
 #nullable enable
 using System.Collections.Concurrent;
 using System.Numerics;
+using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
@@ -57,7 +58,9 @@ public sealed class NpcSpawnGrounding(StaticGeometryManager geometry, NpcGroundR
             _pending.Enqueue(entry);
             return;
         }
-        var z = resolver.SettledZ(template, entry.Zone, entry.Spawn.X, entry.Spawn.Y, entry.Spawn.Z);
+        var z = resolver.SettledZ(template, entry.Zone, entry.Spawn.X, entry.Spawn.Y, entry.Spawn.Z,
+            NpcWorldFooting.TryGetStreamSpawnHeight(npc, entry.Spawn),
+            WorldManager.NavHeightForSpawn(template, entry.Spawn.X, entry.Spawn.Y, entry.Spawn.Z));
         if (!NpcGroundResolver.IsUsableHeight(z) || MathF.Abs(z - entry.Spawn.Z) <= 0.01f ||
             Vector3.DistanceSquared(npc.Transform.World.Position, entry.Spawn) > PositionToleranceSquared)
             return;
@@ -69,5 +72,6 @@ public sealed class NpcSpawnGrounding(StaticGeometryManager geometry, NpcGroundR
         }
         npc.Events.OnMovement(npc, new OnMovementArgs());
         npc.StopMovement();
+        NpcFootingRules.TryBindUnseenFloor(npc);
     }
 }

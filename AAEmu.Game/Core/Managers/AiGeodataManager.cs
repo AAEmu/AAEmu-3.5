@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 
+using AAEmu.Game.Core.Managers.Bots.Navigation;
 using AAEmu.Game.Models.CryEngine.Entities;
 using AAEmu.Game.Models.CryEngine.Loaders;
 using AAEmu.Game.Models.CryEngine.Mission;
@@ -17,6 +18,8 @@ namespace AAEmu.Game.Core.Managers;
 public class AiGeoDataManager(WorldTemplate worldTemplate)
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private NavMeshGround? _triangleNav;
+    private NavMeshGround TriangleNav => _triangleNav ??= new NavMeshGround(worldTemplate);
 
     public List<LinkDescriptor> GetAvailablePoints(NodeDescriptor point)
     {
@@ -252,6 +255,127 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
     }
 
     /// <summary>
+    /// Высота навслоя под (x, y), ближайшая к <paramref name="reference"/> (треугольная проекция Zones при
+    /// <see cref="NavMeshGround.IsEnabled"/>, иначе узлы .bai).
+    /// </summary>
+    public bool TryGround(float x, float y, out float z)
+    {
+        if (NavMeshGround.IsEnabled && TriangleNav.TryGround(x, y, out z))
+            return true;
+        z = 0f;
+        return false;
+    }
+
+    /// <summary>
+    /// Высота навслоя под (x, y), ближайшая к <paramref name="reference"/> по Z среди узлов .bai (порт
+    /// <c>ZoneNavMesh.TryGroundNear</c> на нашей сетке узлов; не треугольная проекция).
+    /// </summary>
+    public bool TryGroundNear(float x, float y, float reference, out float z, float maxHorizontalMetres = 12f)
+    {
+        if (NavMeshGround.IsEnabled && TriangleNav.TryGroundNear(x, y, reference, out z))
+            return true;
+
+        var bestHeight = 0f;
+        var bestDelta = float.PositiveInfinity;
+        var bai = worldTemplate.GetBaiByPos(new Vector3(x, y, reference));
+        if (bai == null)
+        {
+            z = 0f;
+            return false;
+        }
+
+        void Consider(Vector3 nodePos)
+        {
+            var dx = nodePos.X - x;
+            var dy = nodePos.Y - y;
+            if (dx * dx + dy * dy > maxHorizontalMetres * maxHorizontalMetres)
+                return;
+            var delta = MathF.Abs(nodePos.Z - reference);
+            if (delta >= bestDelta || nodePos.Z <= 0f)
+                return;
+            bestDelta = delta;
+            bestHeight = nodePos.Z;
+        }
+
+        foreach (var netMission in bai.NetMissionReaders)
+        {
+            foreach (var (_, nodeDescriptor) in netMission.NodeDescriptorList)
+                Consider(nodeDescriptor.Pos);
+        }
+
+        foreach (var vertexMission in bai.VertexMissionReaders)
+        {
+            foreach (var obstacleDataDescriptor in vertexMission.ObstacleDataDescriptorList)
+                Consider(obstacleDataDescriptor.Pos);
+        }
+
+        if (float.IsPositiveInfinity(bestDelta))
+        {
+            z = 0f;
+            return false;
+        }
+
+        z = bestHeight;
+        return true;
+    }
+
+    /// <summary>
+    /// Пол сооружения: точка в forbidden-полигоне .bai — высота ближайшего узла в пределах flat/rise
+    /// (упрощённый порт <c>ZoneNavMesh.TryStructureFloor</c>).
+    /// </summary>
+    public bool TryStructureFloor(float x, float y, float reference, float maxFlat, float maxRise, out float z)
+    {
+        z = 0f;
+        if (NavMeshGround.IsEnabled && TriangleNav.TryStructureFloor(x, y, reference, maxFlat, maxRise, out z))
+            return true;
+        if (!CheckImpossibleWalk(new Vector3(x, y, reference)))
+            return false;
+        var bai = worldTemplate.GetBaiByPos(new Vector3(x, y, reference));
+        if (bai == null)
+            return false;
+        var bestFlatSq = float.PositiveInfinity;
+        var bestHeight = 0f;
+        var maxFlatSq = maxFlat * maxFlat;
+        var maxRiseSq = maxRise * maxRise;
+
+        void Consider(Vector3 nodePos)
+        {
+            if (nodePos.Z <= 0f)
+                return;
+            var rise = nodePos.Z - reference;
+            if (rise * rise > maxRiseSq)
+                return;
+            var dx = nodePos.X - x;
+            var dy = nodePos.Y - y;
+            var flatSq = dx * dx + dy * dy;
+            if (flatSq > maxFlatSq)
+                return;
+            if (flatSq < bestFlatSq)
+            {
+                bestFlatSq = flatSq;
+                bestHeight = nodePos.Z;
+            }
+        }
+
+        foreach (var netMission in bai.NetMissionReaders)
+        {
+            foreach (var (_, nodeDescriptor) in netMission.NodeDescriptorList)
+                Consider(nodeDescriptor.Pos);
+        }
+
+        foreach (var vertexMission in bai.VertexMissionReaders)
+        {
+            foreach (var obstacleDataDescriptor in vertexMission.ObstacleDataDescriptorList)
+                Consider(obstacleDataDescriptor.Pos);
+        }
+
+        if (float.IsPositiveInfinity(bestFlatSq))
+            return false;
+        z = bestHeight;
+        return true;
+    }
+
+    /// <summary>
     /// Gets height using navmesh data
     /// </summary>
     /// <param name="pos"></param>
@@ -263,6 +387,14 @@ public class AiGeoDataManager(WorldTemplate worldTemplate)
         //stopWatch.Start();
         try
         {
+            if (NavMeshGround.IsEnabled)
+            {
+                if (TriangleNav.TryGround(pos.X, pos.Y, out var meshZ) && meshZ > 0f)
+                    return meshZ;
+                if (TryGroundNear(pos.X, pos.Y, pos.Z, out var nearZ) && nearZ > 0f)
+                    return nearZ;
+            }
+
             var closestPoint = Vector3.Zero;
             var closestDistance = float.MaxValue;
 

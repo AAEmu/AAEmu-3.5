@@ -29,7 +29,7 @@ public partial class AppConfiguration
     public bool HeightMapsEnable { get; set; }
     public string DiscordToken { get; set; }
     public ExpeditionConfig Expedition { get; set; }
-    public WorldConfig World { get; set; }
+    public WorldConfig World { get; set; } = new();
     public DungeonsConfig Dungeons { get; set; }
     public Dictionary<string, int> AccessLevel { get; set; } = [];
     public AccountConfig Account { get; set; }
