@@ -24,6 +24,18 @@ public static class ZoneNpcSpawnRules
     /// <summary>Matches Zones <c>SpawnerSystem.ScheduleCheckIntervalMs</c> (1 s).</summary>
     public const int ScheduleCheckIntervalTicks = 10;
 
+    /// <summary>
+    /// Безуспешных попыток подряд, после которых слот перестаёт объявляться каждый тик и уходит на паузу.
+    /// Штатное «размещение уже полно» до этого порога не доходит: оно снимается первым же удачным спавном.
+    /// </summary>
+    public const int StallAttemptsBeforeBackoff = 30;
+
+    /// <summary>Пауза слота, который не дал ни одного юнита (защита от шторма повторов).</summary>
+    public const int StallBackoffMs = 1000;
+
+    /// <summary>Не чаще одного предупреждения о застое на размещение в этом интервале.</summary>
+    public const int StallWarnIntervalSeconds = 30;
+
     /// <summary>Мгновенная дозаполнка ниже <c>min_population</c> (Zones <c>MinPopulationRespawns</c>).</summary>
     public static bool MinPopulationEnabled { get; } =
         Environment.GetEnvironmentVariable("AAEMU_ZONE_MIN_POPULATION") != "0";

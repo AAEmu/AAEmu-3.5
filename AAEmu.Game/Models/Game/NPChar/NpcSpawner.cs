@@ -30,6 +30,31 @@ public class NpcSpawner : Spawner<Npc>
     private int _scheduledCount;
     // Вычисляемое свойство, возвращающее текущее количество NPC из SpawnedNpcs для данного SpawnerId.
     private int CurrentSpawnCount => SpawnedNpcs.TryGetValue(SpawnerId, out var list) ? list.Count : 0;
+
+    /// <summary>
+    /// Живые NPC размещения. Zones <c>SpawnPopulation</c> освобождает слот в момент смерти юнита: труп ещё
+    /// лежит на земле, но население не занимает (и не блокирует respawn до своего удаления).
+    /// </summary>
+    private int LiveSpawnCount
+    {
+        get
+        {
+            if (!SpawnedNpcs.TryGetValue(SpawnerId, out var list) || list.Count == 0)
+                return 0;
+
+            var live = 0;
+            lock (list)
+            {
+                foreach (var npc in list)
+                {
+                    if (npc is { IsDead: false })
+                        live++;
+                }
+            }
+
+            return live;
+        }
+    }
     private bool IsSpawnScheduled { get; set; } = false;
     private bool IsDespawnScheduled { get; set; } = false;
     private bool RespawnDenied { get; set; }
@@ -982,18 +1007,21 @@ public class NpcSpawner : Spawner<Npc>
             Logger.Error($"[Spawn] Can't spawn npc {UnitId} from spawnerId {Id} - Template is null");
             return;
         }
-        Logger.Debug($"[Spawn] Starting spawn process for SpawnerId={SpawnerId}, UnitId={UnitId}, Template={Template.Id}");
-
-        // Check population limits
-        if (CurrentSpawnCount >= Template.MaxPopulation)
+        // Population limit. For a zone placement (ArcheageZones <c>SpawnPopulation</c>) a dead unit frees its
+        // slot at once, so corpses must not count — otherwise a placement whose units were killed refuses to
+        // spawn while every call still looks like "max population reached" and the slot is re-announced forever.
+        // Legacy json spawners keep counting tracked entries: there a corpse deliberately blocks the respawn
+        // until it is removed (HasCorpse()).
+        var populationCount = ZonePopulationManaged ? LiveSpawnCount : CurrentSpawnCount;
+        if (populationCount >= Template.MaxPopulation)
         {
-            //Logger.Debug($"[Spawn] SpawnerId={SpawnerId} reached max population ({CurrentSpawnCount}/{Template.MaxPopulation})");
+            //Logger.Debug($"[Spawn] SpawnerId={SpawnerId} reached max population ({populationCount}/{Template.MaxPopulation})");
             return;
         }
 
-        if (Template.SuspendSpawnCount > 0 && CurrentSpawnCount > Template.SuspendSpawnCount)
+        if (Template.SuspendSpawnCount > 0 && populationCount > Template.SuspendSpawnCount)
         {
-            //Logger.Debug($"[Spawn] SpawnerId={SpawnerId} reached suspend limit ({CurrentSpawnCount}/{Template.SuspendSpawnCount})");
+            //Logger.Debug($"[Spawn] SpawnerId={SpawnerId} reached suspend limit ({populationCount}/{Template.SuspendSpawnCount})");
             return;
         }
 
@@ -1004,7 +1032,7 @@ public class NpcSpawner : Spawner<Npc>
             return;
         }
 
-        //Logger.Debug($"[Spawn] Found {SpawnableNpcs.Count} spawnable NPCs for SpawnerId={SpawnerId}");
+        Logger.Debug($"[Spawn] Starting spawn process for SpawnerId={SpawnerId}, UnitId={UnitId}, Template={Template.Id}");
 
         // List to store spawned NPCs
         var spawnedNpcs = new List<Npc>();
@@ -1022,19 +1050,21 @@ public class NpcSpawner : Spawner<Npc>
 
                 //Logger.Debug($"[Spawn] Attempting to spawn NPC template {npcTemplate.SpawnerId}:{npcTemplate.MemberId} for SpawnerId={SpawnerId}");
 
+                // Спавним NPC по шаблону. Замок спавнера здесь не держим: создание юнита уходит в NpcManager.Create
+                // (AI, сеть) и может ждать чужие замки — а его ждёт, например, тик AI, убивая НПС этого же размещения.
+                // Список пополняем коротким замком ниже.
+                var spawned = npcTemplate.Spawn(this);
+                if (spawned == null || spawned.Count == 0)
+                {
+                    Logger.Warn($"[Spawn] Failed to spawn NPC from template {npcTemplate.SpawnerId}:{npcTemplate.MemberId} for SpawnerId={SpawnerId}");
+                    continue;
+                }
+
+                //Logger.Debug($"[Spawn] Successfully spawned {spawned.Count} NPCs from template {npcTemplate.SpawnerId}:{npcTemplate.MemberId}");
+
+                // Adds the spawned NPCs to the list
                 lock (_spawnLock)
                 {
-                    // Спавним NPC по шаблону
-                    var spawned = npcTemplate.Spawn(this);
-                    if (spawned == null || spawned.Count == 0)
-                    {
-                        Logger.Warn($"[Spawn] Failed to spawn NPC from template {npcTemplate.SpawnerId}:{npcTemplate.MemberId} for SpawnerId={SpawnerId}");
-                        continue;
-                    }
-
-                    //Logger.Debug($"[Spawn] Successfully spawned {spawned.Count} NPCs from template {npcTemplate.SpawnerId}:{npcTemplate.MemberId}");
-
-                    // Adds the spawned NPCs to the list
                     spawnedNpcs.AddRange(spawned);
                     foreach (var npc in spawned)
                     {

@@ -1,5 +1,6 @@
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.World;
+using AAEmu.Game.Models.Game.World.Transform;
 using AAEmu.Game.Services;
 
 namespace AAEmu.UnitTests.Game.Services;
@@ -91,7 +92,47 @@ public class ZoneNpcSpawnOrchestratorTests
         await Assert.That(orchestrator.QueuedCount).IsGreaterThan(initialQueued);
     }
 
-    private static NpcSpawner BuildSpawner(uint spawnerId, int maxPopulation, bool activationState, int minPopulation = 1)
+    [Test]
+    public async Task PopulateZone_AnnouncesOnlyThatZone_Once()
+    {
+        var template = new WorldTemplate { Name = "main_world", Id = 1 };
+        var world = new WorldInstance(template, 0, true, 1);
+        var orchestrator = new ZoneNpcSpawnOrchestrator(world);
+
+        var halcyona = BuildSpawner(spawnerId: 600, maxPopulation: 2, activationState: true, zoneKey: 129);
+        var solzreed = BuildSpawner(spawnerId: 700, maxPopulation: 3, activationState: true, zoneKey: 179);
+        orchestrator.RegisterPlacement(halcyona);
+        orchestrator.RegisterPlacement(solzreed);
+
+        await Assert.That(orchestrator.PopulateZone(129)).IsTrue();
+        await Assert.That(orchestrator.QueuedCount).IsEqualTo(2);
+        await Assert.That(orchestrator.IsZonePopulated(129)).IsTrue();
+        await Assert.That(orchestrator.IsZonePopulated(179)).IsFalse();
+
+        // A second announcement of the same zone must not duplicate its slots.
+        await Assert.That(orchestrator.PopulateZone(129)).IsFalse();
+        await Assert.That(orchestrator.QueuedCount).IsEqualTo(2);
+
+        await Assert.That(orchestrator.PopulateZone(179)).IsTrue();
+        await Assert.That(orchestrator.QueuedCount).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Tick_DoesNotPopulateWholeWorldByItself()
+    {
+        var template = new WorldTemplate { Name = "main_world", Id = 1 };
+        var world = new WorldInstance(template, 0, true, 1);
+        var orchestrator = new ZoneNpcSpawnOrchestrator(world);
+        orchestrator.RegisterPlacement(BuildSpawner(spawnerId: 800, maxPopulation: 4, activationState: true, zoneKey: 129));
+
+        orchestrator.Tick();
+
+        await Assert.That(orchestrator.QueuedCount).IsEqualTo(0);
+        await Assert.That(orchestrator.IsZonePopulated(129)).IsFalse();
+    }
+
+    private static NpcSpawner BuildSpawner(uint spawnerId, int maxPopulation, bool activationState, int minPopulation = 1,
+        uint zoneKey = 0)
     {
         var npcLine = new NpcSpawnerNpc(spawnerId, 11999);
         var spawnerTemplate = new NpcSpawnerTemplate(spawnerId)
@@ -106,7 +147,8 @@ public class ZoneNpcSpawnOrchestratorTests
             SpawnerId = spawnerId,
             UnitId = 11999,
             Template = spawnerTemplate,
-            NpcSpawnerIds = [spawnerId]
+            NpcSpawnerIds = [spawnerId],
+            Position = new WorldSpawnPosition { ZoneId = zoneKey }
         };
         spawner.InitializeSpawnableNpcs(spawnerTemplate);
         return spawner;

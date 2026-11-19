@@ -335,8 +335,8 @@ public class SpawnManager(WorldInstance parentWorld)
         // NPC spawn: client npc_spawners.g (Zones) first; npc_spawns.json fills the rest.
         Logger.Debug($"Loading NPC spawn data for {World} ...");
         ClientNpcSpawnerLoader.LoadNpcSpawners(this, World);
-        if (ZoneNpcSpawnRules.AuthoritativeFromClientG && World.ZoneNpcSpawn != null)
-            World.ZoneNpcSpawn.PopulateAtLoad();
+        // Placements are announced per zone when a player enters it (ZoneNpcSpawnOrchestrator.PopulateZone), like the
+        // zone host loading npc_spawners.g for a zone — not all 25 000 placements at boot.
 
         _ = LoadNpcSpawns(worldPath);
         var clientG = World.ZoneNpcSpawn is { PlacementCount: > 0 } zoneOrchestrator

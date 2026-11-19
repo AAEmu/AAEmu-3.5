@@ -39,19 +39,24 @@ public class AIManager : Singleton<AIManager>, IAIManager
 
     public void Tick(TimeSpan delta)
     {
+        // Снимок под замком, тик — вне него. Держать _aiLock на время тика нельзя: тик боя убивает юнита
+        // (Skill → DoDie → NpcSpawner.DoDespawn, которому нужен замок спавнера), а спавн (NpcSpawner.DoSpawn →
+        // NpcManager.Create) добавляет AI через AddAi и ждёт этот же _aiLock. Две стороны брали замки в обратном
+        // порядке и вешали весь сервер. Зона тикает AI без общего замка списка — так же делаем и здесь.
+        NpcAi[] snapshot;
         lock (_aiLock)
+            snapshot = _npcAis.ToArray();
+
+        foreach (var npcai in snapshot)
         {
-            foreach (var npcai in _npcAis.ToList())
+            try
             {
-                try
-                {
-                    if (npcai.Owner != null)
-                        npcai.Tick(delta);
-                }
-                catch (Exception e)
-                {
-                    Logger.Error(e);
-                }
+                if (npcai.Owner != null)
+                    npcai.Tick(delta);
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e);
             }
         }
     }

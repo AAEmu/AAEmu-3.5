@@ -397,7 +397,22 @@ public class WorldManager(
     private void ZoneNpcSpawnTick(TimeSpan _)
     {
         foreach (var world in _worlds.Values)
-            world.ZoneNpcSpawn?.Tick();
+        {
+            var orchestrator = world.ZoneNpcSpawn;
+            if (orchestrator == null)
+                continue;
+
+            // ArcheageZones loads a zone's spawners when the zone becomes active (a player is in it), not for the
+            // whole world at boot. Each zone is announced once by the orchestrator.
+            foreach (var character in world.GetAllCharacters())
+            {
+                if (character?.Transform == null)
+                    continue;
+                orchestrator.PopulateZone(character.Transform.ZoneId);
+            }
+
+            orchestrator.Tick();
+        }
     }
 
     private static readonly Lock AutoWaterProbeLock = new();

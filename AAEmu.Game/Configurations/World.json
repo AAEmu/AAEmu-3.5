@@ -18,7 +18,7 @@
         "StaticGeometryMaxZones": 16,
         "WalkerCollisionEnabled": true,
         "ClientNpcSpawnEnabled": true,
-        "ClientNpcSpawnZoneKeys": [ 129, 179 ],
+        "ClientNpcSpawnZoneKeys": [],
         "AiStopCasting": true,
         "MaxInstances": 32,
         "TargetPhysicsTps": 25.0,
