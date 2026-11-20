@@ -8,6 +8,8 @@
     <ProjectReference Include="..\AAEmu.Commons\AAEmu.Commons.csproj" />
     <ProjectReference Include="..\AAEmu.Game\AAEmu.Game.csproj" />
     <ProjectReference Include="..\AAEmu.Login\AAEmu.Login.csproj" />
+    <None Include="..\AAEmu.Game\Configurations\xorKeyValue.txt"
+          Link="Configurations\xorKeyValue.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   
   <ItemGroup>

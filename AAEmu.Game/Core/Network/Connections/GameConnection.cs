@@ -15,6 +15,10 @@ namespace AAEmu.Game.Core.Network.Connections;
 public class GameConnection
 {
     private readonly ISession _session;
+    private readonly Lock _sendLock = new();
+    private readonly Queue<byte[]> _pendingSends = new();
+    private bool _sending;
+    private bool _sendFailed;
     private int _receiveChunkCount;
     private int _receivedPacketCount;
 
@@ -54,17 +58,52 @@ public class GameConnection
     /// <param name="packet"></param>
     public void SendPacket(GamePacket packet)
     {
-        packet.Connection = this;
-        SendPacket(packet.Encode());
-    }
+        byte[] frame;
+        // Level 5 packet numbers must follow the order in which frames enter the send queue.
+        lock (_sendLock)
+        {
+            if (_sendFailed)
+                return;
 
-    /// <summary>
-    /// Sends RAW packet data to the active connection
-    /// </summary>
-    /// <param name="packet"></param>
-    private void SendPacket(byte[] packet)
-    {
-        _session?.SendPacket(packet);
+            packet.Connection = this;
+            frame = packet.Encode();
+            if (_sending)
+            {
+                _pendingSends.Enqueue(frame);
+                return;
+            }
+
+            _sending = true;
+        }
+
+        try
+        {
+            while (true)
+            {
+                // The transport can invoke disconnect callbacks before SendPacket returns.
+                _session?.SendPacket(frame);
+                lock (_sendLock)
+                {
+                    if (!_pendingSends.TryDequeue(out frame))
+                    {
+                        _sending = false;
+                        return;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            lock (_sendLock)
+            {
+                _sendFailed = true;
+                _pendingSends.Clear();
+            }
+
+            // Some packet numbers may already have been consumed by the failed batch.
+            Shutdown();
+            throw;
+        }
     }
 
     /// <summary>
