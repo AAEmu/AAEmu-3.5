@@ -199,7 +199,7 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSListSoldItemPacket, 5, typeof(CSListSoldItemPacket));
         RegisterPacket(CSOffsets.CSBuyPriestBuffPacket, 5, typeof(CSBuyPriestBuffPacket));
         RegisterPacket(CSOffsets.CSUseTeleportPacket, 5, typeof(CSUseTeleportPacket));
-        RegisterPacket(CSOffsets.CSTeleportEndedPacket, 5, typeof(CSTeleportEndedPacket));
+        RegisterPacket(CSOffsets.CSSpawnCharacter2Packet, 5, typeof(CSSpawnCharacter2Packet));
         RegisterPacket(CSOffsets.CSRepairPetItemsPacket, 5, typeof(CSRepairPetItemsPacket));
         RegisterPacket(CSOffsets.CSUpdateActionSlotPacket, 5, typeof(CSUpdateActionSlotPacket));
         RegisterPacket(CSOffsets.CSAuctionPostPacket, 5, typeof(CSAuctionPostPacket));

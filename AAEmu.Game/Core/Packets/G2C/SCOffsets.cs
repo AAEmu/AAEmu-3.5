@@ -794,7 +794,6 @@ public static class SCOffsets
     public const ushort SCShowCommonFarmPacket = 0xfff;
     public const ushort SCSlaveStatePacket = 0xfff;
     public const ushort SCSuspectGoingBotTrial = 0xfff;
-    public const ushort SCTeleportUnitPacket = 0xfff;
     public const ushort SCToggleBeautyshopResponsePacket = 0xfff;
     public const ushort SCUnitOfflinePacket = 0xfff;
     public const ushort SCUnknownPacket = 0xfff;

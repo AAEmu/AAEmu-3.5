@@ -218,7 +218,7 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
             {
                 target.SendPacket(new SCJoinedTeamPacket(activeTeam));
                 target.InParty = true;
-                target.SendPacket(new SCTeamPingPosPacket(true, activeTeam.PingPosition, 0));
+                target.SendPacket(new SCTeamPingPosPacket(activeTeam.PingState));
                 activeTeam.BroadcastPacket(new SCTeamMemberJoinedPacket(activeTeam.Id, newTeamMember, party), target.Id);
 
                 // Make sure team-mates outside render distance learn each other's ObjId
@@ -300,7 +300,8 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
         {
             Id = teamIdManager.GetNextId(),
             OwnerId = activeInvitation.Owner.Id,
-            IsParty = activeInvitation.IsParty
+            IsParty = activeInvitation.IsParty,
+            PingState = TeamPingState.FromMapPosition(activeInvitation.Owner.LocalPingPosition)
         };
         if (newTeam.AddMember(activeInvitation.Owner).Item1 == null || newTeam.AddMember(activeInvitation.Target).Item1 == null) return;
 
@@ -310,7 +311,7 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
         activeInvitation.Owner.InParty = true;
         activeInvitation.Target.SendPacket(new SCJoinedTeamPacket(newTeam));
         activeInvitation.Target.InParty = true;
-        newTeam.BroadcastPacket(new SCTeamPingPosPacket(true, activeInvitation.Owner.LocalPingPosition, 0));
+        newTeam.BroadcastPacket(new SCTeamPingPosPacket(newTeam.PingState));
         if (!newTeam.IsParty)
         {
             chatManager.GetRaidChat(newTeam).JoinChannel(activeInvitation.Owner);
@@ -339,7 +340,8 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
         {
             Id = teamIdManager.GetNextId(),
             OwnerId = character.Id,
-            IsParty = true
+            IsParty = true,
+            PingState = TeamPingState.FromMapPosition(character.LocalPingPosition)
         };
         if (newTeam.AddMember(character).Item1 == null) return;
 
@@ -347,7 +349,7 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
 
         character.SendPacket(new SCJoinedTeamPacket(newTeam));
         character.InParty = asParty;
-        newTeam.BroadcastPacket(new SCTeamPingPosPacket(true, character.LocalPingPosition, 0));
+        newTeam.BroadcastPacket(new SCTeamPingPosPacket(newTeam.PingState));
 
         if (!newTeam.IsParty)
             chatManager.GetRaidChat(newTeam).JoinChannel(character);
@@ -545,14 +547,20 @@ public class TeamManager(IWorldManager worldManager, IChatManager chatManager, I
         activeTeam.BroadcastPacket(new SCTeamLootingRuleChangedPacket(teamId, activeTeam.LootingRule, flags));
     }
 
-    public void SetPingPos(Character unit, uint teamId, bool hasPing, WorldSpawnPosition position, uint insId)
+    public void SetPingPos(Character unit, uint teamId, TeamPingState update)
     {
         var activeTeam = GetActiveTeam(teamId);
         if (activeTeam == null || (activeTeam.OwnerId != unit.Id && !activeTeam.IsMarked(unit.Id)))
             return;
 
-        activeTeam.PingPosition = position;
-        activeTeam.BroadcastPacket(new SCTeamPingPosPacket(hasPing, position, insId));
+        TeamPingState pingState;
+        lock (activeTeam.SyncLock)
+        {
+            pingState = activeTeam.PingState.WithUpdate(update);
+            activeTeam.PingState = pingState;
+        }
+
+        activeTeam.BroadcastPacket(new SCTeamPingPosPacket(pingState));
     }
 
     public void SetOffline(Character unit)

@@ -5,7 +5,7 @@ using AAEmu.Game.Models.Game.Teleport;
 namespace AAEmu.Game.Core.Packets.G2C;
 
 public class SCTeleportUnitPacket(TeleportReason reason, short errorMessage, float x, float y, float z, float z2)
-    : GamePacket(SCOffsets.SCTeleportUnitPacket, 5)
+    : GamePacket(SCOffsets.SCUnitTeleportPacket, 5)
 {
     private readonly byte _reason = (byte)reason;
 

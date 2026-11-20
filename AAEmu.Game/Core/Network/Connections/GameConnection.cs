@@ -6,6 +6,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
+using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Housing;
@@ -19,6 +20,7 @@ public class GameConnection
     private readonly Queue<byte[]> _pendingSends = new();
     private bool _sending;
     private bool _sendFailed;
+    private Character _pendingUnitTeleport;
     private int _receiveChunkCount;
     private int _receivedPacketCount;
 
@@ -67,6 +69,11 @@ public class GameConnection
 
             packet.Connection = this;
             frame = packet.Encode();
+            if (packet is SCTeleportUnitPacket)
+                _pendingUnitTeleport = ActiveChar;
+            else if (packet is SCLoadInstancePacket)
+                _pendingUnitTeleport = null;
+
             if (_sending)
             {
                 _pendingSends.Enqueue(frame);
@@ -103,6 +110,20 @@ public class GameConnection
             // Some packet numbers may already have been consumed by the failed batch.
             Shutdown();
             throw;
+        }
+    }
+
+    internal Character CompleteUnitTeleport()
+    {
+        lock (_sendLock)
+        {
+            var character = _pendingUnitTeleport;
+            _pendingUnitTeleport = null;
+            if (character == null || character != ActiveChar)
+                return null;
+
+            character.DisabledSetPosition = false;
+            return character;
         }
     }
 

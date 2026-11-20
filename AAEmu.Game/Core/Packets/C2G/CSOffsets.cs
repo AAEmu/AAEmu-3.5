@@ -150,7 +150,6 @@ public static class CSOffsets
     public const ushort CSEditCharacterPacket = 0x156;
     public const ushort CSSpawnCharacterPacket = 0x12C;
     public const ushort CSSpawnCharacter2Packet = 0x089;
-    public const ushort CSTeleportEndedPacket = 0xfff; // не найден в новом файле
     //public const ushort CSAesXorKeyPacket = 0x094; // CSRsaencryptAeskeyXorkeyPacket
     public const ushort CSNotifySubZonePacket = 0x0F6; // CSNotifySubzonePacket
     public const ushort CSSaveTutorialPacket = 0x051;
@@ -457,7 +456,6 @@ public static class CSOffsets
     public const ushort CSEnterBeautySalonPacket = 0xfff;
     //public const ushort CSSellBackpackGoodsPacket = 0xfff;
     //public const ushort CSSpecialtyRatioPacket = 0xfff;
-    //public const ushort CSTeleportEndedPacket = 0xfff;
     //public const ushort CSChangeMateNamePacket = 0xfff;
 
     //public const ushort CSSpawnSlavePacket = 0xfff;

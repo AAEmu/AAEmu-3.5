@@ -9,6 +9,10 @@ using AAEmu.Commons.Network;
 using AAEmu.Commons.Network.Core;
 using AAEmu.Game.Core.Network.Connections;
 using AAEmu.Game.Core.Network.Game;
+using AAEmu.Game.Core.Packets.C2G;
+using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Teleport;
 
 namespace AAEmu.UnitTests.Game.Core.Network.Connections;
 
@@ -70,6 +74,27 @@ public class GameConnectionTests
         await Assert.That(numbers[1]).IsEqualTo((byte)1);
         if (!pauseDuringEncoding)
             await Assert.That(secondReturnedWhileFirstPaused).IsTrue();
+    }
+
+    [Test]
+    [Arguments(36, false, true)]
+    [Arguments(46, false, true)]
+    [Arguments(35, false, false)]
+    [Arguments(36, true, false)]
+    public async Task TeleportAcknowledgement_ConsumesOnlyMatchingPendingTransition(int size, bool loadInstance, bool acknowledged)
+    {
+        EncryptionManager.Instance.Load();
+        var character = new Character(null);
+        var connection = new GameConnection(new CapturingSession(null)) { AccountId = 1, ActiveChar = character };
+        connection.SendPacket(new SCTeleportUnitPacket(TeleportReason.Gm, 0, 12.5f, 25.25f, -100f, 0f));
+        if (loadInstance)
+            connection.SendPacket(new SCLoadInstancePacket(2, 1, 0, 0, 0, 0, 0, 0));
+
+        var stream = new PacketStream(new byte[size]);
+        new CSSpawnCharacter2Packet { Connection = connection }.Read(stream);
+
+        await Assert.That(stream.Pos).IsEqualTo(size >= 36 ? 36 : 0);
+        await Assert.That(connection.CompleteUnitTeleport() != null).IsEqualTo(!acknowledged && !loadInstance);
     }
 
     private sealed class SequenceTestPacket(Action? beforeWrite) : GamePacket(0x008, 5)

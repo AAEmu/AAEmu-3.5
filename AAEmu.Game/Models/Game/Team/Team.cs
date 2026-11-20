@@ -5,7 +5,6 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Units;
-using AAEmu.Game.Models.Game.World.Transform;
 
 namespace AAEmu.Game.Models.Game.Team;
 
@@ -17,7 +16,7 @@ public class Team : PacketMarshaler
     public TeamMember[] Members { get; set; }
     public LootingRule LootingRule { get; set; }
     public (byte, uint)[] MarksList { get; set; }
-    public WorldSpawnPosition PingPosition { get; set; }
+    public TeamPingState PingState { get; set; } = TeamPingState.Empty;
 
     /// <summary>
     /// Timestamp when the team transitioned to "every member offline" so the 500ms
@@ -54,7 +53,6 @@ public class Team : PacketMarshaler
     {
         Members = new TeamMember[50];
         ResetMarks();
-        PingPosition = new WorldSpawnPosition();
         LootingRule = new LootingRule();
     }
 

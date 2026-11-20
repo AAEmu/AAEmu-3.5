@@ -19,6 +19,7 @@ public class TeamMember(Character character = null) : PacketMarshaler
         stream.Write(Character.Level);
         stream.Write((byte)Role);
         stream.WriteBc(Character.ObjId);
+        stream.Write(Character.HeirLevel);
         return stream;
     }
 
