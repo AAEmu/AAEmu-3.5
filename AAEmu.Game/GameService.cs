@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using AAEmu.Commons.Cryptography;
+using AAEmu.Commons.IO;
 using AAEmu.Commons.Utils;
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Commons.Utils.Updater;
@@ -16,6 +17,7 @@ using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.IO;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game;
+using AAEmu.Game.Utils.DB;
 using AAEmu.Game.Utils.Scripts;
 
 using Microsoft.Extensions.Hosting;
@@ -56,6 +58,8 @@ public sealed class GameService : IHostedService, IDisposable
                 return;
             }
         }
+
+        CompactDatabasePatcher.Apply(FileManager.AppPath);
 
         ClientFileManager.Initialize();
         if (ClientFileManager.Sources.Count == 0)

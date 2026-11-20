@@ -8,7 +8,9 @@ WORKDIR app
 COPY ./Directory.Build.props .
 COPY ./Directory.Packages.props .
 COPY ./AAEmu.Commons ./AAEmu.Commons
+COPY ./AAEmu.Geometry ./AAEmu.Geometry
 COPY ./AAEmu.Game ./AAEmu.Game
+COPY ./SQL/patches/compact/startup ./SQL/patches/compact/startup
 RUN dotnet publish ./AAEmu.Game/AAEmu.Game.csproj -c $CONFIGURATION -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine
