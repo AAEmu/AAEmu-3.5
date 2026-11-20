@@ -1,5 +1,6 @@
 using AAEmu.Commons.IO;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Skills.Templates;
@@ -103,6 +104,33 @@ public class SkillManagerLoadTests
         await Assert.That(recoverExp.NeedLaborPower).IsEqualTo(GetBoolFromSource("recover_exp_effects", 5, "need_labor_power"));
         await Assert.That(recoverExp.NeedPriest).IsEqualTo(GetBoolFromSource("recover_exp_effects", 5, "need_priest"));
         await Assert.That(recoverExp.Penaltied).IsEqualTo(GetBoolFromSource("recover_exp_effects", 5, "penaltied"));
+    }
+
+    [Test]
+    [Arguments(Race.Nuian, 35420u, 35418u)]
+    [Arguments(Race.Dwarf, 35427u, 0u)]
+    [Arguments(Race.Elf, 35421u, 35422u)]
+    [Arguments(Race.Hariharan, 35423u, 35424u)]
+    [Arguments(Race.Ferre, 35425u, 35426u)]
+    [Arguments(Race.Warborn, 35428u, 0u)]
+    [Arguments(Race.Fairy, 0u, 0u)]
+    public async Task Load_UsesStartingActionSkillsForTheCharacterTemplate(Race race, uint firstRacialSkill, uint secondRacialSkill)
+    {
+        var manager = GetLoadedManager();
+
+        foreach (var gender in new[] { Gender.Male, Gender.Female })
+        {
+            var slots = new Dictionary<byte, uint>();
+            foreach (var skill in manager.GetStartingActionSkills(race, gender))
+            {
+                await Assert.That(skill.AddToSlot).IsTrue();
+                await Assert.That(slots.TryAdd(skill.Slot, skill.Template.Id)).IsTrue();
+            }
+
+            await Assert.That(slots.GetValueOrDefault((byte)13)).IsEqualTo(16064u);
+            await Assert.That(slots.GetValueOrDefault((byte)17)).IsEqualTo(firstRacialSkill);
+            await Assert.That(slots.GetValueOrDefault((byte)18)).IsEqualTo(secondRacialSkill);
+        }
     }
 
     private static SkillManager GetLoadedManager()

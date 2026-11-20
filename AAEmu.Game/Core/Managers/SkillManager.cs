@@ -33,6 +33,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
     private Dictionary<uint, HeirSkillTemplate> _heirSkills = new();
     private Dictionary<uint, HeirSkillDetailTemplate> _heirSkillDetails = new();
     private Dictionary<uint, DefaultSkill> _defaultSkills;
+    private List<DefaultSkill> _sharedStartingActionSkills;
+    private Dictionary<(Race Race, Gender Gender), List<DefaultSkill>> _characterStartingActionSkills;
     private List<uint> _commonSkills;
     private Dictionary<AbilityType, List<SkillTemplate>> _startAbilitySkills;
     private Dictionary<uint, PassiveBuffTemplate> _passiveBuffs;
@@ -113,6 +115,14 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
     public List<DefaultSkill> GetDefaultSkills()
     {
         return [.. _defaultSkills.Values];
+    }
+
+    public List<DefaultSkill> GetStartingActionSkills(Race race, Gender gender)
+    {
+        if (_characterStartingActionSkills.TryGetValue((race, gender), out var skills))
+            return [.. _sharedStartingActionSkills, .. skills];
+
+        return [.. _sharedStartingActionSkills];
     }
 
     public BuffTemplate GetBuffTemplate(uint id)
@@ -265,6 +275,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
 
         _skills = [];
         _defaultSkills = [];
+        _sharedStartingActionSkills = [];
+        _characterStartingActionSkills = [];
         _commonSkills = [];
         _startAbilitySkills = [];
         _passiveBuffs = [];
@@ -563,9 +575,17 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             }
             Logger.Info("Loaded {0} heir skill details", _heirSkillDetails.Count);
 
+            var characterActionSkillsById = new Dictionary<int, DefaultSkill>();
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM default_skills";
+                command.CommandText = """
+                                      SELECT ds.*, EXISTS (
+                                          SELECT 1 FROM character_default_skills cds
+                                          WHERE cds.default_skill_id = ds.id
+                                      ) AS character_specific
+                                      FROM default_skills ds
+                                      ORDER BY ds.id
+                                      """;
                 command.Prepare();
                 using (var sqliteReader = command.ExecuteReader())
                 using (var reader = new SQLiteWrapperReader(sqliteReader))
@@ -591,6 +611,42 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         skill.Slot = reader.GetByte("slot_index");
 
                         _defaultSkills.TryAdd(skill.Template.Id, skill);
+
+                        if (!skill.AddToSlot)
+                            continue;
+
+                        if (reader.GetBoolean("character_specific"))
+                            characterActionSkillsById.Add(skill.Id, skill);
+                        else
+                            _sharedStartingActionSkills.Add(skill);
+                    }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                                      SELECT DISTINCT c.char_race_id, c.char_gender_id, cds.default_skill_id
+                                      FROM character_default_skills cds
+                                      JOIN characters c ON c.id = cds.character_id
+                                      ORDER BY cds.default_skill_id
+                                      """;
+                command.Prepare();
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                {
+                    while (reader.Read())
+                    {
+                        if (!characterActionSkillsById.TryGetValue(reader.GetInt32("default_skill_id"), out var skill))
+                            continue;
+
+                        var key = ((Race)reader.GetByte("char_race_id"), (Gender)reader.GetByte("char_gender_id"));
+                        if (!_characterStartingActionSkills.TryGetValue(key, out var skills))
+                        {
+                            skills = [];
+                            _characterStartingActionSkills.Add(key, skills);
+                        }
+
+                        skills.Add(skill);
                     }
                 }
             }
