@@ -56,6 +56,9 @@ public class LocalizationManager : Singleton<LocalizationManager>, ILocalization
 
     public void AddTranslation(string tblName, string tblColumn, long index, string translationValue)
     {
+        if (translationValue?.Contains("DO NOT TRANSLATE", StringComparison.OrdinalIgnoreCase) == true)
+            translationValue = string.Empty;
+
         if (!_translations.TryAdd(GetLookupKey(tblName, tblColumn, index), translationValue))
             Logger.Error($"Failed to add translation: {tblName}:{tblColumn}:{index}");
     }
