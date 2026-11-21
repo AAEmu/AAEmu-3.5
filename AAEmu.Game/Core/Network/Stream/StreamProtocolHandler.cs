@@ -34,9 +34,7 @@ public class StreamProtocolHandler : BaseProtocolHandler
     {
         try
         {
-            var con = StreamConnectionTable.Instance.GetConnection(session.SessionId);
-            if (con != null)
-                StreamConnectionTable.Instance.RemoveConnection(session.SessionId);
+            StreamConnectionTable.Instance.RemoveConnection(session.SessionId)?.OnDisconnect();
         }
         catch (Exception e)
         {

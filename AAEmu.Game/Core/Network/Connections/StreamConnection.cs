@@ -8,6 +8,9 @@ namespace AAEmu.Game.Core.Network.Connections;
 
 public class StreamConnection(ISession session)
 {
+    private readonly Lock _bindingLock = new();
+    private GameConnection _gameConnection;
+    private bool _disconnected;
     private int _requestId = -1;
     private int _receiveChunkCount;
     private int _receivedPacketCount;
@@ -15,8 +18,20 @@ public class StreamConnection(ISession session)
 
     public uint Id => session.SessionId;
     public IPAddress Ip => session.Ip;
-    public GameConnection GameConnection { get; set; }
+    public GameConnection GameConnection => Volatile.Read(ref _gameConnection);
     public PacketStream LastPacket { get; set; }
+
+    internal bool TryBind(GameConnection gameConnection)
+    {
+        lock (_bindingLock)
+        {
+            if (_disconnected || (_gameConnection != null && _gameConnection != gameConnection))
+                return false;
+
+            Volatile.Write(ref _gameConnection, gameConnection);
+            return true;
+        }
+    }
 
     public int IncrementReceiveChunkCount() => Interlocked.Increment(ref _receiveChunkCount);
 
@@ -57,6 +72,26 @@ public class StreamConnection(ISession session)
 
     public void Shutdown()
     {
-        session?.Close();
+        if (TryDisconnect())
+            session?.Close();
+    }
+
+    internal void OnDisconnect() => TryDisconnect();
+
+    private bool TryDisconnect()
+    {
+        GameConnection gameConnection;
+        lock (_bindingLock)
+        {
+            if (_disconnected)
+                return false;
+
+            _disconnected = true;
+            gameConnection = _gameConnection;
+            Volatile.Write(ref _gameConnection, null);
+        }
+
+        gameConnection?.DetachStream(this);
+        return true;
     }
 }

@@ -18,6 +18,9 @@ public class GameConnection
     private readonly ISession _session;
     private readonly Lock _sendLock = new();
     private readonly Queue<byte[]> _pendingSends = new();
+    private readonly Lock _streamLock = new();
+    private StreamConnection _streamConnection;
+    private bool _streamBindingClosed;
     private bool _sending;
     private bool _sendFailed;
     private Character _pendingUnitTeleport;
@@ -52,6 +55,46 @@ public class GameConnection
         Houses = [];
         Payment = new AccountPayment(this);
         // AddAttribute("gmFlag", true);
+    }
+
+    internal bool TryAttachStream(StreamConnection connection)
+    {
+        StreamConnection previous;
+        lock (_streamLock)
+        {
+            if (_streamBindingClosed || !connection.TryBind(this))
+                return false;
+
+            previous = _streamConnection;
+            _streamConnection = connection;
+        }
+
+        if (previous != connection)
+            previous?.Shutdown();
+        return true;
+    }
+
+    internal void DetachStream(StreamConnection connection)
+    {
+        lock (_streamLock)
+        {
+            if (_streamConnection == connection)
+                _streamConnection = null;
+        }
+    }
+
+    internal void CloseStream(bool gameDisconnected = false)
+    {
+        StreamConnection connection;
+        lock (_streamLock)
+        {
+            _streamBindingClosed |= gameDisconnected;
+            connection = _streamConnection;
+            _streamConnection = null;
+        }
+
+        // Closing the transport can invoke its disconnect callback synchronously.
+        connection?.Shutdown();
     }
 
     /// <summary>
@@ -140,6 +183,7 @@ public class GameConnection
     /// </summary>
     public void OnDisconnect()
     {
+        CloseStream(gameDisconnected: true);
         AccountManager.Instance.Remove(AccountId);
 
         if (ActiveChar != null)

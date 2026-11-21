@@ -8,6 +8,7 @@ namespace AAEmu.Game.Core.Managers.World;
 public class StreamManager : Singleton<StreamManager>, IStreamManager
 {
     private readonly Dictionary<uint, ulong> _accounts = [];
+    private readonly Lock _accountsLock = new();
 
     public static void Load()
     {
@@ -16,32 +17,29 @@ public class StreamManager : Singleton<StreamManager>, IStreamManager
 
     public void AddToken(ulong accountId, uint connectionId)
     {
-        _accounts.Add(connectionId, accountId);
+        lock (_accountsLock)
+            _accounts.Add(connectionId, accountId);
     }
 
     public void RemoveToken(uint token)
     {
-        _accounts.Remove(token);
+        lock (_accountsLock)
+            _accounts.Remove(token);
     }
 
     public void Login(StreamConnection connection, ulong accountId, uint token)
     {
-        if (_accounts.ContainsKey(token))
+        bool authorized;
+        lock (_accountsLock)
         {
-            if (accountId == _accounts[token])
-            {
-                var gCon = GameConnectionTable.Instance.GetConnection(token);
-                connection.GameConnection = gCon;
-                connection.SendPacket(new TCJoinResponsePacket(0));
-            }
-            else
-            {
+            authorized = _accounts.TryGetValue(token, out var expectedAccount) && expectedAccount == accountId;
+            if (!authorized)
                 _accounts.Remove(token);
-                connection.SendPacket(new TCJoinResponsePacket(1));
-            }
         }
-        else
-            connection.SendPacket(new TCJoinResponsePacket(1));
+
+        var gameConnection = authorized ? GameConnectionTable.Instance.GetConnection(token) : null;
+        var attached = gameConnection != null && gameConnection.AccountId == accountId && gameConnection.TryAttachStream(connection);
+        connection.SendPacket(new TCJoinResponsePacket(attached ? (byte)0 : (byte)1));
     }
 
     public static void RequestCell(StreamConnection connection, uint instanceId, int x, int y)

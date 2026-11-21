@@ -249,6 +249,11 @@ public class EnterWorldManager(
         {
             connection.State = GameState.Lobby;
             connection.LeaveTask = null;
+
+            // The client must see the old Stream disconnect before it opens Stream again in the lobby.
+            if (leaveWorldTarget == LeaveWorldTargetType.CharacterSelect)
+                connection.CloseStream();
+
             connection.SendPacket(new SCLeaveWorldGrantedPacket(leaveWorldTarget));
             connection.SendPacket(new ChangeStatePacket(0));
         }
