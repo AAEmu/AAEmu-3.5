@@ -144,6 +144,27 @@ internal static class CgfFixture
     /// <summary>A header and an empty chunk table: a cgf with nothing in it.</summary>
     public static byte[] Empty() => Header([]);
 
+    // A [-1,1] mesh, translated two metres along Y by its node. Its stored box needs no vertex stream.
+    public static byte[] WithPlacedRenderBounds(string nodeName = "body", int vertexCount = 8)
+    {
+        var mesh = new byte[132];
+        Write(mesh, 8, vertexCount);
+        for (var axis = 0; axis < 3; axis++)
+        {
+            Write(mesh, 108 + 4 * axis, -1f);
+            Write(mesh, 120 + 4 * axis, 1f);
+        }
+        var node = new byte[148];
+        Encoding.ASCII.GetBytes(nodeName).CopyTo(node, 0);
+        Write(node, 64, 1);
+        Write(node, 68, -1);
+        Write(node, 84, 1f);
+        Write(node, 104, 1f);
+        Write(node, 124, 1f);
+        Write(node, 136, 200f);
+        return Header([(ChunkMesh, 1, mesh), (ChunkNode, 2, node)]);
+    }
+
     /// <summary>One mesh chunk whose proxy is a 2×2×2 box centred on the origin (no render streams).</summary>
     public static byte[] WithBoxProxy()
     {
@@ -151,6 +172,12 @@ internal static class CgfFixture
         var mesh = Mesh(physicsId: 2, positionsId: 0, indicesId: 0);
         return Header([(ChunkMesh, 1, mesh), (ChunkPhysics, 2, physics)]);
     }
+
+    public static byte[] WithBoxAndBrokenProxyReference() => Header([
+        (ChunkMesh, 1, Mesh(physicsId: 2, positionsId: 0, indicesId: 0)),
+        (ChunkPhysics, 2, BoxPhysics()),
+        (ChunkMesh, 3, Mesh(physicsId: 4, positionsId: 0, indicesId: 0))
+    ]);
 
     /// <summary>
     /// One mesh chunk whose proxy is a box and whose node names a material: the case the surface types need.

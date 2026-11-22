@@ -431,17 +431,8 @@ public sealed class StaticCollision
 
     private static (Vector3 Min, Vector3 Max) WorldBox(CollisionMesh mesh, Matrix4x4 toWorld)
     {
-        var min = new Vector3(float.MaxValue);
-        var max = new Vector3(float.MinValue);
-        for (var i = 0; i < 8; i++)
-        {
-            var corner = new Vector3((i & 1) != 0 ? mesh.Max.X : mesh.Min.X, (i & 2) != 0 ? mesh.Max.Y : mesh.Min.Y, (i & 4) != 0 ? mesh.Max.Z : mesh.Min.Z);
-            var p = Vector3.Transform(corner, toWorld);
-            min = Vector3.Min(min, p);
-            max = Vector3.Max(max, p);
-        }
-
-        return (min, max);
+        var box = new GeometryBounds(mesh.Min, mesh.Max).Transform(toWorld);
+        return (box.Min, box.Max);
     }
 
     private static (float[] Bounds, int[] Nodes, Instance[] Ordered) BuildHierarchy(List<Instance> instances)

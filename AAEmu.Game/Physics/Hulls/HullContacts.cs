@@ -303,6 +303,114 @@ public static class HullContacts
         return best;
     }
 
+    internal static Vector3 Centre(HullBody body, HullShape shape) => new(ToWorld(body, shape.CentreX, shape.CentreY), body.Z);
+
+    /// <summary>Sweeps the hull footprints between their positions at the two ends of a substep.</summary>
+    internal static (HullContact Contact, float Fraction)? SweepPair(HullBody a, HullShape shapeA, Vector3 startA,
+        HullBody b, HullShape shapeB, Vector3 startB, uint bBcId)
+    {
+        var startHeight = startA.Z - startB.Z;
+        var endHeight = a.Z - b.Z;
+        var minHeight = -shapeA.Freeboard - shapeB.KeelDepth;
+        var maxHeight = shapeA.KeelDepth + shapeB.Freeboard;
+        if (!ClipTravel(startHeight, endHeight - startHeight, minHeight, maxHeight, out var heightEntry, out var exit))
+            return null;
+        exit = MathF.Min(1f, exit);
+
+        var toA = ToWorld(a, shapeA.CentreX, shapeA.CentreY);
+        var toB = ToWorld(b, shapeB.CentreX, shapeB.CentreY);
+        var fromA = new Vector2(startA.X, startA.Y);
+        var fromB = new Vector2(startB.X, startB.Y);
+        var start = fromA - fromB;
+        var end = toA - toB;
+        var travel = end - start;
+        var reach = shapeA.HalfLength + shapeA.HalfWidth + shapeB.HalfLength + shapeB.HalfWidth + travel.Length();
+        if (start.LengthSquared() > reach * reach)
+            return null;
+
+        var (bowA, sideA) = Axes(a.Yaw);
+        var (bowB, sideB) = Axes(b.Yaw);
+        ReadOnlySpan<Vector2> axes = [bowA, sideA, bowB, sideB];
+        var planarEntry = float.NegativeInfinity;
+        var entryNormal = Vector2.Zero;
+        foreach (var axis in axes)
+        {
+            var radius = Radius(shapeA, bowA, sideA, axis) + Radius(shapeB, bowB, sideB, axis);
+            var startDistance = Vector2.Dot(start, axis);
+            var shift = Vector2.Dot(travel, axis);
+            if (!ClipTravel(startDistance, shift, -radius, radius, out var enters, out var leaves))
+                return null;
+            if (enters > planarEntry)
+            {
+                planarEntry = enters;
+                entryNormal = shift > 0f ? -axis : axis;
+            }
+            exit = MathF.Min(exit, leaves);
+            if (MathF.Max(planarEntry, heightEntry) > exit || exit < 0f)
+                return null;
+        }
+
+        var entry = MathF.Max(planarEntry, heightEntry);
+        // If the hulls began in contact, only resolve overlap still present at the end of the step.
+        if (entry < 0f && exit < 1f)
+            return null;
+        var fraction = entry >= 0f ? entry : 1f;
+        var normal = entryNormal;
+        var penetration = 0f;
+        var hitA = Vector2.Lerp(fromA, toA, fraction);
+        var hitB = Vector2.Lerp(fromB, toB, fraction);
+        if (planarEntry < 0f || heightEntry > planarEntry)
+        {
+            // The solver uses a horizontal impulse, even when the vertical interval opens last.
+            penetration = float.PositiveInfinity;
+            foreach (var axis in axes)
+            {
+                var radius = Radius(shapeA, bowA, sideA, axis) + Radius(shapeB, bowB, sideB, axis);
+                var distance = Vector2.Dot(hitA - hitB, axis);
+                var depth = radius - MathF.Abs(distance);
+                if (depth < penetration)
+                {
+                    penetration = depth;
+                    normal = distance < 0f || (distance == 0f && Vector2.Dot(travel, axis) > 0f) ? -axis : axis;
+                }
+            }
+            if (penetration <= 0f)
+                return null;
+        }
+        var tangent = new Vector2(-normal.Y, normal.X);
+        var uA = Vector2.Dot(hitA, tangent);
+        var uB = Vector2.Dot(hitB, tangent);
+        var rA = Radius(shapeA, bowA, sideA, tangent);
+        var rB = Radius(shapeB, bowB, sideB, tangent);
+        var tangentMidpoint = (MathF.Max(uA - rA, uB - rB) + MathF.Min(uA + rA, uB + rB)) * 0.5f;
+        var plane = Vector2.Dot(hitB, normal) + Radius(shapeB, bowB, sideB, normal);
+        var point = normal * plane + tangent * tangentMidpoint;
+        var zA = float.Lerp(startA.Z, a.Z, fraction);
+        var zB = float.Lerp(startB.Z, b.Z, fraction);
+        var floor = MathF.Max(zA - shapeA.KeelDepth, zB - shapeB.KeelDepth);
+        var ceiling = MathF.Min(zA + shapeA.Freeboard, zB + shapeB.Freeboard);
+        var contactZ = Math.Clamp(b.WaterLevel, floor, MathF.Max(floor, ceiling));
+        return (new HullContact(point, contactZ, normal, penetration, HullContactKind.Hull, bBcId), fraction);
+
+        static float Radius(HullShape shape, Vector2 bow, Vector2 side, Vector2 axis) =>
+            shape.HalfLength * MathF.Abs(Vector2.Dot(bow, axis)) + shape.HalfWidth * MathF.Abs(Vector2.Dot(side, axis));
+    }
+
+    private static bool ClipTravel(float start, float travel, float min, float max, out float entry, out float exit)
+    {
+        if (MathF.Abs(travel) < 1e-5f)
+        {
+            entry = float.NegativeInfinity;
+            exit = float.PositiveInfinity;
+            return start >= min && start <= max;
+        }
+        var first = (min - start) / travel;
+        var last = (max - start) / travel;
+        entry = MathF.Min(first, last);
+        exit = MathF.Max(first, last);
+        return entry <= 1f && exit >= 0f;
+    }
+
     /// <summary>How fast <paramref name="a"/>'s contact point closes on <paramref name="b"/>'s along the contact's normal (m/s, positive: closing).</summary>
     public static float ClosingSpeed(HullBody a, HullBody b, HullContact contact)
     {

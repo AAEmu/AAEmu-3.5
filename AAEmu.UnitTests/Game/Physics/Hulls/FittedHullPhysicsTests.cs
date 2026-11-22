@@ -241,6 +241,74 @@ public class FittedHullPhysicsTests
     }
 
     [Test]
+    public async Task Impulse_AddsVerticalVelocityChangeAndMassScaledImpulse()
+    {
+        using var physics = Seeded(speed: 0f);
+        physics.SetExtraMass(7, 15000f);
+        physics.ApplyImpulse(7, new HullImpulse(new Vector3(0f, 0f, 1.25f), Vector3.Zero,
+            new Vector3(0f, 0f, 22500f), Vector3.Zero));
+
+        var pose = physics.Pose(7);
+        await Assert.That(pose.Velocity.Z).IsEqualTo(2f).Within(0.00001f);
+        physics.Advance([7u], 34, _ => 15000f);
+        await Assert.That(physics.Pose(7).Z).IsGreaterThan(pose.Z);
+    }
+
+    [Test]
+    public async Task AngularImpulse_UsesLoadedMassAndAuthoredMassBoxForYaw()
+    {
+        using var physics = NewPhysics();
+        var ship = new ShipModelV1 { Id = 3, Mass = 6000f, MassBoxSizeX = 3f, MassBoxSizeY = 4f, MassBoxSizeZ = 2f };
+        physics.Add(7, 191, ship, ship.Mass, new Vector3(16f, 30f, 6f));
+        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 1000f, Z = 100f }, 100f, 0);
+        physics.SetExtraMass(7, 6000f);
+
+        physics.ApplyImpulse(7, new HullImpulse(Vector3.Zero, new Vector3(0f, 0f, 0.2f), Vector3.Zero,
+            new Vector3(0f, 0f, 25000f)));
+
+        // The loaded mass box has Izz = 12000 * (3² + 4²) / 3 = 100000 kg m².
+        await Assert.That(physics.Pose(7).AngularVelocity.Z).IsEqualTo(0.45f).Within(0.00001f);
+    }
+
+    [Test]
+    public async Task Seed_RestoresVerticalVelocityInShipMovementUnits()
+    {
+        using var physics = Seeded(speed: 0f);
+        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 1000f, Z = 101f, VelZ = -3072 }, 100f, 100);
+
+        await Assert.That(physics.Pose(7).Velocity.Z).IsEqualTo(-1.5f);
+    }
+
+    [Test]
+    public async Task Impulse_FromAnotherUnitUsesTheCasterToHullFrame()
+    {
+        using var physics = NewPhysics();
+        Add(physics, 7, 1000f, 1000f, 0f, MathF.PI / 2f);
+
+        physics.ApplyImpulse(7, new HullImpulse(new Vector3(0f, 3f, 0f), Vector3.Zero, Vector3.Zero, Vector3.Zero),
+            new Vector3(1000f, 990f, 99.6f));
+
+        var velocity = physics.Pose(7).Velocity;
+        await Assert.That(velocity.X).IsEqualTo(0f).Within(0.00001f);
+        await Assert.That(velocity.Y).IsEqualTo(3f).Within(0.00001f);
+    }
+
+    [Test]
+    public async Task Explosion_UsesWorldDirectionRegardlessOfHullHeading()
+    {
+        using var physics = NewPhysics();
+        Add(physics, 7, 1000f, 1000f, 0f, MathF.PI / 2f);
+        physics.Advance([7u], 0, _ => 15000f);
+
+        physics.Explode(new HullExplosion(0, 0, 1000, 990, 94.6f, 20000f, 0f, 2f));
+
+        var velocity = physics.Pose(7).Velocity;
+        await Assert.That(velocity.X).IsEqualTo(0f).Within(0.00001f);
+        await Assert.That(velocity.Y).IsGreaterThan(0.5f);
+        await Assert.That(velocity.Z).IsGreaterThan(0.2f);
+    }
+
+    [Test]
     public async Task WaterLevelUpdate_MovesHullToTheNewWaterline()
     {
         using var physics = Seeded(speed: 0f);

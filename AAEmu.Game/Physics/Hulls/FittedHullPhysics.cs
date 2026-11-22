@@ -17,11 +17,10 @@ namespace AAEmu.Game.Physics.Hulls;
 /// it, and it reports nothing more until it is revived or seeded.
 /// </summary>
 /// <remarks>
-/// Not native: no buoyancy roll or pitch (reported level), contacts from a box and sampled rays, not the hull's physics
-/// proxy.
+/// The measured flotation surfaces drive heave, pitch and roll. Contacts use a box and sampled rays.
 /// </remarks>
 public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<int, StaticCollision?>? doodads = null,
-    Func<uint, bool>? isDead = null, bool restDeadOnly = true)
+    Func<uint, bool>? isDead = null, bool restDeadOnly = true, bool useAuthoredDrive = false, Func<Vector3, bool>? isWaterAt = null)
     : IHullPhysics
 {
     /// <summary>A dead hull on a contact whose speeds (m/s, rad/s) are all under this has settled: native's reporter drops an impact this small.</summary>
@@ -29,12 +28,15 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
 
     public const float StaticSourceMass = 10000f;
     public const double MaxCatchUpMs = 250.0;
+    private const double StepMs = HullBody.StepSeconds * 1000;
+    private const double CollisionStepMs = StepMs * 0.5;
 
     private readonly object _sync = new();
     private readonly bool _deadRest = restDeadOnly;
     private readonly Dictionary<uint, Hull> _hulls = [];
     private readonly List<HullContact> _contacts = [];
     private readonly List<Hull> _pairs = [];
+    private readonly List<Hull> _stepping = [];
     private bool _collisionsEnabled = true;
     private bool _poseAtTickTime;
     private long _contactSteps;
@@ -65,7 +67,11 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
     private void AddCore(uint bcId, ushort zoneKey, ShipModelV1? ship, float shipMass, Vector3 authoredSize)
     {
         var shape = HullShape.For(ship, authoredSize);
-        _hulls[bcId] = new Hull(bcId, new HullBody(HullModel.For(ship)) { KeelDepth = shape.KeelDepth }, shape, HullContacts.Outline(shape), shipMass) { ZoneKey = zoneKey };
+        _hulls[bcId] = new Hull(bcId, new HullBody(HullModel.For(ship)) { KeelDepth = shape.KeelDepth }, shape, HullContacts.Outline(shape), shipMass)
+        {
+            ZoneKey = zoneKey,
+            ShipModel = ship
+        };
     }
 
     public void Remove(uint bcId)
@@ -104,7 +110,7 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         }
     }
 
-    public void SetMovementModifiers(uint bcId, float moveSpeedMultiplier, float turnSpeedMultiplier)
+    public void SetMovementModifiers(uint bcId, float moveSpeedMultiplier, float turnSpeedMultiplier, ShipDriveAttributes? drive = null)
     {
         lock (_sync)
         {
@@ -113,6 +119,9 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
                 body.MoveSpeedMultiplier = MathF.Min(moveSpeedMultiplier, 10f);
             if (float.IsFinite(turnSpeedMultiplier) && turnSpeedMultiplier >= 0f)
                 body.TurnSpeedMultiplier = MathF.Min(turnSpeedMultiplier, 10f);
+            if (drive is { } attributes && float.IsFinite(attributes.SpeedMultiplier) && float.IsFinite(attributes.TurnMultiplier) &&
+                float.IsFinite(attributes.SteeringBonus) && float.IsFinite(attributes.ReverseSpeedBonus))
+                body.DriveAttributes = attributes;
         }
     }
 
@@ -131,10 +140,10 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         body.X = pose.X;
         body.Y = pose.Y;
         body.Z = pose.Z;
-        body.HeaveRate = 0;
-        body.Yaw = HullBody.YawFromShorts(pose.RotationX, pose.RotationY, pose.RotationZ);
-        body.SetWorldVelocity(pose.VelX * 1f / 2048f, pose.VelY * 1f / 2048f);
-        body.YawRate = float.IsFinite(pose.AngVelZ) ? Math.Clamp(pose.AngVelZ, -HullBody.MaxYawRate, HullBody.MaxYawRate) : 0f;
+        body.HeaveRate = pose.VelZ / ShipMovementCodec.VelocityScale;
+        body.AuthoredDrive?.Reset();
+        body.SeedOrientation(pose.RotationX, pose.RotationY, pose.RotationZ, new Vector3(pose.AngVelX, pose.AngVelY, pose.AngVelZ));
+        body.SetWorldVelocity(pose.VelX / ShipMovementCodec.VelocityScale, pose.VelY / ShipMovementCodec.VelocityScale);
         body.Steering = Math.Clamp(pose.Steering / 127f, -1f, 1f);
         body.SteeringRate = 0;
         body.Throttle = Math.Clamp(pose.Throttle / 127f, -1f, 1f);
@@ -200,6 +209,30 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         }
     }
 
+    public void SetBuoyancy(uint bcId, HullBuoyancy volumes, float densityMultiplier, GeometryBounds? brushBounds = null)
+    {
+        if (!float.IsFinite(densityMultiplier) || densityMultiplier <= 0f) return;
+        const double waterDensity = 1000d; // kg/m³, the native world's water area default.
+        lock (_sync)
+        {
+            var hull = _hulls[bcId];
+            if (hull.ShipModel is { } model)
+            {
+                // HullBuilder.Plan in ArcheageZones places a thin floating box below the lowest brush bound.
+                var bounds = brushBounds.GetValueOrDefault();
+                var half = (bounds.Max - bounds.Min) * 0.5f;
+                var height = model.KeelHeight > 0f ? model.KeelHeight : half.X * 0.01f;
+                var length = model.KeelLength > 0f ? model.KeelLength : half.Y;
+                var centre = hull.Body.Model.MassCentre with { Z = bounds.Min.Z - height + model.KeelOffsetZ };
+                if (height > 0f && length > 0f && float.IsFinite(height) && float.IsFinite(length) && HullBody.IsFinite(centre))
+                    volumes = volumes.WithKeel(centre, new Vector3(0.0001f, length, height));
+            }
+            hull.Body.Buoyancy = (volumes, waterDensity * densityMultiplier);
+            hull.Body.AuthoredDrive = useAuthoredDrive ? ShipDrive.Create(hull.ShipModel, brushBounds, isWaterAt) : null;
+            hull.ReportPose = null;
+        }
+    }
+
     public void SetHelm(uint bcId, float throttle, float steering, long nowMs)
     {
         lock (_sync) SetHelmCore(bcId, throttle, steering, nowMs);
@@ -215,19 +248,31 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         hull.HelmAtMs = nowMs;
     }
 
-    /// <summary>The fitted model turns an impulse by the hull's heading whatever its source.</summary>
+    /// <summary>External impulses arrive in a frame whose forward axis points from the caster to the hull.</summary>
     public void ApplyImpulse(uint bcId, HullImpulse impulse, Vector3? source = null)
     {
         if (!HullBody.IsFinite(impulse.Velocity) || !HullBody.IsFinite(impulse.AngularVelocity)
             || !HullBody.IsFinite(impulse.Impulse) || !HullBody.IsFinite(impulse.AngularImpulse))
             return;
-        lock (_sync) ApplyImpulseCore(bcId, impulse);
+        lock (_sync) ApplyImpulseCore(bcId, impulse, source);
     }
 
-    private void ApplyImpulseCore(uint bcId, HullImpulse impulse)
+    private void ApplyImpulseCore(uint bcId, HullImpulse impulse, Vector3? source)
     {
         var hull = _hulls[bcId];
         if (hull.Held) return;
+        if (source is { } from && float.IsFinite(from.X) && float.IsFinite(from.Y))
+        {
+            var sourceYaw = MathF.Atan2(-(float)(hull.Body.X - from.X), (float)(hull.Body.Y - from.Y));
+            var toBody = Quaternion.Conjugate(hull.Body.Orientation()) * Quaternion.CreateFromAxisAngle(Vector3.UnitZ, sourceYaw);
+            impulse = impulse with
+            {
+                Velocity = Vector3.Transform(impulse.Velocity, toBody),
+                AngularVelocity = Vector3.Transform(impulse.AngularVelocity, toBody),
+                Impulse = Vector3.Transform(impulse.Impulse, toBody),
+                AngularImpulse = Vector3.Transform(impulse.AngularImpulse, toBody)
+            };
+        }
         hull.Body.ApplyImpulse(impulse.Velocity, impulse.AngularVelocity, impulse.Impulse, impulse.AngularImpulse);
         hull.ReportPose = null;
         hull.Resting = false;
@@ -267,7 +312,8 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
             var force = blast.Pressure * Math.Clamp(1f - distance / radius, 0f, 1f);
             if (force <= 0f)
                 continue;
-            var push = direction * force;
+            var toBody = Quaternion.Conjugate(hull.Body.Orientation());
+            var push = Vector3.Transform(direction * force, toBody);
             hull.Body.ApplyImpulse(push, Vector3.Zero, push, Vector3.Zero);
             hull.ReportPose = null;
             hull.Resting = false;
@@ -289,51 +335,11 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
             hull.ReportPose = null;
         }
 
-        foreach (var bcId in active)
-        {
-            var hull = _hulls[bcId];
-            if (hull.Held)
-            {
-                hull.SimulatedToMs = nowMs;
-                continue;
-            }
-            if (!hull.Seeded || !hull.Controlled)
-                continue;
-            var stepMs = HullBody.StepSeconds * 1000;
-            if (nowMs < hull.SimulatedToMs)
-                hull.SimulatedToMs = nowMs;
-            else if (nowMs - hull.SimulatedToMs > MaxCatchUpMs)
-                hull.SimulatedToMs = nowMs - MaxCatchUpMs;
-            if ((hull.Resting || hull.Quiet) && !IsDead(bcId))
-                hull.Resting = hull.Quiet = false;
-            if (hull.Resting)
-            {
-                // A moored obstacle to the other hulls; its clock keeps up so it does not catch up when woken.
-                hull.SimulatedToMs += Math.Floor((nowMs - hull.SimulatedToMs) / stepMs) * stepMs;
-                continue;
-            }
+        if (useAuthoredDrive)
+            AdvanceWithPairContacts(active, nowMs, reportMass);
+        else
+            AdvanceIndependently(active, nowMs, reportMass);
 
-            hull.Active = true;
-            hull.Touched = false;
-            while (hull.SimulatedToMs + stepMs <= nowMs)
-            {
-                if (hull.HelmAtMs >= 0 && hull.SimulatedToMs - hull.HelmAtMs > IHullPhysics.HelmTimeoutMs)
-                {
-                    hull.Body.DropHelm();
-                    hull.HelmAtMs = -1;
-                }
-
-                hull.Body.Step();
-                hull.Touched = CollisionsEnabled && Collide(hull);
-                hull.SimulatedToMs += stepMs;
-            }
-
-            // Hull-hull contacts below resolve after the tick's reports were taken.
-            hull.ReportPose = PoseAtTickTime ? PoseOf(hull.Body, (nowMs - hull.SimulatedToMs) / 1000.0) : PoseOf(hull.Body);
-        }
-
-        if (CollisionsEnabled)
-            CollidePairs(reportMass);
         foreach (var bcId in active)
         {
             var hull = _hulls[bcId];
@@ -347,6 +353,110 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
             }
         }
     }
+
+    private void AdvanceIndependently(IReadOnlyList<uint> active, long nowMs, Func<uint, float> reportMass)
+    {
+        foreach (var bcId in active)
+        {
+            var hull = _hulls[bcId];
+            if (!PrepareToAdvance(hull, nowMs))
+                continue;
+            var dead = IsDead(bcId);
+            while (hull.SimulatedToMs + StepMs <= nowMs)
+            {
+                ExpireHelm(hull);
+                hull.Body.StepSubstep(dead, (float)HullBody.StepSeconds);
+                hull.Touched = _collisionsEnabled && Collide(hull);
+                hull.SimulatedToMs += StepMs;
+            }
+
+            // Hull-hull contacts below resolve after the tick's reports were taken.
+            RecordPose(hull, nowMs);
+        }
+
+        if (_collisionsEnabled)
+        {
+            CollectPairHulls();
+            CollidePairs(reportMass);
+        }
+    }
+
+    private void AdvanceWithPairContacts(IReadOnlyList<uint> active, long nowMs, Func<uint, float> reportMass)
+    {
+        var lastFrame = (long)Math.Floor(nowMs / CollisionStepMs + 1e-6);
+        var firstFrame = lastFrame + 1;
+        _stepping.Clear();
+        foreach (var bcId in active)
+        {
+            var hull = _hulls[bcId];
+            if (!PrepareToAdvance(hull, nowMs))
+                continue;
+            // Align every hull to one grid so sweeps compare motion over the same interval.
+            hull.NextFrame = (long)Math.Ceiling(hull.SimulatedToMs / CollisionStepMs - 1e-6) + 1;
+            firstFrame = Math.Min(firstFrame, hull.NextFrame);
+            _stepping.Add(hull);
+        }
+
+        if (_collisionsEnabled)
+            CollectPairHulls();
+        var checkPairs = _collisionsEnabled && _pairs.Count > 1;
+        for (var frame = firstFrame; frame <= lastFrame; frame++)
+        {
+            foreach (var hull in _stepping)
+            {
+                if (hull.NextFrame != frame)
+                    continue;
+                ExpireHelm(hull);
+                if (checkPairs)
+                    hull.SubstepStart = HullContacts.Centre(hull.Body, hull.Shape);
+                hull.Body.StepSubstep(IsDead(hull.BcId), (float)(CollisionStepMs / 1000d));
+                hull.SimulatedToMs = frame * CollisionStepMs;
+                hull.Touched = _collisionsEnabled && Collide(hull);
+                hull.LastFrame = frame;
+                hull.NextFrame++;
+            }
+            if (checkPairs)
+                CollidePairs(reportMass, frame);
+        }
+
+        foreach (var hull in _stepping)
+            RecordPose(hull, nowMs);
+        _stepping.Clear();
+    }
+
+    private bool PrepareToAdvance(Hull hull, long nowMs)
+    {
+        if (hull.Held)
+        {
+            hull.SimulatedToMs = nowMs;
+            return false;
+        }
+        if (!hull.Seeded || !hull.Controlled)
+            return false;
+        hull.SimulatedToMs = Math.Clamp(hull.SimulatedToMs, nowMs - MaxCatchUpMs, nowMs);
+        if ((hull.Resting || hull.Quiet) && !IsDead(hull.BcId))
+            hull.Resting = hull.Quiet = false;
+        if (hull.Resting)
+        {
+            // A moored obstacle whose clock keeps up until it is woken.
+            hull.SimulatedToMs += Math.Floor((nowMs - hull.SimulatedToMs) / StepMs) * StepMs;
+            return false;
+        }
+        hull.Active = true;
+        hull.Touched = false;
+        return true;
+    }
+
+    private static void ExpireHelm(Hull hull)
+    {
+        if (hull.HelmAtMs < 0 || hull.SimulatedToMs - hull.HelmAtMs <= IHullPhysics.HelmTimeoutMs)
+            return;
+        hull.Body.DropHelm();
+        hull.HelmAtMs = -1;
+    }
+
+    private void RecordPose(Hull hull, long nowMs) =>
+        hull.ReportPose = _poseAtTickTime ? PoseOf(hull.Body, Math.Max(0d, nowMs - hull.SimulatedToMs) / 1000.0) : PoseOf(hull.Body);
 
     public HullPose Pose(uint bcId)
     {
@@ -390,13 +500,14 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         {
             _hulls.Clear();
             _pairs.Clear();
+            _stepping.Clear();
             _contacts.Clear();
         }
     }
 
     private static HullPose PoseOf(HullBody body) =>
-        new(body.X, body.Y, body.Z, new Quaternion(0f, 0f, MathF.Sin(body.Yaw / 2), MathF.Cos(body.Yaw / 2)),
-            new Vector3(body.VelocityX, body.VelocityY, body.HeaveRate), new Vector3(0f, 0f, body.YawRate),
+        new(body.X, body.Y, body.Z, body.Orientation(),
+            new Vector3(body.VelocityX, body.VelocityY, body.HeaveRate), body.WorldAngularVelocity,
             body.Steering, body.ThrottleStep, body.Rpm);
 
     /// <summary>The pose <paramref name="aheadSeconds"/> after the body's last step, at its velocities.</summary>
@@ -404,17 +515,21 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
     {
         const float k = HullModel.PhysicsTimeScale;
         var ahead = (float)aheadSeconds;
-        var yaw = HullBody.WrapAngle(body.Yaw + k * body.YawRate * ahead);
-        return new HullPose(body.X + k * body.VelocityX * aheadSeconds, body.Y + k * body.VelocityY * aheadSeconds, body.Z + body.HeaveRate * ahead,
-            new Quaternion(0f, 0f, MathF.Sin(yaw / 2), MathF.Cos(yaw / 2)), new Vector3(body.VelocityX, body.VelocityY, body.HeaveRate),
-            new Vector3(0f, 0f, body.YawRate), body.Steering, body.ThrottleStep, body.Rpm);
+        var rotation = body.Orientation(k * ahead);
+        var offset = body.Buoyancy.HasValue
+            ? Vector3.Transform(body.Model.MassCentre, body.Orientation()) - Vector3.Transform(body.Model.MassCentre, rotation)
+            : Vector3.Zero;
+        return new HullPose(body.X + k * body.VelocityX * aheadSeconds + offset.X,
+            body.Y + k * body.VelocityY * aheadSeconds + offset.Y, body.Z + body.HeaveRate * ahead + offset.Z,
+            rotation, new Vector3(body.VelocityX, body.VelocityY, body.HeaveRate),
+            body.WorldAngularVelocity, body.Steering, body.ThrottleStep, body.Rpm);
     }
 
     private bool IsDead(uint bcId) => isDead?.Invoke(bcId) == true;
 
     private static bool Settled(HullBody body) =>
         MathF.Abs(body.Surge) < SettledSpeed && MathF.Abs(body.Sway) < SettledSpeed && MathF.Abs(body.HeaveRate) < SettledSpeed
-        && MathF.Abs(body.YawRate) < SettledSpeed;
+        && MathF.Abs(body.YawRate) < SettledSpeed && MathF.Abs(body.PitchRate) < SettledSpeed && MathF.Abs(body.RollRate) < SettledSpeed;
 
     /// <summary>One step's static contacts of a hull: impulses for every contact, the push-out from the deepest wall. False: none.</summary>
     private bool Collide(Hull hull)
@@ -447,36 +562,60 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         return true;
     }
 
-    /// <summary>Hull against hull, once per tick for every pair with at least one simulated hull.</summary>
-    private void CollidePairs(Func<uint, float> reportMass)
+    private void CollectPairHulls()
     {
+        _pairs.Clear();
         if (_hulls.Count < 2)
             return;
-        _pairs.Clear();
         foreach (var hull in _hulls.Values)
             if (hull.Seeded && !hull.Held)
+            {
+                hull.LastFrame = long.MinValue;
                 _pairs.Add(hull);
+            }
+    }
+
+    private void CollidePairs(Func<uint, float> reportMass, long? frame = null)
+    {
         var hulls = _pairs;
         for (var i = 0; i < hulls.Count; i++)
         for (var j = i + 1; j < hulls.Count; j++)
         {
             var a = hulls[i];
             var b = hulls[j];
-            if (a.World != b.World || (!a.Active && !b.Active))
+            if (a.World != b.World || (!a.Active && !b.Active) ||
+                (frame.HasValue && a.LastFrame != frame.Value && b.LastFrame != frame.Value))
                 continue;
+            // On a substep, orient the contact from a hull that actually advanced.
+            if (frame.HasValue && a.LastFrame != frame.Value)
+                (a, b) = (b, a);
             if (!a.Active || (a.Quiet && b.Active && !b.Quiet))
                 (a, b) = (b, a); // a moves and reports; b may be moored or a quiet wreck
-            var contact = HullContacts.FindPair(a.Body, a.Shape, a.Outline, b.Body, b.Shape, b.BcId);
-            if (contact == null)
+            HullContact contact;
+            if (frame is { } substep)
             {
-                var reverse = HullContacts.FindPair(b.Body, b.Shape, b.Outline, a.Body, a.Shape, a.BcId);
-                if (reverse == null)
+                var fromA = a.LastFrame == substep ? a.SubstepStart : HullContacts.Centre(a.Body, a.Shape);
+                var fromB = b.LastFrame == substep ? b.SubstepStart : HullContacts.Centre(b.Body, b.Shape);
+                if (HullContacts.SweepPair(a.Body, a.Shape, fromA, b.Body, b.Shape, fromB, b.BcId) is not { } hit)
                     continue;
-                // b's point inside a: the same contact seen from a, its push-out reversed.
-                contact = reverse.Value with { Normal = -reverse.Value.Normal, OtherBcId = b.BcId };
+                contact = hit.Contact;
+                var time = (long)((substep - 1d + hit.Fraction) * CollisionStepMs);
+                a.FirstContactMs ??= time;
+                b.FirstContactMs ??= time;
+                if (hit.Fraction < 1f)
+                {
+                    MoveBackToContact(a, fromA, hit.Fraction);
+                    MoveBackToContact(b, fromB, hit.Fraction);
+                }
+            }
+            else
+            {
+                if (FindPairContact(a, b) is not { } hit)
+                    continue;
+                contact = hit;
             }
 
-            if (b.Resting && HullContacts.ClosingSpeed(a.Body, b.Body, contact.Value) > SettledSpeed)
+            if (b.Resting && HullContacts.ClosingSpeed(a.Body, b.Body, contact) > SettledSpeed)
             {
                 // A hull closing on a rested wreck wakes it; one lying against it does not.
                 b.Resting = false;
@@ -487,10 +626,26 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
             a.Touched = b.Touched = true;
             var massA = ContactMass(a, reportMass(a.BcId));
             var massB = ContactMass(b, reportMass(b.BcId));
-            var removed = HullContacts.ResolvePair(a.Body, a.Shape, massA, b.Body, b.Shape, massB, b.Active, contact.Value);
-            var partB = HullContacts.Part(b.Body, b.Shape, contact.Value);
-            Note(a, contact.Value, removed, b.BcId, partB, massB);
+            var removed = HullContacts.ResolvePair(a.Body, a.Shape, massA, b.Body, b.Shape, massB, b.Active, contact);
+            var partB = HullContacts.Part(b.Body, b.Shape, contact);
+            Note(a, contact, removed, b.BcId, partB, massB);
         }
+    }
+
+    private static HullContact? FindPairContact(Hull a, Hull b)
+    {
+        if (HullContacts.FindPair(a.Body, a.Shape, a.Outline, b.Body, b.Shape, b.BcId) is { } contact)
+            return contact;
+        if (HullContacts.FindPair(b.Body, b.Shape, b.Outline, a.Body, a.Shape, a.BcId) is { } reverse)
+            return reverse with { Normal = -reverse.Normal, OtherBcId = b.BcId };
+        return null;
+    }
+
+    private static void MoveBackToContact(Hull hull, Vector3 start, float fraction)
+    {
+        var shift = (start - HullContacts.Centre(hull.Body, hull.Shape)) * (1f - fraction);
+        hull.Body.X += shift.X;
+        hull.Body.Y += shift.Y;
     }
 
     /// <summary>
@@ -537,6 +692,7 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         public ushort ZoneKey { get; set; }
         public int World { get; set; }
         public bool Seeded { get; set; }
+        public ShipModelV1? ShipModel { get; init; }
         public bool Held { get; set; }
         public bool Controlled { get; set; }
         /// <summary>Simulated in the latest <see cref="Advance"/>.</summary>
@@ -554,6 +710,9 @@ public sealed class FittedHullPhysics(Func<ushort, ZoneCollision?> zones, Func<i
         public float WindowImpact { get; set; }
         public (uint BcId, byte Part, float Mass) WindowSource { get; set; }
         public long? FirstContactMs { get; set; }
+        public long LastFrame { get; set; }
+        public long NextFrame { get; set; }
+        public Vector3 SubstepStart { get; set; }
         public double SimulatedToMs { get; set; }
         /// <summary>When the helm (or a seed) last set the hull's input; -1 once dropped.</summary>
         public long HelmAtMs { get; set; } = -1;

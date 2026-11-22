@@ -917,7 +917,7 @@ public class SpawnManager(WorldInstance parentWorld)
 
                     if (ownerTypeToSpawn == DoodadOwnerType.Slave && useParentObject is Slave parentSlave)
                     {
-                        parentSlave.AttachedDoodads.Add(doodad);
+                        parentSlave.AddAttachedDoodad(doodad);
                     }
 
                     doodad.InitDoodad();

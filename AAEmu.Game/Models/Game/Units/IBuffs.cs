@@ -24,6 +24,7 @@ public interface IBuffs
     Buff GetEffectByTemplate(BuffTemplate template);
     Buff GetEffectFromBuffId(uint id);
     List<Buff> GetEffectsByType(Type effectType);
+    (bool Frozen, bool DriveBlocked, bool TurnBlocked) GetShipControlRestrictions();
     bool HasEffectsMatchingCondition(Func<Buff, bool> predicate);
     void RemoveAllEffects();
     void RemoveBuff(uint buffId);

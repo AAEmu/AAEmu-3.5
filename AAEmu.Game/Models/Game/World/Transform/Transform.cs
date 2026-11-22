@@ -41,6 +41,13 @@ public class Transform : IDisposable
     /// List of Child Transforms of this Transform
     /// </summary>
     public List<Transform> Children { get => _children; }
+
+    internal void CopyChildrenTo(List<Transform> destination)
+    {
+        lock (_children)
+            destination.AddRange(_children);
+    }
+
     public Transform StickyParent { get => _stickyParentTransform; set => SetStickyParent(value); }
     /// <summary>
     /// List of Transforms that are linked to this object, but aren't direct children.
@@ -330,48 +337,49 @@ public class Transform : IDisposable
 
     private void InternalAttachChild(Transform child)
     {
-        if (!_children.Contains(child))
+        lock (_children)
         {
+            if (_children.Contains(child)) return;
             _children.Add(child);
-
-            var inverseParentRotation = Quaternion.Inverse(World.ToQuaternion());
-            var parentScale = _owningObject is BaseUnit u ? u.Scale : 1f;
-
-            // NLObP version of transformations
-            // Convert current child world offset into local space and unscale it.
-            child.Local.Position =
-                Vector3.Transform(child.Local.Position - World.Position, inverseParentRotation) / parentScale;
-
-            // Child has no parent, so child.Local == child.World
-            var childWorldRotation = child.Local.ToQuaternion();
-            // Transform the child's world rotation to the local space of the parent, using the parent's inverse rotation
-            var localRotation = inverseParentRotation * childWorldRotation;
-            child.Local.ApplyFromQuaternion(localRotation);
-
-            if (child.GameObject != null)
-                child.GameObject.ParentObj = this.GameObject;
         }
+
+        var inverseParentRotation = Quaternion.Inverse(World.ToQuaternion());
+        var parentScale = _owningObject is BaseUnit u ? u.Scale : 1f;
+
+        // NLObP version of transformations
+        // Convert current child world offset into local space and unscale it.
+        child.Local.Position =
+            Vector3.Transform(child.Local.Position - World.Position, inverseParentRotation) / parentScale;
+
+        // Child has no parent, so child.Local == child.World
+        var childWorldRotation = child.Local.ToQuaternion();
+        // Transform the child's world rotation to the local space of the parent, using the parent's inverse rotation
+        var localRotation = inverseParentRotation * childWorldRotation;
+        child.Local.ApplyFromQuaternion(localRotation);
+
+        if (child.GameObject != null)
+            child.GameObject.ParentObj = this.GameObject;
     }
 
     private void InternalDetachChild(Transform child)
     {
-        if (_children.Remove(child))
-        {
-            var parentRotation = World.ToQuaternion();
-            var parentScale = _owningObject is BaseUnit u ? u.Scale : 1f;
+        lock (_children)
+            if (!_children.Remove(child)) return;
 
-            // NLObP version of transformations
-            // When detaching, convert local (unscaled) back into world space including parent scale.
-            child.Local.Position = Vector3.Transform(child.Local.Position * parentScale, parentRotation) + World.Position;
+        var parentRotation = World.ToQuaternion();
+        var parentScale = _owningObject is BaseUnit u ? u.Scale : 1f;
 
-            var childLocalRotation = child.Local.ToQuaternion();
-            // Transform the child's local rotation relative to the parent to world space, using the parent's rotation
-            var worldRotation = parentRotation * childLocalRotation;
-            child.Local.ApplyFromQuaternion(worldRotation);
-            
-            if (child.GameObject != null)
-                child.GameObject.ParentObj = null;
-        }
+        // NLObP version of transformations
+        // When detaching, convert local (unscaled) back into world space including parent scale.
+        child.Local.Position = Vector3.Transform(child.Local.Position * parentScale, parentRotation) + World.Position;
+
+        var childLocalRotation = child.Local.ToQuaternion();
+        // Transform the child's local rotation relative to the parent to world space, using the parent's rotation
+        var worldRotation = parentRotation * childLocalRotation;
+        child.Local.ApplyFromQuaternion(worldRotation);
+
+        if (child.GameObject != null)
+            child.GameObject.ParentObj = null;
     }
 
     /// <summary>

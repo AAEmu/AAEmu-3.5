@@ -11,6 +11,7 @@ using AAEmu.Game.Models.Game;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
+using AAEmu.Game.Models.Game.Formulas;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
@@ -553,7 +554,14 @@ public class SlaveManager(WorldInstance parentWorldInstance)
         // Move it to target location, and call spawn packet
         summonedSlave.Transform = spawnPos.CloneDetached(summonedSlave);
 
-        if (summonedSlave.Template.IsABoat() && summonedSlave.Template.PortalTime > 0f)
+        var isBoat = summonedSlave.Template.IsABoat();
+        if (isBoat && FormulaManager.Instance.GetUnitFormula(FormulaOwnerType.Slave, UnitFormulaKind.Facet) is { } facet)
+        {
+            var value = facet.Evaluate(new Dictionary<string, double> { ["level"] = summonedSlave.Level });
+            if (double.IsFinite(value))
+                summonedSlave.Facets = (int)Math.Clamp(value, 0d, int.MaxValue);
+        }
+        if (isBoat && summonedSlave.Template.PortalTime > 0f)
         {
             var spawnWorld = WorldManager.Instance.GetWorld(summonedSlave.Transform.InstanceId);
             var waterAtFinal = spawnWorld?.Water?.GetWaterSurface(summonedSlave.Transform.World.Position, out _) ?? 0f;
@@ -620,7 +628,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
 
             ApplyAttachPointLocation(summonedSlave, doodad, doodadBinding.AttachPointId);
 
-            summonedSlave.AttachedDoodads.Add(doodad);
+            summonedSlave.AddAttachedDoodad(doodad);
             doodad.InitDoodad();
             doodad.Spawn();
 
@@ -687,6 +695,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                 Name = string.IsNullOrWhiteSpace(childSlaveName) ? childSlaveTemplate.Name : childSlaveName,
                 Level = (byte)childSlaveTemplate.Level,
                 ModelId = childSlaveTemplate.ModelId,
+                FittedCollisionMass = isBoat ? ModelManager.Instance.GetVehicleModels(childSlaveTemplate.ModelId)?.WheeledVehicleMass ?? 0f : 0f,
                 Template = childSlaveTemplate,
                 Hp = childSlaveHp,
                 Mp = childSlaveMp,
@@ -726,7 +735,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
         }
 
         // If it's a boat, add it to boat physics
-        if (summonedSlave.Template.IsABoat())
+        if (isBoat)
         {
             var world = WorldManager.Instance.GetWorld(owner.Transform.InstanceId);
             world.Physics.AddShip(summonedSlave);
@@ -970,7 +979,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                 doodad.Hide();
                 doodad.Despawn = DateTime.UtcNow;
                 World.SpawnManager.AddDespawn(doodad);
-                slave.AttachedDoodads.Remove(doodad);
+                slave.RemoveAttachedDoodad(doodad);
                 currentHealPoints.Remove(doodad);
                 unUsedHealPoints.Add(doodad.AttachPoint);
                 doodad.Delete();
@@ -1018,7 +1027,7 @@ public class SlaveManager(WorldInstance parentWorldInstance)
 
                 wreckArea.FuncGroupId = wreckArea.GetFuncGroupId();
 
-                slave.AttachedDoodads.Add(wreckArea);
+                slave.AddAttachedDoodad(wreckArea);
                 currentHealPoints.Add(wreckArea);
                 wreckArea.Spawn();
             }

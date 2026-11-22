@@ -1,12 +1,13 @@
 ﻿#nullable enable
 
+using System.Numerics;
+
 using AAEmu.Game.Models.Game.Models;
 
 namespace AAEmu.Game.Physics.Hulls;
 
 /// <summary>
-/// The coefficients of a hull's 3-DOF model (surge, sway, yaw on flat water; heave as a damped spring to the
-/// waterline; roll and pitch held level), fitted per ship model to native voyages. Rates are per wall second;
+/// The coefficients fitted to native voyages and the ship row's mass and water properties. Rates are per wall second;
 /// <see cref="PhysicsTimeScale"/> turns the body velocities into motion. Steering, throttle and rpm are fractions of
 /// full scale (the wire's 127).
 /// </summary>
@@ -67,6 +68,16 @@ public sealed record HullModel
     /// <summary>Kilograms, for <c>HullImpulse</c>'s linear and angular impulses (the ship model's <c>mass</c>).</summary>
     public float Mass { get; init; }
 
+    /// <summary>Yaw inertia per kilogram, in square metres. The reference footprint is used when the mass box is unavailable.</summary>
+    public double YawInertiaPerMass { get; private init; } =
+        BoxInertiaPerMass(HullShape.ReferenceSize.X * 0.5, HullShape.ReferenceSize.Y * 0.5);
+    // The Harpoon Clipper's 4 x 8 x 2.5 m mass-box half extents are the fallback for old rows without a mass box.
+    internal double PitchInertiaPerMass { get; private init; } = BoxInertiaPerMass(8d, 2.5d);
+    internal double RollInertiaPerMass { get; private init; } = BoxInertiaPerMass(4d, 2.5d);
+    internal Vector3 MassCentre { get; private init; }
+    internal float WaterResistance { get; private init; }
+    internal float WaterDamping { get; private init; }
+
     /// <summary>The <c>ship_models.id</c> this model was fitted to.</summary>
     public uint FittedShipModel { get; init; }
 
@@ -110,28 +121,50 @@ public sealed record HullModel
     public static HullModel Default => HarpoonClipper;
 
     /// <summary>
-    /// The model for one <c>ship_models</c> row: its own fit, or else the fitted model nearest in mass (with the row's
-    /// mass for impulses). No row: <see cref="Default"/>.
+    /// The fit for a <c>ship_models</c> row, selected by ID or nearest mass. Impulses use the row's mass and mass box.
+    /// A missing row uses <see cref="Default"/>.
     /// </summary>
     public static HullModel For(ShipModelV1? ship)
     {
         if (ship == null)
             return Default;
         var mass = float.IsFinite(ship.Mass) && ship.Mass > 0f ? ship.Mass : Default.Mass;
-        if (Fitted.TryGetValue(ship.Id, out var fitted))
-            return fitted with { Mass = mass };
-        var nearest = Default;
-        var distance = double.MaxValue;
-        foreach (var model in Fitted.Values)
+        var inertiaPerMass = float.IsFinite(ship.MassBoxSizeX) && float.IsFinite(ship.MassBoxSizeY) && ship.MassBoxSizeX > 0f && ship.MassBoxSizeY > 0f
+            ? BoxInertiaPerMass(ship.MassBoxSizeX, ship.MassBoxSizeY)
+            : Default.YawInertiaPerMass;
+        if (!Fitted.TryGetValue(ship.Id, out var fitted))
         {
-            var candidate = Math.Abs(Math.Log(mass / model.Mass));
-            if (candidate >= distance)
-                continue;
-            nearest = model;
-            distance = candidate;
+            fitted = Default;
+            var distance = double.MaxValue;
+            foreach (var model in Fitted.Values)
+            {
+                var candidate = Math.Abs(Math.Log(mass / model.Mass));
+                if (candidate >= distance)
+                    continue;
+                fitted = model;
+                distance = candidate;
+            }
         }
-        return nearest with { Mass = mass };
+        var centre = new Vector3(ship.MassCenterX, ship.MassCenterY, ship.MassCenterZ);
+        return fitted with
+        {
+            Mass = mass,
+            YawInertiaPerMass = inertiaPerMass,
+            PitchInertiaPerMass = BoxInertia(ship.MassBoxSizeY, ship.MassBoxSizeZ, Default.PitchInertiaPerMass),
+            RollInertiaPerMass = BoxInertia(ship.MassBoxSizeX, ship.MassBoxSizeZ, Default.RollInertiaPerMass),
+            MassCentre = HullBody.IsFinite(centre) ? centre : Vector3.Zero,
+            WaterResistance = PositiveOrZero(ship.WaterResistance),
+            WaterDamping = PositiveOrZero(ship.WaterDamping)
+        };
     }
+
+    private static double BoxInertia(float a, float b, double fallback) =>
+        float.IsFinite(a) && float.IsFinite(b) && a > 0f && b > 0f ? Math.Max(0.001d, BoxInertiaPerMass(a, b)) : fallback;
+
+    private static float PositiveOrZero(float value) => float.IsFinite(value) && value > 0f ? value : 0f;
+
+    // r575 cryphysics_dedicate.dll, CBoxGeom mass properties (RVA 0x13f550): unit-density inertia divided by volume.
+    private static double BoxInertiaPerMass(double halfA, double halfB) => (halfA * halfA + halfB * halfB) / 3d;
 
     /// <summary>
     /// A model from the fit's parameter vector, in the fit scripts' order: A, B, R, Du, Du2, Cwv, Dv, Cwu, Ys, Yr, Yu,

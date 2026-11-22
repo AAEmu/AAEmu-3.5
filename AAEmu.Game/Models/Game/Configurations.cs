@@ -140,6 +140,9 @@ public class WorldConfig
     /// </summary>
     public float TargetPhysicsTps { get; set; } = 25f;
 
+    /// <summary>Enable the authored ship drive and coupled resistance for hulls with enough model data.</summary>
+    public bool AuthoredShipDriveEnabled { get; set; }
+
     /// <summary>
     /// Ship wind model used for open-sea wind when there is no river flow (<see cref="Slave.CachedWaterFlow"/> is zero).
     /// Configure in <c>AAEmu.Game/Configurations/World.json</c> under <c>World.WindModel</c>.

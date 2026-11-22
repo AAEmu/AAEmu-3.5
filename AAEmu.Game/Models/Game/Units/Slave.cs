@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Collections.Immutable;
+using System.Numerics;
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -39,7 +40,8 @@ public class Slave : Unit
     public BaseUnitType OwnerType { get; init; }
 
     public Item SummoningItem { get; init; }
-    public List<Doodad> AttachedDoodads { get; set; }
+    private ImmutableList<Doodad> _attachedDoodads = [];
+    public ImmutableList<Doodad> AttachedDoodads => Volatile.Read(ref _attachedDoodads);
     public List<Slave> AttachedSlaves { get; set; }
     public System.Collections.Concurrent.ConcurrentDictionary<AttachPointKind, Character> AttachedCharacters { get; set; }
     public DateTime SpawnTime { get; init; }
@@ -60,6 +62,7 @@ public class Slave : Unit
         internal set => Volatile.Write(ref _physicsState, value);
     }
     public ShipModelV1 ShipModel { get; internal set; }
+    internal float FittedCollisionMass { get; init; }
     public SlaveSpawner Spawner { get; set; }
     public Task LeaveTask { get; set; }
     public CancellationTokenSource CancelTokenSource { get; set; }
@@ -71,7 +74,6 @@ public class Slave : Unit
 
     public Slave()
     {
-        AttachedDoodads = [];
         AttachedSlaves = [];
         AttachedCharacters = [];
         HpTriggerPointsPercent.Add(0);
@@ -80,6 +82,12 @@ public class Slave : Unit
         HpTriggerPointsPercent.Add(75);
         HpTriggerPointsPercent.Add(100);
     }
+
+    internal void AddAttachedDoodad(Doodad doodad) =>
+        ImmutableInterlocked.Update(ref _attachedDoodads, static (attached, item) => attached.Add(item), doodad);
+
+    internal void RemoveAttachedDoodad(Doodad doodad) =>
+        ImmutableInterlocked.Update(ref _attachedDoodads, static (attached, item) => attached.Remove(item), doodad);
 
     #region Attributes
     [UnitAttribute(UnitAttribute.Str)]

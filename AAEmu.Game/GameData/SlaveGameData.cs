@@ -21,6 +21,9 @@ namespace AAEmu.Game.GameData;
 [GameData]
 public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
 {
+    private const int ShipMassReductionConstantId = 24;
+    // The stock 3.5 value also applies to older data exports without the constants table.
+    private const float DefaultShipMassReductionPerSecond = 1f;
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
     private readonly Dictionary<uint, SlaveTemplate> _slaveTemplates = []; // TODO: Move to global/static
@@ -29,10 +32,56 @@ public class SlaveGameData : Singleton<SlaveGameData>, IGameDataLoader
     private readonly Dictionary<uint, List<SlaveMountSkills>> _slaveMountSkills = [];
     private readonly Dictionary<uint, uint> _repairableSlaves = []; // SlaveId, RepairEffectId
     private readonly Dictionary<uint, SlaveCollisionDamageDesc> _slaveCollisionDamages = [];
-    public float ShipMassReductionPerSecond { get; private set; }
+    private IReadOnlyDictionary<UnitAttribute, (int Min, int Max)> _shipDriveAttributeLimits =
+        new Dictionary<UnitAttribute, (int Min, int Max)>();
+    public float ShipMassReductionPerSecond { get; private set; } = DefaultShipMassReductionPerSecond;
+
+    internal double ClampShipDriveAttribute(UnitAttribute attribute, double value)
+    {
+        var (min, max) = _shipDriveAttributeLimits.TryGetValue(attribute, out var limits)
+            ? limits : (-2_000_000_000, 2_000_000_000);
+        return Math.Clamp(value, min, max);
+    }
+
+    internal static Dictionary<UnitAttribute, (int Min, int Max)> ReadShipDriveAttributeLimits(SqliteConnection connection)
+    {
+        var result = new Dictionary<UnitAttribute, (int Min, int Max)>();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'unit_attribute_limits'";
+        if (command.ExecuteScalar() == null)
+            return result;
+
+        command.CommandText = """
+            SELECT unit_attribute_id, minimum, maximum FROM unit_attribute_limits
+            WHERE unit_attribute_id IN (10, 13, 72, 190, 191, 192, 193) AND minimum <= maximum
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            result[(UnitAttribute)reader.GetInt32(0)] = (reader.GetInt32(1), reader.GetInt32(2));
+        return result;
+    }
+
+    internal static float ReadShipMassReductionPerSecond(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'constants'";
+        if (command.ExecuteScalar() == null)
+            return DefaultShipMassReductionPerSecond;
+
+        command.CommandText = "SELECT value FROM constants WHERE id = $id";
+        command.Parameters.AddWithValue("$id", ShipMassReductionConstantId);
+        return command.ExecuteScalar() switch
+        {
+            double value when double.IsFinite(value) && value >= 0d && value <= float.MaxValue => (float)value,
+            long value when value >= 0 => value,
+            _ => DefaultShipMassReductionPerSecond
+        };
+    }
 
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
+        ShipMassReductionPerSecond = ReadShipMassReductionPerSecond(connection);
+        _shipDriveAttributeLimits = ReadShipDriveAttributeLimits(connection);
         #region SQLLite
 
         using (var command = connection.CreateCommand())

@@ -39,26 +39,26 @@ public class ShipDoodadCollisionTests
     [Test]
     public async Task HullBounds_RecognizesUnambiguousShipBodiesButRejectsDecorationAndAmbiguity()
     {
-        var resolver = new ShipHullBoundsResolver(new VariantHullFiles());
+        var resolver = new ShipHullGeometryResolver(new VariantHullFiles());
         var single = await resolver.ResolveAsync("prefab://prefabs/variants.xml/single");
         var named = await resolver.ResolveAsync("prefab://prefabs/variants.xml/named");
         var animated = await resolver.ResolveAsync("prefab://prefabs/variants.xml/animated");
         var ambiguous = await resolver.ResolveAsync("prefab://prefabs/variants.xml/ambiguous");
         var decoration = await resolver.ResolveAsync("prefab://prefabs/variants.xml/decoration");
-        await Assert.That(single.X).IsEqualTo(2f).Within(0.001f);
-        await Assert.That(named.X).IsEqualTo(2f).Within(0.001f);
-        await Assert.That(animated.X).IsEqualTo(2f).Within(0.001f);
-        await Assert.That(ambiguous.X).IsEqualTo(0f);
-        await Assert.That(decoration.X).IsEqualTo(0f);
+        await Assert.That(single.Bounds.X).IsEqualTo(2f).Within(0.001f);
+        await Assert.That(named.Bounds.X).IsEqualTo(2f).Within(0.001f);
+        await Assert.That(animated.Bounds.X).IsEqualTo(2f).Within(0.001f);
+        await Assert.That(ambiguous.Bounds.X).IsEqualTo(0f);
+        await Assert.That(decoration.Bounds.X).IsEqualTo(0f);
     }
 
     [Test]
     public async Task HullBounds_UsesOnlyBodyAndAppliesItsTransform()
     {
-        var resolver = new ShipHullBoundsResolver(new HullFiles());
-        var size = await resolver.ResolveAsync("prefab://prefabs/hull.xml/ship");
-        await Assert.That(size.X).IsEqualTo(4f).Within(0.001f);
-        await Assert.That(size.Y).IsEqualTo(6f).Within(0.001f);
+        var resolver = new ShipHullGeometryResolver(new HullFiles());
+        var geometry = await resolver.ResolveAsync("prefab://prefabs/hull.xml/ship");
+        await Assert.That(geometry.Bounds.X).IsEqualTo(4f).Within(0.001f);
+        await Assert.That(geometry.Bounds.Y).IsEqualTo(6f).Within(0.001f);
     }
 
     private sealed class Files : IGeometryFileSource

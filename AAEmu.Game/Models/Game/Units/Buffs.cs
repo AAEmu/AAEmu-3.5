@@ -19,7 +19,7 @@ public class Buffs : IBuffs
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private const int MinimumBuffDurationToSave = 60000;
 
-    // [GEAR-SLOT-FIX] Slot reserved in Unit.Bonuses for gear bonuses (see Unit.UpdateGearBonuses,
+    // [GEAR-SLOT-FIX] Slot reserved for gear bonuses (see Unit.UpdateGearBonuses,
     // which does `Bonuses[1] = []`). The buff allocator MUST skip this index, otherwise the first
     // passive buff applied at character load collides with gear and is wiped at login.
     // _nextIndex therefore starts at GearBonusesIndex + 1 and wraps back to it after uint.MaxValue.
@@ -852,6 +852,26 @@ public class Buffs : IBuffs
         }
 
         return effects.Any(predicate);
+    }
+
+    public (bool Frozen, bool DriveBlocked, bool TurnBlocked) GetShipControlRestrictions()
+    {
+        var driveBlocked = false;
+        var turnBlocked = false;
+        lock (_lock)
+        {
+            foreach (var effect in _effects)
+            {
+                if (effect?.Template is not { } template)
+                    continue;
+                if (template.FreezeShip)
+                    return (true, true, true);
+                var incapacitated = template.Stun || template.Sleep;
+                driveBlocked |= incapacitated || template.Root;
+                turnBlocked |= incapacitated || template.Psychokinesis;
+            }
+        }
+        return (false, driveBlocked, turnBlocked);
     }
 
     #region Buff Persistence

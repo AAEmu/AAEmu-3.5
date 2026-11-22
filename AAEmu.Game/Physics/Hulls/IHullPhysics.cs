@@ -18,6 +18,10 @@ public readonly record struct HullImpulse(Vector3 Velocity, Vector3 AngularVeloc
 public readonly record struct HullExplosion(int World, uint TargetBcId, double X, double Y, float Z, float Radius, float HoleSize,
     float Pressure);
 
+/// <summary>Engine and rudder modifiers from the mounted ship's attributes and effects.</summary>
+public readonly record struct ShipDriveAttributes(float SpeedMultiplier, float TurnMultiplier, float SteeringBonus, float ReverseSpeedBonus,
+    bool CanDrive, bool CanTurn);
+
 /// <summary>In-process ship simulation. Identifiers belong to the owning game world; no transport is involved.</summary>
 public interface IHullPhysics : IDisposable
 {
@@ -36,13 +40,14 @@ public interface IHullPhysics : IDisposable
     void Deactivate(uint bcId, long nowMs);
     void SetHeld(uint bcId, bool held, long nowMs);
     void SetShape(uint bcId, Vector3 authoredSize);
+    void SetBuoyancy(uint bcId, HullBuoyancy volumes, float densityMultiplier, AAEmu.Geometry.GeometryBounds? brushBounds = null);
     void SetHelm(uint bcId, float throttle, float steering, long nowMs);
     void ApplyImpulse(uint bcId, HullImpulse impulse, Vector3? source = null);
     void Explode(HullExplosion blast);
     void SetExtraMass(uint bcId, float mass);
     void SetWaterLevel(uint bcId, float waterLevel);
     void SetEnvironment(uint bcId, bool hasWater, float waterLevel, float? groundHeight);
-    void SetMovementModifiers(uint bcId, float moveSpeedMultiplier, float turnSpeedMultiplier);
+    void SetMovementModifiers(uint bcId, float moveSpeedMultiplier, float turnSpeedMultiplier, ShipDriveAttributes? drive = null);
     void Advance(IReadOnlyList<uint> active, long nowMs, Func<uint, float> reportMass);
     HullPose Pose(uint bcId);
     void TakeCollisionWindows(uint bcId, List<HullCollisionWindow> into);

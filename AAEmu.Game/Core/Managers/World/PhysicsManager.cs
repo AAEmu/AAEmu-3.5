@@ -1,7 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using System.Numerics;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models;
+using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Skills.SkillControllers;
 using AAEmu.Game.Models.Game.Units;
@@ -9,6 +11,7 @@ using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Slaves;
 using AAEmu.Game.Models.Game.World;
+using AAEmu.Game.Models.Game.World.Transform;
 using AAEmu.Game.Physics;
 using AAEmu.Game.Physics.Hulls;
 using AAEmu.Game.Physics.Static;
@@ -21,11 +24,13 @@ namespace AAEmu.Game.Core.Managers.World;
 public sealed class PhysicsManager : IDisposable
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private readonly ConcurrentQueue<Action> _commands = new();
-    private readonly Dictionary<uint, Slave> _ships = [];
+    private readonly ConcurrentQueue<Action<long>> _commands = new();
+    private readonly Dictionary<uint, Ship> _ships = [];
+    private readonly HashSet<uint> _aboard = [];
+    private readonly List<Transform> _attachmentChildren = [];
     private readonly HashSet<uint> _suspended = [];
     private readonly HashSet<uint> _waitingForGeometry = [];
-    private readonly Dictionary<uint, Task<Vector3>> _pendingHullBounds = [];
+    private readonly Dictionary<uint, Task<ShipHullGeometry>> _pendingHullGeometry = [];
     private readonly List<uint> _active = [];
     private readonly List<Slave> _snapshot = [];
     private readonly HullCollisionReporter _collisionReporter = new();
@@ -39,7 +44,8 @@ public sealed class PhysicsManager : IDisposable
     private readonly Func<uint, bool> _prefetchZone;
     private readonly Func<uint, bool> _zoneReady;
     private readonly Action<uint, HullCollisionWindow, float> _reportCollision;
-    private readonly ShipHullBoundsResolver _hullBounds;
+    private readonly ShipHullGeometryResolver _hullGeometry;
+    private readonly bool _useAuthoredDrive;
     private IHullPhysics _hulls;
     private Func<float, float, float?> _terrain;
     private Func<float, float, StaticCollision> _geometryAt;
@@ -48,15 +54,17 @@ public sealed class PhysicsManager : IDisposable
     private volatile bool _running;
     private bool _disposed;
     private long _previousTick = -1;
+    private long _tickVersion;
     private long _reportedAt = -1;
     private long _lastPrefetch = -1;
     private int _prefetchCursor;
 
-    public PhysicsManager(IHullPhysics hulls = null, ShipHullBoundsResolver hullBounds = null)
+    public PhysicsManager(IHullPhysics hulls = null, ShipHullGeometryResolver hullGeometry = null)
     {
         _hulls = hulls;
-        _hullBounds = hullBounds ?? ShipHullBoundsResolver.Instance;
-        _mass = id => _ships.TryGetValue(id, out var ship) ? MathF.Max(ship.ShipModel?.Mass ?? 1f, 1f) : 1f;
+        _hullGeometry = hullGeometry ?? ShipHullGeometryResolver.Instance;
+        _useAuthoredDrive = AppConfiguration.Instance?.World?.AuthoredShipDriveEnabled ?? false;
+        _mass = id => _ships.TryGetValue(id, out var ship) ? ship.ReportMass : 1f;
         _prefetchZone = CollectPrefetchZone;
         _zoneReady = IsZoneReady;
         _reportCollision = ReportCollision;
@@ -70,7 +78,8 @@ public sealed class PhysicsManager : IDisposable
         _terrain ??= (x, y) => SimulationWorld.Template.TryGetHeight(x, y, out var height) ? height : null;
         _geometryAt ??= GeometryAt;
         _hulls ??= new FittedHullPhysics(ZoneCollision, doodads: _ => ShipDoodadCollision.Instance.Current(SimulationWorld.Id),
-            isDead: id => _ships.TryGetValue(id, out var ship) && ship.Hp <= 0);
+            isDead: id => _ships.TryGetValue(id, out var ship) && ship.Unit.Hp <= 0, useAuthoredDrive: _useAuthoredDrive,
+            isWaterAt: point => SimulationWorld.Water.IsWater(point, out _));
     }
 
     public void AttachStaticGeometry(StaticGeometryManager geometry)
@@ -154,7 +163,7 @@ public sealed class PhysicsManager : IDisposable
         }
         var seed = new ShipMoveType();
         seed.UseSlaveBase(slave);
-        Enqueue(() =>
+        Enqueue(now =>
         {
             if (_ships.ContainsKey(slave.ObjId))
             {
@@ -162,14 +171,13 @@ public sealed class PhysicsManager : IDisposable
                 _collisionReporter.Remove(slave.ObjId);
             }
             slave.ShipModel = model;
-            _ships[slave.ObjId] = slave;
+            _ships[slave.ObjId] = new Ship(slave, model.Mass);
             _hulls.Add(slave.ObjId, (ushort)slave.Transform.ZoneId, model, model.Mass, slave.Template?.ObbSize ?? Vector3.Zero);
             _hulls.SetWorld(slave.ObjId, (int)SimulationWorld.Id);
-            _pendingHullBounds.Remove(slave.ObjId);
-            var size = slave.Template?.ObbSize ?? Vector3.Zero;
-            if ((!float.IsFinite(size.X) || !float.IsFinite(size.Y) || size.X <= 0f || size.Y <= 0f) && !string.IsNullOrWhiteSpace(model.Normal))
-                _pendingHullBounds[slave.ObjId] = _hullBounds.ResolveAsync(model.Normal);
-            var now = Environment.TickCount64;
+            _pendingHullGeometry.Remove(slave.ObjId);
+            if (!string.IsNullOrWhiteSpace(model.Normal) ||
+                (model.TubeRadius != 0f && model.TubeLength != 0f && model.TubeOffsetZ != 0f))
+                _pendingHullGeometry[slave.ObjId] = _hullGeometry.ResolveAsync(model.Normal ?? string.Empty, model.TubeRadius, model.TubeLength, model.TubeOffsetZ);
             var surface = SimulationWorld.Water.GetWaterSurface(slave.Transform.World.Position, out _);
             _hulls.Seed(slave.ObjId, seed, surface > 0f ? surface : SimulationWorld.Template.OceanLevel, now);
             _hulls.Activate(slave.ObjId, now);
@@ -182,14 +190,14 @@ public sealed class PhysicsManager : IDisposable
     public void RemoveShip(Slave slave)
     {
         if (slave == null) return;
-        Enqueue(() =>
+        Enqueue(_ =>
         {
-            if (!_ships.TryGetValue(slave.ObjId, out var current) || !ReferenceEquals(current, slave)) return;
+            if (!_ships.TryGetValue(slave.ObjId, out var current) || !ReferenceEquals(current.Unit, slave)) return;
             _hulls.Remove(slave.ObjId);
             _ships.Remove(slave.ObjId);
             _suspended.Remove(slave.ObjId);
             _waitingForGeometry.Remove(slave.ObjId);
-            _pendingHullBounds.Remove(slave.ObjId);
+            _pendingHullGeometry.Remove(slave.ObjId);
             _collisionReporter.Remove(slave.ObjId);
             slave.PhysicsState = null;
         });
@@ -198,21 +206,28 @@ public sealed class PhysicsManager : IDisposable
     public void SetHelm(Slave slave, sbyte throttle, sbyte steering)
     {
         var now = Environment.TickCount64;
-        Enqueue(() =>
+        Enqueue(_ =>
         {
-            if (_ships.TryGetValue(slave.ObjId, out var current) && ReferenceEquals(current, slave))
+            if (_ships.TryGetValue(slave.ObjId, out var current) && ReferenceEquals(current.Unit, slave))
                 _hulls.SetHelm(slave.ObjId, Math.Clamp(throttle / 127f, -1f, 1f), Math.Clamp(steering / 127f, -1f, 1f), now);
         });
     }
 
-    public void ApplyImpulse(Slave slave, HullImpulse impulse, Vector3? source = null) => Enqueue(() =>
+    public void ApplyImpulse(Slave slave, HullImpulse impulse, Vector3? source = null) => Enqueue(now =>
     {
-        if (_ships.ContainsKey(slave.ObjId)) _hulls.ApplyImpulse(slave.ObjId, impulse, source);
+        if (!_ships.TryGetValue(slave.ObjId, out var ship) || !ReferenceEquals(ship.Unit, slave)) return;
+        UpdateShipMass(ship, now);
+        _hulls.ApplyImpulse(slave.ObjId, impulse, source);
     });
 
-    public void Explode(HullExplosion blast) => Enqueue(() => _hulls.Explode(blast));
+    public void Explode(HullExplosion blast) => Enqueue(now =>
+    {
+        foreach (var ship in _ships.Values)
+            UpdateShipMass(ship, now);
+        _hulls.Explode(blast);
+    });
 
-    private void Enqueue(Action command)
+    private void Enqueue(Action<long> command)
     {
         lock (_lifetimeLock)
         {
@@ -226,27 +241,38 @@ public sealed class PhysicsManager : IDisposable
         lock (_tickLock)
         {
             if (_disposed) return;
-            while (_commands.TryDequeue(out var command)) command();
+            _tickVersion++;
+            while (_commands.TryDequeue(out var command)) command(nowMs);
             _active.Clear();
             _snapshot.Clear();
             _prefetchPositions.Clear();
             var dt = _previousTick < 0 ? 0f : Math.Clamp((nowMs - _previousTick) / 1000f, 0f, 0.25f);
             _previousTick = nowMs;
-            foreach (var ship in _ships.Values)
+            foreach (var entry in _ships.Values)
             {
+                var ship = entry.Unit;
                 try
                 {
                     if (ship.ParentWorld != null && ship.ParentWorld.Id != SimulationWorld.Id) continue;
+                    UpdateShipMass(entry, nowMs);
                     var shipPosition = ship.Transform.World.Position;
                     _prefetchPositions.Add(new Vector2(shipPosition.X, shipPosition.Y));
                     var id = ship.ObjId;
-                    if (_pendingHullBounds.TryGetValue(id, out var bounds) && bounds.IsCompleted)
+                    if (_pendingHullGeometry.TryGetValue(id, out var geometryLoad) && geometryLoad.IsCompleted)
                     {
-                        _pendingHullBounds.Remove(id);
-                        if (bounds.IsCompletedSuccessfully && bounds.Result is var resolved && resolved.X > 0f && resolved.Y > 0f)
-                            _hulls.SetShape(id, resolved);
+                        _pendingHullGeometry.Remove(id);
+                        if (geometryLoad.IsCompletedSuccessfully)
+                        {
+                            var loaded = geometryLoad.Result;
+                            var size = ship.Template?.ObbSize ?? Vector3.Zero;
+                            if ((!float.IsFinite(size.X) || !float.IsFinite(size.Y) || size.X <= 0f || size.Y <= 0f) &&
+                                loaded.Bounds.X > 0f && loaded.Bounds.Y > 0f)
+                                _hulls.SetShape(id, loaded.Bounds);
+                            if (loaded.Buoyancy is { } buoyancy)
+                                _hulls.SetBuoyancy(id, buoyancy, ship.ShipModel.WaterDensity, loaded.BrushBounds);
+                        }
                     }
-                    if (_waitingForGeometry.Contains(id) && !_pendingHullBounds.ContainsKey(id) && CollisionReady(new Vector2(shipPosition.X, shipPosition.Y)))
+                    if (_waitingForGeometry.Contains(id) && !_pendingHullGeometry.ContainsKey(id) && CollisionReady(new Vector2(shipPosition.X, shipPosition.Y)))
                     {
                         _waitingForGeometry.Remove(id);
                         _hulls.SetHeld(id, false, nowMs);
@@ -258,7 +284,8 @@ public sealed class PhysicsManager : IDisposable
                     {
                         geometry.GetZone(SimulationWorld.Template, zone);
                     }
-                    if (ship.Buffs.HasEffectsMatchingCondition(effect => effect.Template.FreezeShip))
+                    var (frozen, driveBlocked, turnBlocked) = ship.Buffs.GetShipControlRestrictions();
+                    if (frozen)
                     {
                         if (_suspended.Add(id)) _hulls.Deactivate(id, nowMs);
                         continue;
@@ -271,7 +298,8 @@ public sealed class PhysicsManager : IDisposable
                     var groundKnown = SimulationWorld.Template.TryGetHeight(position.X, position.Y, out var ground);
                     var hasWater = float.IsFinite(surface) && (groundKnown ? ground < surface : MathF.Abs(position.Z - surface) < 10f);
                     _hulls.SetEnvironment(id, hasWater, surface, groundKnown ? ground : null);
-                    _hulls.SetMovementModifiers(id, ship.MoveSpeedMul, ship.TurnSpeed);
+                    _hulls.SetMovementModifiers(id, ship.MoveSpeedMul, ship.TurnSpeed,
+                        _useAuthoredDrive ? GetShipDriveAttributes(ship, !driveBlocked, !turnBlocked) : null);
                     var recoil = ShipHarpoonRopeController.TickTensionTearAndGetHullRecoilDeltaV(ship, dt);
                     if (recoil.LengthSquared() > 0f) ApplyWorldVelocity(id, recoil);
                     _active.Add(id);
@@ -305,11 +333,104 @@ public sealed class PhysicsManager : IDisposable
         }
     }
 
+    private void UpdateShipMass(Ship entry, long nowMs)
+    {
+        if (entry.MassTick == _tickVersion) return;
+        var ship = entry.Unit;
+        var hullMass = ship.ShipModel.Mass;
+        var reportMass = hullMass;
+        _aboard.Clear();
+        var attributeMass = AttributeMass(ship) + SeatedRiderMass(ship);
+        foreach (var part in entry.Parts)
+        {
+            if (!ReferenceEquals(part.Transform.Parent, ship.Transform)) continue;
+            attributeMass += AttributeMass(part) + SeatedRiderMass(part);
+            if (float.IsFinite(part.FittedCollisionMass) && part.FittedCollisionMass > 0f)
+                reportMass += part.FittedCollisionMass;
+        }
+        entry.ReportMass = MathF.Max(reportMass, 1f);
+
+        var template = ship.Template;
+        if (template is { Capacity: > 0, AddedShipMassPerUnit: > 0f })
+        {
+            CountLinkedRiders(ship);
+            foreach (var part in entry.Parts)
+                if (ReferenceEquals(part.Transform.Parent, ship.Transform))
+                    CountLinkedRiders(part);
+        }
+
+        var mass = entry.Load.Update(nowMs, hullMass, template?.Capacity ?? 0, template?.AddedShipMassPerUnit ?? 0f,
+            _aboard.Count, attributeMass, SlaveGameData.Instance.ShipMassReductionPerSecond);
+        if (entry.ExtraMass != mass)
+        {
+            _hulls.SetExtraMass(ship.ObjId, mass);
+            entry.ExtraMass = mass;
+        }
+        entry.MassTick = _tickVersion;
+    }
+
+    private float SeatedRiderMass(Slave vehicle)
+    {
+        var mass = 0f;
+        foreach (var (_, rider) in vehicle.AttachedCharacters)
+            if (ReferenceEquals(rider.Transform.Parent, vehicle.Transform) && _aboard.Add(rider.ObjId))
+                mass += AttributeMass(rider);
+        return mass;
+    }
+
+    private void CountLinkedRiders(Slave vehicle)
+    {
+        CountLinkedRidersAt(vehicle.Transform);
+        foreach (var doodad in vehicle.AttachedDoodads)
+            if (ReferenceEquals(doodad.Transform.Parent, vehicle.Transform))
+                CountLinkedRidersAt(doodad.Transform);
+    }
+
+    private void CountLinkedRidersAt(Transform attachment)
+    {
+        attachment.CopyChildrenTo(_attachmentChildren);
+        foreach (var child in _attachmentChildren)
+        {
+            if (!ReferenceEquals(child.Parent, attachment) || child.GameObject is not Unit rider) continue;
+            if (ReferenceEquals(child.StickyParent, attachment) ||
+                rider is Character character && ReferenceEquals(character.Bonding?.GetOwner()?.Transform, attachment))
+                _aboard.Add(rider.ObjId);
+        }
+        _attachmentChildren.Clear();
+    }
+
+    private static float AttributeMass(Unit unit)
+    {
+        var multiplier = unit.CalculateWithBonuses(0d, UnitAttribute.MassMul);
+        var baseMass = multiplier == 0d ? 0d : Math.Truncate((float)multiplier * unit.Facets * 0.001f);
+        return (float)Math.Truncate(unit.CalculateWithBonuses(baseMass, UnitAttribute.Mass));
+    }
+
     private void ApplyWorldVelocity(uint id, Vector3 delta)
     {
         var yaw = _hulls.Pose(id).Rotation;
         var local = Vector3.Transform(delta, Quaternion.Conjugate(yaw));
         _hulls.ApplyImpulse(id, new HullImpulse(local, Vector3.Zero, Vector3.Zero, Vector3.Zero));
+    }
+
+    internal static ShipDriveAttributes GetShipDriveAttributes(Slave ship, bool canDrive, bool canTurn)
+    {
+        var facets = Attribute(UnitAttribute.Facets, ship.Facets);
+        return new ShipDriveAttributes(
+            Attribute(UnitAttribute.MoveSpeedMul) * 0.001f, Attribute(UnitAttribute.TurnSpeed) * 0.01f,
+            FacetBonus(UnitAttribute.SteeringSpeed, UnitAttribute.SteeringSpeedMul),
+            FacetBonus(UnitAttribute.ReverseVelocity, UnitAttribute.ReverseVelocityMul), canDrive, canTurn);
+
+        float Attribute(UnitAttribute attribute, double baseValue = 0d)
+        {
+            var value = Math.Truncate(ship.CalculateWithAdditiveBonuses(baseValue, attribute));
+            return (float)SlaveGameData.Instance.ClampShipDriveAttribute(attribute, value);
+        }
+        float FacetBonus(UnitAttribute attribute, UnitAttribute multiplier)
+        {
+            var baseValue = Math.Truncate(Attribute(multiplier) * facets * 0.001f);
+            return Attribute(attribute, baseValue) * 0.001f;
+        }
     }
 
     private void ReportCollision(uint id, HullCollisionWindow contact, float impact)
@@ -318,8 +439,8 @@ public sealed class PhysicsManager : IDisposable
         try
         {
             _ships.TryGetValue(contact.OtherBcId, out var other);
-            var mass = _hulls.ReportsImpactMass ? contact.OwnMass : _mass(id);
-            SlaveCollisionDamage.ApplyFromImpact(ship, contact.OwnPart, impact, mass, other);
+            var mass = _hulls.ReportsImpactMass ? contact.OwnMass : ship.ReportMass;
+            SlaveCollisionDamage.ApplyFromImpact(ship.Unit, contact.OwnPart, impact, mass, other?.Unit);
         }
         catch (Exception ex) { Logger.Error(ex, "Hull collision failed for {0}", id); }
     }
@@ -364,15 +485,33 @@ public sealed class PhysicsManager : IDisposable
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var ship in _ships.Values) ship.PhysicsState = null;
+            foreach (var ship in _ships.Values) ship.Unit.PhysicsState = null;
             _ships.Clear();
             Volatile.Read(ref _geometry)?.SetRetainedZones(this, SimulationWorld.Template, []);
             _suspended.Clear();
             _waitingForGeometry.Clear();
-            _pendingHullBounds.Clear();
+            _pendingHullGeometry.Clear();
             ShipDoodadCollision.Instance.RemoveWorld(SimulationWorld.Id);
             while (_commands.TryDequeue(out _)) { }
             _hulls?.Dispose();
         }
+    }
+
+    private sealed class Ship
+    {
+        public Ship(Slave unit, float hullMass)
+        {
+            Unit = unit;
+            // SlaveManager fits the children before registering the hull. The roster belongs to this hull lifetime.
+            Parts = unit.AttachedSlaves.ToArray();
+            ReportMass = MathF.Max(hullMass, 1f);
+        }
+
+        public Slave Unit { get; }
+        public Slave[] Parts { get; }
+        public float ReportMass { get; set; }
+        public HullMassState Load { get; } = new();
+        public float ExtraMass { get; set; }
+        public long MassTick { get; set; }
     }
 }

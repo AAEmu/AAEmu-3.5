@@ -371,7 +371,7 @@ public class DamageEffect : EffectTemplate
 
         if (Bonuses != null)
         {
-            ((Unit)caster).Bonuses[uint.MaxValue] = [];
+            ((Unit)caster).ClearBonuses(uint.MaxValue);
         }
 
         var trgCharacter = trg as Character;

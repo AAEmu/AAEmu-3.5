@@ -109,8 +109,13 @@ public static class CgfPhysicsReader
             if (type != ChunkMesh || body + 28 + 64 + 16 > data.Length)
                 continue;
             var physicsId = I32(data, body + 28 + 64); // slot 0: the default (colliding) proxy
-            if (physicsId == 0 || !chunks.TryGetValue(physicsId, out var physics) || physics.Type != ChunkPhysicsData)
+            if (physicsId == 0)
                 continue;
+            if (!chunks.TryGetValue(physicsId, out var physics) || physics.Type != ChunkPhysicsData)
+            {
+                unreadable++;
+                continue;
+            }
 
             var toObject = Matrix4x4.Identity;
             if (nodesByObject.TryGetValue(meshId, out var nodeId))
@@ -163,12 +168,18 @@ public static class CgfPhysicsReader
     /// diagonal is the radius native's vegetation size test takes. Null when the file is no cgf or has no mesh.
     /// </summary>
     public static (Vector3 Min, Vector3 Max)? RenderBounds(ReadOnlySpan<byte> data)
+        => ReadRenderBounds(data, objectFrame: false) is { } box ? (box.Min, box.Max) : null;
+
+    /// <summary>Render bounds of occupied meshes in the asset frame, including their node chains.</summary>
+    public static GeometryBounds? ObjectRenderBounds(ReadOnlySpan<byte> data) => ReadRenderBounds(data, objectFrame: true);
+
+    private static GeometryBounds? ReadRenderBounds(ReadOnlySpan<byte> data, bool objectFrame)
     {
         if (data.Length < 20 || !data[..6].SequenceEqual("CryTek"u8))
             return null;
         var version = U32(data, 12);
         var tableOffset = I32(data, 16);
-        if (tableOffset <= 0 || tableOffset + 4 > data.Length)
+        if (tableOffset <= 0 || tableOffset > data.Length - 4)
             return null;
         var count = I32(data, tableOffset);
         var stride = version == 0x745 ? 20 : 16;
@@ -181,9 +192,11 @@ public static class CgfPhysicsReader
             var type = U32(data, e);
             var offset = I32(data, e + 8);
             var id = I32(data, e + 12);
-            if (offset <= 0 || offset + 16 > data.Length)
+            if (offset <= 0 || offset > data.Length - 16)
                 continue;
             var body = U32(data, offset) == type && I32(data, offset + 8) == offset && I32(data, offset + 12) == id ? offset + 16 : offset;
+            if (type == ChunkNode && body > data.Length - (objectFrame ? 148 : 72))
+                continue;
             chunks.TryAdd(id, (type, body));
         }
 
@@ -198,15 +211,23 @@ public static class CgfPhysicsReader
         var max = new Vector3(float.MinValue);
         foreach (var (meshId, (type, body)) in chunks)
         {
-            if (type != ChunkMesh || body + MeshBounds + 24 > data.Length)
+            if (type != ChunkMesh || body > data.Length - MeshBounds - 24)
                 continue;
-            if (nodesByObject.TryGetValue(meshId, out var nodeId) && IsLod(data, chunks, nodeId))
+            if (objectFrame && I32(data, body + 8) <= 0)
                 continue;
-            min = Vector3.Min(min, V3(data, body + MeshBounds));
-            max = Vector3.Max(max, V3(data, body + MeshBounds + 12));
+            var box = new GeometryBounds(V3(data, body + MeshBounds), V3(data, body + MeshBounds + 12));
+            if (nodesByObject.TryGetValue(meshId, out var nodeId))
+            {
+                if (IsLod(data, chunks, nodeId))
+                    continue;
+                if (objectFrame)
+                    box = box.Transform(NodeChain(data, chunks, nodeId));
+            }
+            min = Vector3.Min(min, box.Min);
+            max = Vector3.Max(max, box.Max);
         }
 
-        return min.X <= max.X ? (min, max) : null;
+        return min.X <= max.X ? new GeometryBounds(min, max) : null;
     }
 
     /// <summary>The name in the material chunk a node names; null when it names none this reader knows.</summary>

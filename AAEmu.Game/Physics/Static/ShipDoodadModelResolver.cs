@@ -13,7 +13,7 @@ namespace AAEmu.Game.Physics.Static;
 public readonly record struct ShipDoodadMeshPart(string AssetPath, Matrix4x4 Local, string? Name = null, bool IsBrush = true);
 
 /// <summary>Resolves CGF/CGA and prefab model URIs through the configured client file source, including packed assets.</summary>
-public sealed class ShipDoodadModelResolver(IGeometryFileSource source)
+public sealed class ShipDoodadModelResolver(IGeometryFileSource source, bool includeUnresolvedBrushes = false)
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly Lock _gate = new();
@@ -132,8 +132,14 @@ public sealed class ShipDoodadModelResolver(IGeometryFileSource source)
                 }
                 if (!string.Equals(type, "Brush", StringComparison.OrdinalIgnoreCase)) continue;
                 var asset = reader.GetAttribute("Prefab");
-                if (!string.IsNullOrWhiteSpace(asset))
-                    parsed[prefab].Add(new ShipDoodadMeshPart(AssetPath(asset), Pose(reader.GetAttribute("Pos"), reader.GetAttribute("Rotate"), reader.GetAttribute("Scale")), reader.GetAttribute("Name")));
+                var name = reader.GetAttribute("Name");
+                if (string.IsNullOrWhiteSpace(asset))
+                {
+                    if (includeUnresolvedBrushes)
+                        parsed[prefab].Add(new ShipDoodadMeshPart(string.Empty, Matrix4x4.Identity, name));
+                    continue;
+                }
+                parsed[prefab].Add(new ShipDoodadMeshPart(AssetPath(asset), Pose(reader.GetAttribute("Pos"), reader.GetAttribute("Rotate"), reader.GetAttribute("Scale")), name));
             }
             foreach (var (name, parts) in parsed)
                 result.Add(name, parts.ToArray());
@@ -171,7 +177,7 @@ public sealed class ShipDoodadModelResolver(IGeometryFileSource source)
         return values;
     }
 
-    private static string AssetPath(string relative)
+    internal static string AssetPath(string relative)
     {
         relative = relative.Replace('\\', '/').TrimStart('/').ToLowerInvariant();
         return relative.StartsWith("game/", StringComparison.Ordinal) ? relative : "game/" + relative;

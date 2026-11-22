@@ -172,6 +172,10 @@ public enum UnitAttribute : byte
     PhysicsCollisionDamageMul = 187,
     Mass = 188,
     MassMul = 189,
+    SteeringSpeed = 190,
+    SteeringSpeedMul = 191,
+    ReverseVelocity = 192,
+    ReverseVelocityMul = 193,
     PhysicsCollisionArmorMul = 194,
     ImpactMass = 203,
 }
