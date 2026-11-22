@@ -21,11 +21,16 @@ public class ACWorldCookiePacket(ILoginConnection connection, GameServer gs)
         var serverIp = gs.Host;
         if (connection.IsLocallyConnected)
             serverIp = connection.Ip.ToString();
+
         stream.Write(_cookie);
-        for (var i = 0; i < 4; i++)
+        stream.Write(Helpers.ConvertIp(serverIp));
+        stream.Write(gs.Port);
+
+        // Empty slots are not considered gateway candidates by the client.
+        for (var i = 0; i < 3; i++)
         {
-            stream.Write(Helpers.ConvertIp(serverIp));
-            stream.Write(gs.Port);
+            stream.Write(0u);
+            stream.Write((ushort)0);
         }
 
         return stream;

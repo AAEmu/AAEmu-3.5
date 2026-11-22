@@ -272,8 +272,12 @@ public class LoginSessionTests
     }
 
     [Test]
-    public async Task InitiateEnterWorld_Success_SendsWorldCookiePacket(CancellationToken cancellationToken)
+    [Arguments(false, 0x7F000001u)]
+    [Arguments(true, 0x0A000001u)]
+    public async Task InitiateEnterWorld_Success_SendsOneWorldCookieEndpoint(
+        bool isLocallyConnected, uint expectedAddress, CancellationToken cancellationToken)
     {
+        _mockConnection.IsLocallyConnected.Returns(isLocallyConnected);
         await AuthenticateSuccessfullyAsync(cancellationToken);
         CreateActiveGameServer(s_testGsId);
 
@@ -284,6 +288,19 @@ public class LoginSessionTests
         await Assert.That(_sentPackets.Count).IsEqualTo(1);
         await Assert.That(_sentPackets[0].GetType()).IsEqualTo(typeof(ACWorldCookiePacket));
         await Assert.That(_session.State).IsEqualTo(LoginState.Authenticated);
+
+        var stream = _sentPackets[0].Encode();
+        await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)30);
+        await Assert.That(stream.ReadUInt16()).IsEqualTo(LCOffsets.ACWorldCookiePacket);
+        await Assert.That(stream.ReadUInt32()).IsEqualTo(s_testConnectionId.Value);
+        await Assert.That(stream.ReadUInt32()).IsEqualTo(expectedAddress);
+        await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)1234);
+        for (var i = 0; i < 3; i++)
+        {
+            await Assert.That(stream.ReadUInt32()).IsEqualTo(0u);
+            await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)0);
+        }
+        await Assert.That(stream.LeftBytes).IsEqualTo(0);
     }
 
     [Test]
