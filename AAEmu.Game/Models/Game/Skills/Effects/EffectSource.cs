@@ -8,6 +8,7 @@ public class EffectSource
     public BuffTemplate Buff { get; set; }
     public int Amount { get; set; }
     public bool IsTrigger { get; set; }
+    internal bool AoeDiminishing { get; init; }
 
     public EffectSource()
     {

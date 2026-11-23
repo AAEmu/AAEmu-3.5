@@ -8,7 +8,18 @@ public class SummonMate : Item
     public int DetailMateExp { get; set; }
     public byte DetailLevel { get; set; }
     public uint MateDbId { get; set; }
-    public DateTime RepairStartTime { get; set; } = DateTime.MinValue;
+    private DateTime _repairStartTime;
+
+    // The stored value is the time at which this mate can be summoned again.
+    public DateTime RepairStartTime
+    {
+        get => _repairStartTime;
+        set
+        {
+            _repairStartTime = value;
+            IsDirty = true;
+        }
+    }
 
     public override ItemDetailType DetailType => ItemDetailType.Mate;
     public override uint DetailBytesLength => 24;
@@ -30,7 +41,9 @@ public class SummonMate : Item
         DetailLevel = stream.ReadByte();     // 1 byte: level
         MateDbId = stream.ReadUInt32();      // 4 bytes: mate DB id
         var repairTicks = stream.ReadInt64(); // 8 bytes: repair cooldown ticks
-        RepairStartTime = repairTicks > 0 ? DateTime.SpecifyKind(new DateTime(repairTicks), DateTimeKind.Utc) : DateTime.MinValue;
+        _repairStartTime = repairTicks > 0 && repairTicks <= DateTime.MaxValue.Ticks
+            ? new DateTime(repairTicks, DateTimeKind.Utc)
+            : DateTime.MinValue;
         _ = stream.ReadBytes(6);             // 6 bytes: padding to reach 24
     }
 
@@ -42,6 +55,29 @@ public class SummonMate : Item
         stream.Write(MateDbId);              // 4
         stream.Write(RepairStartTime > DateTime.MinValue ? RepairStartTime.Ticks : 0L); // 8
         stream.Write(new byte[6]);           // 6 — total 24
+    }
+
+    protected override void ReadClientDetails(PacketStream stream)
+    {
+        DetailMateExp = stream.ReadInt32();
+        _ = stream.ReadByte();
+        DetailLevel = stream.ReadByte();
+        var recoverySeconds = stream.ReadInt64();
+        _repairStartTime = recoverySeconds is > 0 and <= 253402300799L
+            ? DateTimeOffset.FromUnixTimeSeconds(recoverySeconds).UtcDateTime
+            : DateTime.MinValue;
+        _ = stream.ReadBytes(6);
+    }
+
+    protected override void WriteClientDetails(PacketStream stream) => WriteAdditionalDetails(stream);
+
+    public override void WriteAdditionalDetails(PacketStream stream)
+    {
+        stream.Write(DetailMateExp);
+        stream.Write((byte)0);
+        stream.Write(DetailLevel);
+        stream.Write(RepairStartTime > DateTime.UnixEpoch ? new DateTimeOffset(RepairStartTime).ToUnixTimeSeconds() : 0L);
+        stream.Write(new byte[6]);
     }
 
     public override void OnManuallyDestroyingItem()

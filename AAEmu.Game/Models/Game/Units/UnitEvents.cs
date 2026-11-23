@@ -9,6 +9,11 @@ namespace AAEmu.Game.Models.Game.Units;
 
 public class UnitEvents
 {
+    private readonly Lock _buffSourceLock = new();
+    private Action _buffSourceDetached;
+    private Guid _buffSourceLife;
+    private bool _buffSourceOffline;
+
     /********************************************************
      *  Please dont uncomment unless you implement these!   *
      *           Commented = Not Invoked!!!                 *
@@ -17,21 +22,24 @@ public class UnitEvents
     public EventHandler<OnAttackArgs> OnAttack = delegate { }; //Double check this one
     public EventHandler<OnAttackedArgs> OnAttacked = delegate { }; //Double check this one
     public EventHandler<OnDamageArgs> OnDamage = delegate { };
+    public EventHandler<OnDamageArgs> OnDamageMelee = delegate { };
+    public EventHandler<OnDamageArgs> OnDamageSpell = delegate { };
+    public EventHandler<OnDamageArgs> OnDamageRanged = delegate { };
+    public EventHandler<OnDamageArgs> OnDamageSiege = delegate { };
     public EventHandler<OnDamagedArgs> OnDamaged = delegate { };
     //public EventHandler<OnTimeoutArgs> OnTimeout = delegate { }; //When player disconnects? Buff runs out? idk
     public EventHandler<OnDamagedArgs> OnDamagedMelee = delegate { };
     public EventHandler<OnDamagedArgs> OnDamagedRanged = delegate { };
     public EventHandler<OnDamagedArgs> OnDamagedSpell = delegate { };
     public EventHandler<OnDamagedArgs> OnDamagedSiege = delegate { };
-    //public EventHandler<OnLandingArgs> OnLanding = delegate { }; //Assume this is for falling?
+    public EventHandler<OnLandingArgs> OnLanding = delegate { };
     //public EventHandler<OnStartedArgs> OnStarted = delegate { }; // I think this belongs part of effect
     public EventHandler<OnMovementArgs> OnMovement = delegate { }; // Only for walking? Or Movement in general?
     public EventHandler<OnChannelingCancelArgs> OnChannelingCancel = delegate { }; //This one might need fixing
     //public EventHandler<OnRemoveOnDamagedArgs> OnRemoveOnDamaged = delegate { }; // Covered by OnDamaged? Maybe?
     public EventHandler<OnUnmountArgs> OnUnmount = delegate { };
     public EventHandler<OnKillArgs> OnKill = delegate { };
-    //public EventHandler<OnDamagedCollisionArgs> OnDamagedCollision = delegate { };//I think for ships
-    //public EventHandler<OnImmortalityArgs> OnImmortality = delegate { }; //When unit goes invuln?
+    public EventHandler<OnDamagedCollisionArgs> OnDamagedCollision = delegate { };
     //public EventHandler<OnTimeArgs> OnTime = delegate { }; //Event for effect?
     //public EventHandler<OnTimeArgs> OnTime = delegate { }; //Add it if needed, but I think OnKill is fine?
     public EventHandler<OnHealedArgs> OnHealed = delegate { };
@@ -72,7 +80,63 @@ public class UnitEvents
     public EventHandler<InIdleArgs> InIdle = delegate { };
     public EventHandler<InAlertArgs> InAlert = delegate { };
     public EventHandler<InDeadArgs> InDead = delegate { };
-    public EventHandler<OnDeathArgs> OnDeath = delegate { };
+    public event EventHandler<OnDeathArgs> OnDeath;
+    public void RaiseDeath(object sender, OnDeathArgs args)
+    {
+        lock (_buffSourceLock)
+            _buffSourceLife = Guid.Empty;
+        OnDeath?.Invoke(sender, args);
+    }
+
+    internal Guid BuffSourceLife
+    {
+        get
+        {
+            lock (_buffSourceLock)
+            {
+                if (_buffSourceLife == Guid.Empty)
+                    _buffSourceLife = Guid.NewGuid();
+                return _buffSourceLife;
+            }
+        }
+    }
+
+    internal bool TryTrackBuffSource(Action onDetached, Guid? expectedLife)
+    {
+        lock (_buffSourceLock)
+        {
+            if (_buffSourceOffline || (expectedLife.HasValue && _buffSourceLife != expectedLife.GetValueOrDefault()))
+                return false;
+
+            _buffSourceDetached += onDetached;
+            return true;
+        }
+    }
+
+    internal void UntrackBuffSource(Action onDetached)
+    {
+        lock (_buffSourceLock)
+            _buffSourceDetached -= onDetached;
+    }
+
+    internal void DetachBuffSource()
+    {
+        Action detached;
+        lock (_buffSourceLock)
+        {
+            _buffSourceOffline = true;
+            _buffSourceLife = Guid.Empty;
+            detached = _buffSourceDetached;
+            _buffSourceDetached = null;
+        }
+        detached?.Invoke();
+    }
+
+    internal void ResumeBuffSource()
+    {
+        lock (_buffSourceLock)
+            _buffSourceOffline = false;
+    }
     public EventHandler<OnSpawnArgs> OnSpawn = delegate { };
     public EventHandler<OnDespawnArgs> OnDespawn = delegate { };
     public EventHandler<OnTimerExpiredArgs> OnTimerExpired = delegate { };
@@ -245,22 +309,26 @@ public class OnQuestCompleteArgs : EventArgs
 public class OnAttackArgs : EventArgs
 {
     public Unit Attacker { get; set; }
+    public BaseUnit Receiver { get; set; }
 }
 
 public class OnAttackedArgs : EventArgs
 {
-    // Empty
+    public BaseUnit Attacker { get; set; }
+    public BaseUnit Receiver { get; set; }
 }
 
 public class OnDamageArgs : EventArgs
 {
     public Unit Attacker { get; set; }
+    public BaseUnit Receiver { get; set; }
     public int Amount { get; set; }
 }
 
 public class OnDamagedArgs : EventArgs
 {
     public Unit Attacker { get; set; }
+    public BaseUnit Receiver { get; set; }
     public int Amount { get; set; }
 }
 
@@ -328,12 +396,10 @@ public class OnKillArgs : EventArgs
 
 public class OnDamagedCollisionArgs : EventArgs
 {
-    // Empty
-}
-
-public class OnImmortalityArgs : EventArgs
-{
-    // Empty
+    public BaseUnit Attacker { get; init; }
+    public Unit Receiver { get; init; }
+    public int Amount { get; init; }
+    public float Impact { get; init; }
 }
 
 public class OnTimeArgs : EventArgs
@@ -350,6 +416,7 @@ public class OnHealedArgs : EventArgs
 {
     public Unit Healer { get; set; }
     public int HealAmount { get; set; }
+    public bool IgnoreHealAggro { get; set; }
 }
 
 public class OnCombatStartedArgs : EventArgs

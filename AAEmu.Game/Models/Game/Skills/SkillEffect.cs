@@ -40,4 +40,7 @@ public class SkillEffect
     public uint TargetNoBuffTagId { get; set; }
     public uint TargetNpcTagId { get; set; }
     public int Weight { get; set; }
+
+    internal bool MatchesCastingUseProgress(int progress) =>
+        progress >= StartCastingUseChance && progress <= EndCastingUseChance;
 }

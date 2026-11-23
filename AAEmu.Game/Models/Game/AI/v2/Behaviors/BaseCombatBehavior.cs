@@ -318,6 +318,9 @@ public abstract class BaseCombatBehavior : Behavior
         if ((Ai.Owner.ActiveSkillController?.State ?? SkillController.SCState.Ended) == SkillController.SCState.Running)
             return Ai.Owner.CurrentTarget != null;
 
+        if (Ai.Owner.TryFocusTaunt())
+            return true;
+
         // We might want to optimize this somehow.
         var aggroList = Ai.Owner.AggroTable.Values;
         var abusers = aggroList.OrderByDescending(o => o.TotalAggro).Select(o => o.Owner).ToList();

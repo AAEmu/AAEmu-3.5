@@ -1398,6 +1398,52 @@ public partial class Npc : Unit
         // AI?.OnSkillEnd(skill);
     }
 
+    internal void BeginTaunt(Unit taunter, bool takeTopThreat)
+    {
+        if (taunter.ObjId == 0 || IsDead || !ReferenceEquals(ParentWorld, taunter.ParentWorld))
+            return;
+
+        if (takeTopThreat)
+        {
+            if (!AggroTable.ContainsKey(taunter.ObjId))
+                AddUnitAggro(AggroKind.Etc, taunter, 0);
+
+            if (AggroTable.TryGetValue(taunter.ObjId, out var entry))
+            {
+                var highest = 0;
+                foreach (var (_, other) in AggroTable)
+                    highest = Math.Max(highest, other.TotalAggro);
+                entry.RaiseTotalAggroTo(highest == int.MaxValue ? highest : highest + 1);
+            }
+        }
+
+        Ai?.OnAggroTargetChanged();
+    }
+
+    internal bool TryFocusTaunt()
+    {
+        if (Buffs is not Units.Buffs effects || effects.GetTauntSource() is not { } taunter ||
+            !UnitIsVisible(taunter))
+            return false;
+
+        if (!ReferenceEquals(CurrentTarget, taunter))
+        {
+            CurrentAggroTarget = taunter;
+            SetTarget(taunter);
+        }
+        return true;
+    }
+
+    internal void EndTaunt(Unit taunter)
+    {
+        if (taunter == null || Ai == null || !ReferenceEquals(CurrentTarget, taunter) || TryFocusTaunt())
+            return;
+
+        CurrentAggroTarget = null;
+        SetTarget(null);
+        Ai.OnAggroTargetChanged();
+    }
+
     public void SetTarget(Unit other)
     {
         CurrentTarget = other;

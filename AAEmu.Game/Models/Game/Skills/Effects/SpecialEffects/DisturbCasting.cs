@@ -1,5 +1,6 @@
 ﻿using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Models.Tasks.Skills;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
@@ -16,10 +17,11 @@ public class DisturbCasting : SpecialEffectAction
     {
         if (caster is Character) { Logger.Debug("Special effects: DisturbCasting chance {0}, delay {1}, value3 {2}, value4 {3}", chance, delay, value3, value4); }
 
-        if (target is Unit unit)
-        {
-            unit.ActivePlotState?.RequestCancellation();
-            // TODO: Find a way to cancel normal skills properly
-        }
+        if (target is not Unit unit || chance > 0 && chance < 100 && Random.Shared.Next(100) >= chance)
+            return;
+
+        unit.ActivePlotState?.RequestCancellation();
+        if (unit.SkillTask is CastTask task)
+            task.Skill.Stop(unit, task);
     }
 }

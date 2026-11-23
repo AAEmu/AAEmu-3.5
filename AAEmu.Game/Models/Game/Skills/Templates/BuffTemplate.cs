@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Effects;
@@ -163,7 +164,6 @@ public class BuffTemplate
     // -------------------------------------------------------------------------
     // Иммунитеты
     // -------------------------------------------------------------------------
-    public uint ImmuneBuffTagId { get; set; } // TODO: no DB column, stale
     public uint ImmuneDamage { get; set; }
     public bool ImmuneExceptCreator { get; set; }
     public uint ImmuneExceptCreatorRelationId { get; set; }
@@ -318,11 +318,8 @@ public class BuffTemplate
         if (BuffId > 0 && target.Buffs.CheckBuff(BuffId))
             return;
 
-        if (RequireBuffId > 0 && !target.Buffs.CheckBuff(RequireBuffId))
-            return; //TODO send error?
-
-        if (target.Buffs.CheckBuffImmune(Id))
-            return; //TODO  error of immune?
+        if (!CanApplyTo(target, caster, source.Skill))
+            return;
 
         ushort abLevel = 1;
 
@@ -355,6 +352,24 @@ public class BuffTemplate
         target.Buffs.AddBuff(new Buff(target, caster, casterObj, this, source.Skill, time) { AbLevel = abLevel });
     }
 
+    public bool CanApplyTo(BaseUnit target, BaseUnit caster, Skill castingSkill = null)
+    {
+        if (RequireBuffId != 0 && !target.Buffs.CheckBuff(RequireBuffId))
+            return false;
+
+        var requiredTags = BuffGameData.Instance.GetRequiredBuffTags(Id);
+        if (requiredTags != null)
+        {
+            foreach (var tag in requiredTags)
+            {
+                if (!target.Buffs.CheckBuffTag(tag))
+                    return false;
+            }
+        }
+
+        return !target.Buffs.CheckBuffImmune(this, caster, castingSkill);
+    }
+
     /// <summary>
     /// Removes the static and dynamic unit bonuses this buff registered under <paramref name="buff"/>.Index.
     /// Shared by <see cref="Start"/> (to stay idempotent across refreshes) and <see cref="Dispel"/>.
@@ -373,11 +388,23 @@ public class BuffTemplate
     /// </summary>
     public void Start(BaseUnit caster, BaseUnit owner, Buff buff)
     {
+        ApplyBonuses(owner, buff);
+        buff.InitializeCharge();
+
+        if (!buff.Passive)
+            owner.BroadcastPacket(new SCBuffCreatedPacket(buff), true);
+
+        ApplySpecialProperties(caster, owner, buff);
+    }
+
+    internal void ApplyBonuses(BaseUnit owner, Buff buff)
+    {
         RemoveBonuses(owner, buff);
 
         foreach (var template in Bonuses)
         {
-            var bonus = new Bonus { Template = template, Value = (int)Math.Round(template.Value + template.LinearLevelBonus * (buff.AbLevel / 100f)) };
+            var value = (template.Value + template.LinearLevelBonus * (buff.AbLevel / 100f)) * Math.Max(1, buff.Stack);
+            var bonus = new Bonus { Template = template, Value = (int)Math.Round(value) };
             owner.AddBonus(buff.Index, bonus);
         }
 
@@ -416,13 +443,10 @@ public class BuffTemplate
                     break;
             }
         }
+    }
 
-        if (buff.Charge == 0)
-            buff.Charge = Random.Shared.Next(InitMinCharge, InitMaxCharge);
-
-        if (!buff.Passive)
-            owner.BroadcastPacket(new SCBuffCreatedPacket(buff), true);
-
+    private void ApplySpecialProperties(BaseUnit caster, BaseUnit owner, Buff buff)
+    {
         // Buff-driven SkillController for NPCs: pull / lift / fear / leap / dash
         // skills carry their displacement via a buff. SkillControllerId resolves
         // to a SkillControllerTemplate whose KindId picks the controller class
@@ -520,11 +544,11 @@ public class BuffTemplate
     /// Применяет тиковый эффект (разовый или по области).
     /// Делегирует <see cref="BuffTickHandler"/>.
     /// </summary>
-    public void TimeToTimeApply(BaseUnit caster, BaseUnit owner, Buff buff)
+    internal void TimeToTimeApply(BaseUnit caster, BaseUnit owner, Buff buff, SkillCaster skillCaster)
     {
         if (TickAreaRadius > 0)
         {
-            DoAreaTick(caster, owner, buff);
+            DoAreaTick(caster, owner, buff, skillCaster);
             return;
         }
 
@@ -545,7 +569,7 @@ public class BuffTemplate
 
             var targetObj = new SkillCastUnitTarget(owner.ObjId);
             var skillObj = new SkillObject(); // TODO ?
-            eff.Apply(caster, buff.SkillCaster, owner, targetObj, new CastBuff(buff), new EffectSource(this), skillObj,
+            eff.Apply(caster, skillCaster, owner, targetObj, new CastBuff(buff), new EffectSource(this), skillObj,
                 DateTime.UtcNow);
         }
     }
@@ -553,7 +577,7 @@ public class BuffTemplate
     /// <summary>
     /// Выполняет area-тик напрямую.
     /// </summary>
-    private void DoAreaTick(BaseUnit caster, BaseUnit owner, Buff buff)
+    private void DoAreaTick(BaseUnit caster, BaseUnit owner, Buff buff, SkillCaster skillCaster)
     {
         var units = WorldManager.GetAround<Unit>(owner, TickAreaRadius);
 
@@ -591,7 +615,7 @@ public class BuffTemplate
                         continue;
 
                     var targetObj = new SkillCastUnitTarget(trg.ObjId);
-                    eff.Apply(source, buff.SkillCaster, trg, targetObj, new CastBuff(buff), new EffectSource(this), skillObj, DateTime.UtcNow);
+                    eff.Apply(source, skillCaster, trg, targetObj, new CastBuff(buff), new EffectSource(this), skillObj, DateTime.UtcNow);
                 }
             }
         }
@@ -619,9 +643,11 @@ public class BuffTemplate
     private void DispelCore(BaseUnit caster, BaseUnit owner, Buff buff, bool replaced)
     {
         RemoveBonuses(owner, buff);
-        var requiringBuffs = owner.Buffs.GetBuffsRequiring(buff.Template.Id);
-        foreach (var requiringBuff in requiringBuffs.ToList())
-            requiringBuff.Exit();
+        if (!owner.Buffs.CheckBuff(Id))
+        {
+            foreach (var requiringBuff in owner.Buffs.GetBuffsRequiring(Id))
+                requiringBuff.Exit();
+        }
 
         if (!buff.Passive && !replaced)
             owner.BroadcastPacket(new SCBuffRemovedPacket(owner.ObjId, buff.Index), true);
@@ -650,6 +676,12 @@ public class BuffTemplate
     public int GetDuration(uint abLevel)
     {
         return Math.Max(0, LevelDuration * (int)abLevel + Duration);
+    }
+
+    internal int ClampDuration(long duration)
+    {
+        var limit = MaxLifeTime == 0 ? int.MaxValue : Math.Min(MaxLifeTime, (uint)int.MaxValue);
+        return (int)Math.Clamp(duration, 0, limit);
     }
 
     /// <summary>

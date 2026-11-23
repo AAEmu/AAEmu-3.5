@@ -74,6 +74,37 @@ public class CompactDatabasePatcherTests
         await Assert.That((string)links).IsEqualTo("1:161,1:165,2:161,2:165,3:169,13:170");
     }
 
+    [Test]
+    public async Task CampfirePatchRestoresTheAuthoredCrowdBuffAndTag()
+    {
+        using var files = new PatchFiles();
+        files.Execute("""
+                      CREATE TABLE buffs (
+                        id INT PRIMARY KEY, name TEXT, "desc" TEXT, duration INT, tick INT,
+                        icon_id INT, fx_group_id INT, kind_id INT, system INT, active_weapon_id INT,
+                        stack_rule_id INT, max_stack INT, save_rule_id INT, remove_on_death INT, remove_on_exempt INT,
+                        crowd_friendly INT, crowd_hostile INT, crowd_number INT, scale REAL, scaleDuration REAL,
+                        custom_dual_material_fade_time REAL, reflection_ratio INT, reflection_target_ratio INT,
+                        psychokinesis_speed REAL, tick_area_angle INT, gliding_fall_speed_fast REAL,
+                        gliding_fall_speed_normal REAL, gliding_fall_speed_slow REAL, gliding_land_height REAL,
+                        gliding_lift_count INT, gliding_lift_duration REAL, gliding_lift_height REAL,
+                        gliding_lift_speed REAL, gliding_lift_valid_time REAL, gliding_move_speed_fast REAL,
+                        gliding_move_speed_normal REAL, gliding_move_speed_slow REAL, gliding_sliding_time REAL,
+                        gliding_smooth_time REAL, gliding_startup_speed REAL, gliding_startup_time REAL
+                      );
+                      CREATE TABLE tagged_buffs (id INT PRIMARY KEY, buff_id INT, tag_id INT);
+                      """);
+        const string patchName = "2026-11-23-campfire-crowd-buff.sql";
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "SQL", "patches", "compact", "startup", patchName),
+            Path.Combine(files.PatchDirectory, patchName));
+
+        CompactDatabasePatcher.Apply(files.Root);
+        CompactDatabasePatcher.Apply(files.Root);
+
+        await Assert.That((long)files.Scalar("SELECT count(*) FROM buffs WHERE id=22659 AND duration=0 AND fx_group_id=836 AND system=1")).IsEqualTo(1L);
+        await Assert.That((long)files.Scalar("SELECT count(*) FROM tagged_buffs WHERE buff_id=22659 AND tag_id=2480")).IsEqualTo(1L);
+    }
+
     private sealed class PatchFiles : IDisposable
     {
         internal string Root { get; } = Directory.CreateTempSubdirectory("aaemu-compact-patches-").FullName;

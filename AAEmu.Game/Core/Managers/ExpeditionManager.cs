@@ -47,7 +47,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
 
         var member = GetMemberFromCharacter(expedition, owner, true);
 
-        expedition.Members.Add(member);
+        expedition.AddMember(member);
 
         return expedition;
     }
@@ -131,7 +131,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
                                 IsOnline = false,
                                 InParty = false
                             };
-                            expedition.Members.Add(member);
+                            expedition.AddMember(member);
                         }
                     }
                 }
@@ -304,7 +304,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
             var newMember = GetMemberFromCharacter(expedition, invited, false);
 
             invited.Expedition = expedition;
-            expedition.Members.Add(newMember);
+            expedition.AddMember(newMember);
 
             invited.BroadcastPacket(
                 new SCUnitExpeditionChangedPacket(invited.ObjId, invited.Id, "", invited.Name, 0, (uint)expedition.Id, false),
@@ -344,7 +344,7 @@ public class ExpeditionManager(IExpeditionIdManager expeditionIdManager, ITeamMa
         var newMember = GetMemberFromCharacter(expedition, invited, false);
 
         invited.Expedition = expedition;
-        expedition.Members.Add(newMember);
+        expedition.AddMember(newMember);
 
         invited.BroadcastPacket(
             new SCUnitExpeditionChangedPacket(invited.ObjId, invited.Id, "", invited.Name, 0, (uint)expedition.Id, false),

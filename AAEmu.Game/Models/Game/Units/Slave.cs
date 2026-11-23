@@ -685,7 +685,7 @@ public class Slave : Unit
     public override void DoDie(BaseUnit killer, KillReason killReason)
     {
         InterruptSkills();
-        Events.OnDeath(this, new OnDeathArgs { Killer = (Unit)killer, Victim = this });
+        Events.RaiseDeath(this, new OnDeathArgs { Killer = (Unit)killer, Victim = this });
         Buffs.RemoveEffectsOnDeath();
         killer.BroadcastPacket(new SCUnitDeathPacket(ObjId, killReason, (Unit)killer), true);
 

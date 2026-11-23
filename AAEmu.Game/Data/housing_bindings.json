@@ -1,4 +1,29 @@
 [
+    // housing_dominion.xml market and main castle prefabs. CGF helper translations in meters.
+    {
+        "TemplateId": [645],
+        "AttachPointId": {
+            "10": { "X": 0.0, "Y": 12.1728406, "Z": 0.7094387 }
+        }
+    },
+    {
+        "TemplateId": [654],
+        "AttachPointId": {
+            "51": { "X": -0.02375, "Y": -4.8519531, "Z": 2.6970688 }
+        }
+    },
+    {
+        "TemplateId": [655],
+        "AttachPointId": {
+            "51": { "X": 0.0, "Y": -5.4295728, "Z": 2.6970605 }
+        }
+    },
+    {
+        "TemplateId": [656],
+        "AttachPointId": {
+            "51": { "X": 0.0000195, "Y": -5.4295703, "Z": 2.6970355 }
+        }
+    },
 /*
   TemplateId=1927 -> 'modeld' ->
   sub_id=820 -> 'prefab_elements' ->

@@ -484,7 +484,8 @@ public class HousingManager(
         // TODO minus moneyAmount
 
         var sourceDesignItem = connection.ActiveChar.Inventory.GetItemById(itemId);
-        if (sourceDesignItem == null || sourceDesignItem.OwnerId != connection.ActiveChar.Id)
+        if (sourceDesignItem == null || sourceDesignItem.OwnerId != connection.ActiveChar.Id ||
+            TerritoryMemoryEmber.IsSourceHouse(designId) && !HousingGameData.Instance.IsDesignItem(designId, sourceDesignItem.TemplateId))
         {
             // Invalid itemId supplied or the id is not owned by the user
             connection.ActiveChar.SendErrorMessage(ErrorMessageType.BagInvalidItem);

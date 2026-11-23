@@ -60,6 +60,20 @@ public class PlotEventCondition
                 throw new InvalidOperationException("This can't happen");
         }
 
+        if (targetInfo.EffectedTargets.Count == 0)
+        {
+            var fallbackTarget = TargetId switch
+            {
+                PlotEffectTarget.OriginalSource => state.Caster,
+                PlotEffectTarget.OriginalTarget => state.Target,
+                PlotEffectTarget.Source => targetInfo.Source,
+                PlotEffectTarget.Target or PlotEffectTarget.Location => targetInfo.Target,
+                _ => throw new InvalidOperationException("Invalid plot effect target")
+            };
+            return condition.Condition.Check(source, state.CasterCaster, fallbackTarget,
+                state.TargetCaster, state.SkillObject, state.ActiveSkill);
+        }
+
         var result = true;
         foreach (var newTarget in targetInfo.EffectedTargets)
         {

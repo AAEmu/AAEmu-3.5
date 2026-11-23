@@ -136,7 +136,7 @@ public class UnitReqs
 
             case UnitReqsKindType.TargetDoodad:
                 BaseUnit targetDoodad = null;
-                if (unit?.CurrentTarget is Doodad targetDoodadCheck)
+                if (target is Doodad targetDoodadCheck)
                 {
                     targetDoodad = targetDoodadCheck;
                 }

@@ -15,6 +15,7 @@ public class PlotManager : Singleton<PlotManager>, IPlotManager
     private Dictionary<uint, Plot> _plots;
     private Dictionary<uint, PlotEventTemplate> _eventTemplates;
     private Dictionary<uint, PlotCondition> _conditions;
+    internal IReadOnlyList<float> AoeDiminishingRates { get; private set; } = [];
     //private Dictionary<uint, PlotAoeCondition> _aoeConditions;
 
     public Plot GetPlot(uint id)
@@ -40,6 +41,16 @@ public class PlotManager : Singleton<PlotManager>, IPlotManager
         //_aoeConditions = new Dictionary<uint, PlotAoeCondition>();
         using (var connection = SQLite.CreateConnection())
         {
+            List<float> rates = [];
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT rate FROM aoe_diminishings ORDER BY id";
+                using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+                while (reader.Read())
+                    rates.Add(reader.GetFloat("rate"));
+            }
+            AoeDiminishingRates = rates.AsReadOnly();
+
             Logger.Info("Loading plots...");
             using (var command = connection.CreateCommand())
             {
@@ -293,6 +304,7 @@ public class PlotManager : Singleton<PlotManager>, IPlotManager
                         template.Position = reader.GetInt32("position");
                         template.PerTarget = reader.GetBoolean("per_target", true);
                         template.Casting = reader.GetBoolean("casting", true);
+                        template.CastingUseable = reader.GetBoolean("casting_useable", false);
                         template.Delay = reader.GetInt32("delay");
                         template.Speed = reader.GetInt32("speed");
                         template.Channeling = reader.GetBoolean("channeling", true);

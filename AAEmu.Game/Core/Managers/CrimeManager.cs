@@ -9,7 +9,6 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.CommonFarm.Static;
 using AAEmu.Game.Models.Game.Crime;
 using AAEmu.Game.Models.Game.DoodadObj;
-using AAEmu.Game.Models.Game.DoodadObj.Funcs;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
 using MySql.Data.MySqlClient;
@@ -175,76 +174,74 @@ public class CrimeManager(IWorldManager worldManager,
     /// <returns></returns>
     public CrimeEvent ReportCrime(Character reporter, Doodad evidence, uint arg1, uint arg2, uint arg3, string message)
     {
+        if (reporter == null || evidence == null)
+            return null;
+
         if (evidence.OwnerType == DoodadOwnerType.Character && evidence.OwnerId == reporter.Id)
         {
             Logger.Warn($"{reporter.Name} ({reporter.Id}) tried to somehow report their own crimes at {evidence.Transform.World.Position}");
             SusManager.Instance.LogActivity(SusManager.CategoryCheating, reporter, $"Reported own crime at {evidence.Transform.World.Position} (type={evidence.TemplateId}");
             return null;
         }
-        var crimeType = CrimeKind.None;
-        short crimeValue = 0; // Not sure if needed to be known here
-        var nextPhase = 0;
-        foreach (var evidenceCurrentFunc in evidence.CurrentFuncs)
-        {
-            if (evidenceCurrentFunc.FuncType == "DoodadFuncEvidenceItemLoot")
-            {
-                var func = doodadManager.GetFuncTemplate(evidenceCurrentFunc.FuncId, evidenceCurrentFunc.FuncType);
-                if (func is DoodadFuncEvidenceItemLoot evidenceItemLoot)
-                {
-                    crimeType = (CrimeKind)evidenceItemLoot.CrimeKindId;
-                    crimeValue = evidenceItemLoot.CrimeValue;
-                    nextPhase = evidenceCurrentFunc.NextPhase;
-                }
-            }
-        }
-
-        var zoneKey = zoneManager.GetZoneByKey(evidence.Transform.ZoneId);
-
-        var newId = crimeIdManager.GetNextId();
-        var newEvent = new CrimeEvent()
-        {
-            Id = newId,
-            Criminal = evidence.OwnerId,
-            Victim = (uint)evidence.Data,
-            Reporter = reporter.Id,
-            DoodadTemplate = evidence.ItemTemplateId,
-            CrimeKind = crimeType,
-            CrimeTime = evidence.PlantTime,
-            ReportTime = DateTime.UtcNow,
-            Position = evidence.Transform.World.Position,
-            ZoneKey = zoneKey?.Id ?? 0u,
-            Arg1 = arg1,
-            Arg2 = arg2,
-            Arg3 = arg3,
-            Msg = message
-        };
-
-        if (!CrimeEvents.TryAdd(newEvent.Id, newEvent))
-        {
-            crimeIdManager.ReleaseId(newId); // Free the Id again if not able to add
-            Logger.Warn($"Unable to report crime at {newEvent.Position} with message {newEvent.Msg}");
+        if (evidence.TryClaimCrimeReport(reporter, doodadManager) is not { } claim)
             return null;
-        }
-        UpdatedEventIds.Add(newEvent.Id);
 
-        // TODO: Handle this phase change by doing the skill, and handling the crime points in DoodadFuncEvidenceItemLoot of the doodad.
-        // Add crime points to criminal
-        AddCrimePoints(newEvent.Criminal, crimeType, crimeValue);
-
-        // Progress Doodad to next phase to finish the report
-        if (nextPhase > 0)
+        CrimeEvent newEvent;
+        var stored = false;
+        try
         {
-            evidence.DoChangePhase(reporter, nextPhase);
+            var zoneKey = zoneManager.GetZoneByKey(claim.ZoneId)?.Id ?? 0u;
+            var newId = crimeIdManager.GetNextId();
+            newEvent = new CrimeEvent
+            {
+                Id = newId,
+                Criminal = claim.Criminal,
+                Victim = claim.Victim,
+                Reporter = reporter.Id,
+                DoodadTemplate = claim.ItemTemplate,
+                CrimeKind = claim.Kind,
+                CrimeTime = claim.PlantedAt,
+                ReportTime = DateTime.UtcNow,
+                Position = claim.Position,
+                ZoneKey = zoneKey,
+                Arg1 = arg1,
+                Arg2 = arg2,
+                Arg3 = arg3,
+                Msg = message
+            };
+
+            stored = CrimeEvents.TryAdd(newEvent.Id, newEvent);
+            if (!stored)
+            {
+                crimeIdManager.ReleaseId(newId);
+                Logger.Warn($"Unable to report crime at {newEvent.Position} with message {newEvent.Msg}");
+                return null;
+            }
+
+            lock (UpdatedEventIds)
+                UpdatedEventIds.Add(newEvent.Id);
+        }
+        finally
+        {
+            if (!stored)
+                evidence.ReleaseCrimeReportClaim();
         }
 
-        // Return the new CrimeId
+        try
+        {
+            AddCrimePoints(newEvent.Criminal, claim.Kind, claim.Points);
+        }
+        finally
+        {
+            evidence.AdvanceReportedEvidence(reporter, claim);
+        }
+
         return newEvent;
     }
 
     private void AddCrimePoints(uint criminalId, CrimeKind crimeType, short crimePoints)
     {
         // TODO: Handle this in the character manager instead so it can do offline people as well?
-        // TODO: Handle this in DoodadFuncEvidenceItemLoot of the doodad.
         Logger.Debug($"Adding {crimePoints} crime points to player {criminalId} for {crimeType} ({(int)crimeType})");
         var criminal = worldManager.GetCharacterById(criminalId);
         if (criminal is { IsOnline: true })

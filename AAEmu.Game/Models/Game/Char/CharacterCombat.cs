@@ -32,8 +32,6 @@ public partial class Character
     private int _consecutiveDeathCount;
     private DateTime _lastDeathTime = DateTime.MinValue;
 
-    public uint ResurrectHpPercent { get; set; } = 1;
-    public uint ResurrectMpPercent { get; set; } = 1;
     public uint HostileFactionKills { get; set; }
     public uint HonorGainedInCombat { get; set; }
 
@@ -61,8 +59,10 @@ public partial class Character
 
     public override void DoDie(BaseUnit killer, KillReason killReason)
     {
+        ClearResurrectionOffer();
         // Escalating respawn timer — runs BEFORE base.DoDie sends SCUnitDeathPacket
         ComputeDeathWaitTime();
+        ApplyDeathExperiencePenalty(killer, killReason);
 
         base.DoDie(killer, killReason);
 

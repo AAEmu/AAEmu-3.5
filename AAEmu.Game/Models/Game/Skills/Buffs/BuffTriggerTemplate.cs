@@ -14,7 +14,7 @@ public class BuffTriggerTemplate
     public bool CheckTagSrcInOwner { get; set; }
     public bool CheckTagSrcInSource { get; set; }
     public bool CheckTagSrcInTarget { get; set; }
-    public uint DelayTime { get; set; }
+    public int DelayTime { get; set; }
     public uint EffectId { get; set; }
     public EffectTemplate Effect { get; set; }
     public uint EventId { get; set; }

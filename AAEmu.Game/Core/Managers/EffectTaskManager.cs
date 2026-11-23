@@ -10,14 +10,22 @@ namespace AAEmu.Game.Core.Managers;
 /// </summary>
 public class EffectTaskManager(ITaskManager taskManager) : Singleton<EffectTaskManager>, IEffectTaskManager
 {
+    internal AuraTask AddAuraTask(Buff buff, double interval)
+    {
+        var task = new AuraTask(buff);
+        taskManager.Schedule(task, TimeSpan.FromMilliseconds(interval));
+        return task;
+    }
+
     /// <summary>
     /// Pre-Variant of dispel effects...
     /// </summary>
     /// <param name="buff"></param>
     /// <param name="interval">milliseconds</param>
-    public void AddDispelTask(Buff buff, double interval)
+    public DispelTask AddDispelTask(Buff buff, double interval)
     {
         var task = new DispelTask(buff);
-        taskManager.Schedule(task, TimeSpan.FromMilliseconds(interval)); // TODO create normal effect schedule
+        taskManager.Schedule(task, TimeSpan.FromMilliseconds(interval));
+        return task;
     }
 }

@@ -4,6 +4,7 @@ using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Faction;
+using AAEmu.Game.Models.Game.Formulas;
 using AAEmu.Game.Models.Game.Items.Procs;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.NPChar;
@@ -31,9 +32,9 @@ public class DamageEffect : EffectTemplate
     public DamageType DamageType { get; set; }
     public float DpsIncMultiplier { get; set; }
     public float DpsMultiplier { get; set; }
-    public bool EngageCombat { get; set; }
+    public bool EngageCombat { get; set; } = true;
     public string ExtraEffects { get; set; }
-    public bool FireProc { get; set; }
+    public bool FireProc { get; set; } = true;
     public int FixedMax { get; set; }
     public int FixedMin { get; set; }
     public int HealthStealRatio { get; set; }
@@ -86,16 +87,15 @@ public class DamageEffect : EffectTemplate
             return;
         }
 
-        if (Bonuses != null)
-        {
-            foreach (var bonus in Bonuses)
-            {
-                caster.AddBonus(uint.MaxValue, new Bonus { Template = bonus, Value = bonus.Value });
-            }
-        }
+        var fromBuffTrigger = source?.IsTrigger == true;
 
         trg.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.AttackedEtc);
         caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.AttackEtc);
+        if (fromBuffTrigger)
+        {
+            trg.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.AttackedBuffTrigger);
+            caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.AttackBuffTrigger);
+        }
 
         if (target.Buffs.CheckDamageImmune(DamageType))
         {
@@ -118,11 +118,21 @@ public class DamageEffect : EffectTemplate
                 HoldableId = (byte)(holdable?.HoldableTemplate?.Id ?? 0),
                 HitType = hitType
             };
-            // TODO: Gotta figure out how to tell if it should be applied on getting hit, or on hitting
-            trg.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false);
-            caster.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false);
+            caster.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false, source.Skill);
+            if (!ReferenceEquals(caster, trg))
+                trg.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false, source.Skill);
             caster.BroadcastPacket(missPacket, true);
             return;
+        }
+
+        // Test-drive restriction damage is authored on a friendly vehicle.
+        if (castObj is not CastBuff { Buff.Template.Id: 6151 } && !caster.CanAttack(trg))
+            return;
+
+        if (Bonuses != null)
+        {
+            foreach (var bonus in Bonuses)
+                caster.AddBonus(uint.MaxValue, new Bonus { Template = bonus, Value = bonus.Value });
         }
 
         float flexibilityRateMod = trg.Flexibility / 1000 * 3;
@@ -225,6 +235,21 @@ public class DamageEffect : EffectTemplate
         min *= Multiplier;
         max *= Multiplier;
 
+        if (AdjustDamageByHeight && caster.Transform?.World is { } casterTransform &&
+            trg.Transform?.World is { } targetTransform)
+        {
+            var advantage = casterTransform.Position.Z - targetTransform.Position.Z;
+            if (advantage >= 1f && FormulaManager.Instance.GetFormula((uint)FormulaKind.DamageMultiplierByHeight) is { } heightFormula)
+            {
+                var factor = heightFormula.Evaluate(new Dictionary<string, double>(1) { ["range"] = advantage });
+                if (double.IsFinite(factor) && factor > 0)
+                {
+                    min *= (float)factor;
+                    max *= (float)factor;
+                }
+            }
+        }
+
         var damageMultiplier = DamageType switch
         {
             DamageType.Melee => ((Unit)caster).MeleeDamageMul,
@@ -271,14 +296,13 @@ public class DamageEffect : EffectTemplate
             effect?.Exit();
         }
 
-        if (UseTargetChargedBuff && source.Skill != null)
+        Buff targetChargedEffect = null;
+        if (UseTargetChargedBuff && TargetChargedBuffId != 0)
         {
-            var effect = target.Buffs.GetEffectFromBuffId(ChargedBuffId);
-            var charges = effect?.Charge ?? 0;
-
-            min += charges * (ChargedMul + source.Skill.Level * ChargedLevelMul);
-            max += charges * (ChargedMul + source.Skill.Level * ChargedLevelMul);
-            effect?.Exit();
+            targetChargedEffect = trg.Buffs.GetEffectFromBuffId(TargetChargedBuffId);
+            var chargeDamage = (targetChargedEffect?.Charge ?? 0) * TargetChargedMul;
+            min += chargeDamage;
+            max += chargeDamage;
         }
 
         if (UseFixedDamage)
@@ -287,13 +311,32 @@ public class DamageEffect : EffectTemplate
             max = FixedMax;
         }
 
+        if (UsePercentDamage)
+        {
+            // In the 3.5 schema this flag chooses the victim's current or maximum HP.
+            var health = UseCurrentHealth ? trg.Hp : trg.MaxHp;
+            var percentDamage = Random.Shared.Next((float)PercentMin, PercentMax) * 0.01f * health;
+            min += percentDamage;
+            max += percentDamage;
+        }
+
         var finalDamage = Random.Shared.Next(min, max);
+        if (TargetHealthMax > 0)
+        {
+            var health = trg.Hpp;
+            if (health >= TargetHealthMin && health <= TargetHealthMax)
+                finalDamage = finalDamage * TargetHealthMul + TargetHealthAdd;
+        }
+        if (finalDamage > 0 && source?.Buff?.TickEffects.Count is not > 0 &&
+            source?.Skill?.Template is { } skill &&
+            (source.AoeDiminishing || (skill.Plot?.EventTemplate?.AoeDiminishing == true &&
+                                      (skill.TargetAreaRadius > 0 || skill.TargetAreaCount > 1))))
+            finalDamage *= AoeDiminishing.Advance(trg, skill.Id, time, PlotManager.Instance.AoeDiminishingRates);
 
         // Buff tag increase (Hellspear's impale combo, for ex)
         if (TargetBuffTagId > 0 && target.Buffs.CheckBuffTag(TargetBuffTagId))
         {
-            // TODO TargetBuffBonus ? (used in 3 DamageEffects)
-            finalDamage *= TargetBuffBonusMul;
+            finalDamage = finalDamage * TargetBuffBonusMul + TargetBuffBonus;
         }
 
         // Toughness reduction (PVP Only)
@@ -345,21 +388,26 @@ public class DamageEffect : EffectTemplate
             }
         }
         var value = (int)(finalDamage * reductionMul);
+        if (caster is Character crafter && ActabilityGroupId > 0 &&
+            crafter.Actability?.Actabilities.TryGetValue(ActabilityGroupId, out var actability) == true)
+            value = EffectResourceMath.ApplyActability(value, actability.Point, ActabilityStep, ActabilityAdd, ActabilityMul);
         var absorbed = (int)(finalDamage * (1.0f - reductionMul));
         var healthStolen = (int)(value * (HealthStealRatio / 100.0f));
         var manaStolen = (int)(value * (ManaStealRatio / 100.0f));
 
-        // ID=6151, Test Drive Restriction, 8m
-        if (castObj is CastBuff buff && buff.Buff.Template.Id == 6151)
-        {
-            // TODO I don’t know how to correctly check for the destruction buff of a test car
-            // skip the check CanAttack()
-        }
-        // Safeguard to prevent accidental flagging
-        else if (!caster.CanAttack(trg))
-            return;
+        targetChargedEffect?.Exit();
 
-        trg.ReduceCurrentHp(caster, value);
+        var manaDamage = 0;
+        if (ManaDamage)
+        {
+            var previousMana = trg.Mp;
+            trg.ReduceCurrentMp(caster, value);
+            manaDamage = Math.Max(0, previousMana - trg.Mp);
+        }
+        else
+        {
+            trg.ReduceCurrentHp(caster, value, damageType: DamageType);
+        }
         ((Unit)caster).SummarizeDamage += value;
 
         if (healthStolen > 0 || manaStolen > 0)
@@ -402,11 +450,12 @@ public class DamageEffect : EffectTemplate
             }
         }
 
-        // TODO : Use proper chance kinds (melee, magic etc.)
-
         // set for all combatants, for RegenTick
-        trg.IsInBattle = trg.Hp > 0;
-        trg.LastCombatActivity = DateTime.UtcNow;
+        if (EngageCombat)
+        {
+            trg.IsInBattle = trg.Hp > 0;
+            trg.LastCombatActivity = DateTime.UtcNow;
+        }
 
         if (trgCharacter != null)
         {
@@ -416,21 +465,32 @@ public class DamageEffect : EffectTemplate
             {
                 trgCharacter.SetHostileActivity(attackerCharacter);
             }
-            trgCharacter.Procs?.RollProcsForKind(ProcChanceKind.TakeDamageAny);
         }
 
         if (attacker != null)
         {
-            attacker.IsInBattle |= trg.Hp > 0;
-            attacker.LastCombatActivity = DateTime.UtcNow;
-            attacker.Procs?.RollProcsForKind(ProcChanceKind.HitAny);
+            if (EngageCombat)
+            {
+                attacker.IsInBattle |= trg.Hp > 0;
+                attacker.LastCombatActivity = DateTime.UtcNow;
+            }
         }
 
-        // TODO: Gotta figure out how to tell if it should be applied on getting hit, or on hitting
-        caster.CombatBuffs.TriggerCombatBuffs((Unit)caster, target as Unit, hitType, false);
-        target.CombatBuffs.TriggerCombatBuffs((Unit)caster, target as Unit, hitType, false);
-        var packet = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, value, absorbed)
+        if (FireProc && value > 0 && skillObject?.IsItemProc != true && source?.Skill?.IsItemProc != true)
         {
+            var triggeringSkill = source?.Skill;
+            attacker?.Procs?.RollDamageProcs(trg, triggeringSkill, DamageType, hitType, received: false);
+            if (!trg.IsDead)
+                trg.Procs?.RollDamageProcs(attacker, triggeringSkill, DamageType, hitType, received: true);
+        }
+
+        caster.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false, source.Skill);
+        if (!ReferenceEquals(caster, trg))
+            trg.CombatBuffs.TriggerCombatBuffs(caster, trg, hitType, false, source.Skill);
+        var packet = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId,
+            ManaDamage ? 0 : value, ManaDamage ? 0 : absorbed)
+        {
+            _manaBurn = manaDamage,
             HoldableId = (byte)(holdable?.HoldableTemplate?.Id ?? 0),
             HitType = hitType
         };
@@ -449,57 +509,55 @@ public class DamageEffect : EffectTemplate
         //Invoke even if damage is 0
         ((Unit)caster).Events.OnAttack(this, new OnAttackArgs
         {
-            Attacker = (Unit)caster
+            Attacker = (Unit)caster,
+            Receiver = trg
         });
-        trg.Events.OnAttacked(this, new OnAttackedArgs { });
+        trg.Events.OnAttacked(this, new OnAttackedArgs { Attacker = caster, Receiver = trg });
 
         if (value > 0)
         {
-            ((Unit)caster).Events.OnDamage(this, new OnDamageArgs
+            var sourceUnit = (Unit)caster;
+            sourceUnit.Events.OnDamage(this, new OnDamageArgs
             {
                 Attacker = (Unit)caster,
+                Receiver = trg,
                 Amount = value
             });
             caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.DamageEtc);
+            if (fromBuffTrigger)
+                caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.DamageBuffTrigger);
             trg.Events.OnDamaged(this, new OnDamagedArgs
             {
                 Attacker = (Unit)caster,
+                Receiver = trg,
                 Amount = value
             });
 
+            var dealt = new OnDamageArgs { Attacker = sourceUnit, Receiver = trg, Amount = value };
+            var received = new OnDamagedArgs { Attacker = sourceUnit, Receiver = trg, Amount = value };
             switch (DamageType)
             {
                 case DamageType.Melee:
-                    trg.Events.OnDamagedMelee(this, new OnDamagedArgs
-                    {
-                        Attacker = (Unit)caster,
-                        Amount = value
-                    });
+                    sourceUnit.Events.OnDamageMelee(this, dealt);
+                    trg.Events.OnDamagedMelee(this, received);
                     break;
                 case DamageType.Ranged:
-                    trg.Events.OnDamagedRanged(this, new OnDamagedArgs
-                    {
-                        Attacker = (Unit)caster,
-                        Amount = value
-                    });
+                    sourceUnit.Events.OnDamageRanged(this, dealt);
+                    trg.Events.OnDamagedRanged(this, received);
                     break;
                 case DamageType.Magic:
-                    trg.Events.OnDamagedSpell(this, new OnDamagedArgs
-                    {
-                        Attacker = (Unit)caster,
-                        Amount = value
-                    });
+                    sourceUnit.Events.OnDamageSpell(this, dealt);
+                    trg.Events.OnDamagedSpell(this, received);
                     break;
                 case DamageType.Siege:
-                    trg.Events.OnDamagedSiege(this, new OnDamagedArgs
-                    {
-                        Attacker = (Unit)caster,
-                        Amount = value
-                    });
+                    sourceUnit.Events.OnDamageSiege(this, dealt);
+                    trg.Events.OnDamagedSiege(this, received);
                     break;
             }
 
             trg.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.DamagedEtc);
+            if (fromBuffTrigger)
+                trg.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.DamagedBuffTrigger);
         }
     }
 }

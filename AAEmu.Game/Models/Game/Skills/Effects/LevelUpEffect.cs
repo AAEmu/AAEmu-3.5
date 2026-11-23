@@ -1,4 +1,5 @@
 ﻿using AAEmu.Game.Core.Packets;
+using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 
@@ -14,6 +15,7 @@ public class LevelUpEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Trace("LevelUpEffect {0}", Id);
+        if (target is Character character && Level is > 0 and <= byte.MaxValue)
+            character.RaiseLevelFromEffect((byte)Level);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
 
@@ -32,28 +33,7 @@ public class CSStartInteractionPacket() : GamePacket(CSOffsets.CSStartInteractio
             // This could later be used to implement some of the anti-cheating
             // 0 is the intended default or else quests go wonky
 
-            uint option = 0;
-            if (npc.Template.Banker)
-                option = SkillsEnum.UseWarehouse; // Open warehouse
-            // TODO: fill in the skills and maybe change the order to what it would show in-game
-            else if (npc.Template.AbilityChanger)
-                option = SkillsEnum.ChangeSkillsets; // Open Skill-Trainer
-            else if (npc.Template.Auctioneer)
-                option = SkillsEnum.UseAuctioneer; // Open Auctioneer
-            else if (npc.Template.Priest)
-                option = SkillsEnum.Blessing; // Open Recover-Exp dialog ?
-            else if (npc.Template.Repairman)
-                option = SkillsEnum.Repair; // Open Repair dialog ?
-            else if (npc.Template.Merchant)
-                option = SkillsEnum.UseStore; // Open Shop dialog ?
-            else if (npc.Template.Stabler)
-                option = SkillsEnum.HealPetSWounds; // Open Pet Recovery dialog ?
-            else if (npc.Template.Expedition)
-                option = SkillsEnum.FormGuild; // Open Repair dialog ?
-            else if (npc.Template.RecrutingBattlefieldId > 0)
-                option = SkillsEnum.WarSupport; // Open Arena dialog ?
-            else if (npc.Template.Blacksmith)
-                option = SkillsEnum.ItemFusion; // Open Item Fuse dialog ?
+            var option = SkillAuthority.GetNpcMenuSkill(npc.Template);
 
             Connection.ActiveChar.SendPacket(new SCNpcInteractionSkillListPacket(npcObjId, objId, extraInfo,
                 pickId, mouseButton, modifierKeys, [option]));

@@ -4,6 +4,7 @@ using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Housing;
 using AAEmu.Game.Models.Game.NPChar;
+using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
 namespace AAEmu.Game.Core.Packets.C2G;
 
@@ -12,9 +13,11 @@ public class CSChangeTargetPacket() : GamePacket(CSOffsets.CSChangeTargetPacket,
     public override void Read(PacketStream stream)
     {
         var targetId = stream.ReadBc();
-        Connection
-                .ActiveChar
-                .CurrentTarget = targetId > 0 ? Connection.ActiveChar.ParentWorld.GetUnit(targetId) : null;
+        var player = Connection.ActiveChar;
+        BaseUnit selected = targetId > 0 ? player.ParentWorld.GetUnit(targetId) : null;
+        if (player.Buffs is Buffs collection && collection.HoldsCurrentTarget())
+            selected = player.CurrentTarget;
+        player.CurrentTarget = SkillTargetingUtil.IsTargetRestricted(player, selected) ? null : selected;
 
         Connection
             .ActiveChar

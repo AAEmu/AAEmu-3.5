@@ -194,9 +194,16 @@ public partial class Character : Unit, ICharacter
     public CharacterMails Mails { get; set; }
     public CharacterAppellations Appellations { get; set; }
     public CharacterAbilities Abilities { get; set; }
-    public AbilityType HighAbility1 { get; set; }
-    public AbilityType HighAbility2 { get; set; }
-    public AbilityType HighAbility3 { get; set; }
+    public AbilityType HighAbility1 { get; set; } = AbilityType.None;
+    public AbilityType HighAbility2 { get; set; } = AbilityType.None;
+    public AbilityType HighAbility3 { get; set; } = AbilityType.None;
+    public override int MaxHighAbilityRsc
+    {
+        get => SkillManager.Instance.TryGetHighAbilityCapacity(HighAbility1, HighAbility2, HighAbility3, out var capacity)
+            ? (int)Math.Clamp(CalculateWithBonuses(capacity, UnitAttribute.MaxHighAbilityResource), 0, int.MaxValue)
+            : base.MaxHighAbilityRsc;
+        set => base.MaxHighAbilityRsc = value;
+    }
     public List<AbilitySetInfo> AbilitySets { get; } = [];
     public byte AbilitySetFreeActivationCount { get; set; }
     public byte UsableAbilitySetSlotCount { get; set; } = 1;
@@ -210,6 +217,7 @@ public partial class Character : Unit, ICharacter
     public CharacterActability Actability { get; set; }
 
     public CharacterSkills Skills { get; set; }
+    public CharacterSkillActiveTypes SkillActiveTypes { get; }
     public CharacterCraft Craft { get; set; }
     public uint SubZoneId { get; set; } // понадобилось хранить для составления точек Memory Tome (Recall)
     public int AccessLevel { get; set; }
@@ -1394,6 +1402,7 @@ public partial class Character : Unit, ICharacter
 
     public Character(UnitCustomModelParams modelParams)
     {
+        SkillActiveTypes = new CharacterSkillActiveTypes(this);
         _options = [];
         _hostilePlayers = new ConcurrentDictionary<uint, DateTime>();
         Breath = LungCapacity;
@@ -1423,38 +1432,59 @@ public partial class Character : Unit, ICharacter
         return false;
     }
 
-    public void AddExp(int expDelta, bool shouldAddAbilityExp)
+    public void AddExp(int expDelta, bool shouldAddAbilityExp) =>
+        AddExpCore(expDelta, shouldAddAbilityExp);
+
+    internal void RaiseLevelFromEffect(byte targetLevel) =>
+        AddExpCore(0, shouldAddAbilityExp: false, targetLevel);
+
+    private void AddExpCore(int expDelta, bool shouldAddAbilityExp, byte targetLevel = 0, bool useExpRate = true)
     {
-        if (expDelta == 0)
+        var promotion = targetLevel > 0;
+        if (expDelta == 0 && !promotion)
             return;
-
-        if (expDelta > 0)
-        {
+        if (expDelta > 0 && useExpRate)
             expDelta = (int)(expDelta * AppConfiguration.Instance.World.ExpRate);
-        }
 
-        var newExperience = Experience + expDelta;
-        var newLevel = ExperienceManager.Instance.GetLevelFromExp(newExperience, Level, out var overflow);
-        var leveledUp = newLevel > Level;
-
-        // Prevent overflow - cap the experience at the amount for the highest level
-        if (newLevel >= ExperienceManager.Instance.MaxPlayerLevel)
+        lock (_experienceLock)
         {
-            newExperience -= overflow;
-        }
+            var manager = ExperienceManager.Instance;
+            var promotionExperience = 0;
+            if (promotion)
+            {
+                if (targetLevel <= Level || targetLevel > manager.MaxPlayerLevel)
+                    return;
+                promotionExperience = manager.GetExpForLevel(targetLevel);
+                expDelta = promotionExperience - Experience;
+                if (expDelta <= 0)
+                    return;
+            }
 
-        Experience = newExperience;
-        Level = newLevel;
+            var newExperience = Experience + expDelta;
+            var newLevel = manager.GetLevelFromExp(newExperience, Level, out var overflow);
+            var leveledUp = newLevel > Level;
 
-        if (shouldAddAbilityExp)
-            Abilities.AddActiveExp(expDelta); // TODO ... or all?
+            // The client applies the same XP delta to Heir once the character starts at level 55.
+            if (!promotion && Level >= ExperienceManager.HeirUnlockLevel)
+                SetHeirExperience(manager.ApplyHeirExperience(Level, HeirExp, expDelta));
 
-        SendPacket(new SCExpChangedPacket(ObjId, expDelta, shouldAddAbilityExp));
+            if (newLevel >= manager.MaxPlayerLevel)
+                newExperience -= overflow;
 
-        if (leveledUp)
-        {
-            Expedition?.OnCharacterRefresh(this);
-            BroadcastPacket(new SCLevelChangedPacket(ObjId, Level), true);
+            Experience = newExperience;
+            Level = newLevel;
+            if (shouldAddAbilityExp)
+                Abilities.AddActiveExp(expDelta);
+
+            SendPacket(new SCExpChangedPacket(ObjId, expDelta, shouldAddAbilityExp));
+            if (promotion)
+                Abilities.RaiseActiveExperienceTo(promotionExperience);
+
+            if (leveledUp)
+            {
+                Expedition?.OnCharacterRefresh(this);
+                BroadcastPacket(new SCLevelChangedPacket(ObjId, Level), true);
+            }
         }
 
         //Quests.OnLevelUp(); // TODO added for quest Id=5967
@@ -1609,22 +1639,68 @@ public partial class Character : Unit, ICharacter
         return ExperienceManager.Instance.GetLevelFromExp(Abilities.Abilities[type].Exp, out _);
     }
 
-    public void ResetSkillCooldown(uint skillId, bool gcd)
+    public void ResetSkillCooldown(uint skillId, bool gcd, bool resetSkillTags = false)
     {
-        SendPacket(new SCSkillCooldownResetPacket(this, skillId, 0, gcd));
+        lock (GcdLock)
+        {
+            Cooldowns.RemoveCooldown(skillId);
+            if (resetSkillTags && SkillManager.Instance.GetSkillTemplate(skillId) is { } template)
+            {
+                Cooldowns.RemoveTagCooldown(template.CooldownTagId);
+                Cooldowns.RemoveTagCooldown(template.SecondCooldownTagId);
+                Cooldowns.RemoveTagCooldown(template.ThirdCooldownTagId);
+            }
+            if (gcd)
+                GlobalCooldown = DateTime.MinValue;
+        }
+        SendPacket(new SCSkillCooldownResetPacket(this, skillId, 0, gcd, resetSkillTags));
+    }
+
+    internal void ResetSkillTagCooldown(uint tagId, bool gcd)
+    {
+        lock (GcdLock)
+        {
+            Cooldowns.RemoveTagCooldown((int)tagId);
+            if (gcd)
+                GlobalCooldown = DateTime.MinValue;
+        }
+        SendPacket(new SCSkillCooldownResetPacket(this, 0, tagId, gcd));
     }
 
     public void ResetAllSkillCooldowns(bool triggerGcd)
     {
         const uint playerSkillsTag = 378;
-        var skillIds = SkillManager.Instance.GetSkillsByTag(playerSkillsTag);
+        var manager = SkillManager.Instance;
+        var skillIds = manager.GetSkillsByTag(playerSkillsTag);
 
         var packets = new CompressedGamePackets();
-        foreach (var skillId in skillIds)
+        var tags = new HashSet<int>();
+        lock (GcdLock)
         {
-            packets.AddPacket(new SCSkillCooldownResetPacket(this, skillId, 0, triggerGcd));
+            if (triggerGcd)
+                GlobalCooldown = DateTime.MinValue;
+
+            foreach (var skillId in skillIds)
+            {
+                Cooldowns.RemoveCooldown(skillId);
+                packets.AddPacket(new SCSkillCooldownResetPacket(this, skillId, 0, triggerGcd));
+                if (manager.GetSkillTemplate(skillId) is { } template)
+                {
+                    ResetTag(template.CooldownTagId);
+                    ResetTag(template.SecondCooldownTagId);
+                    ResetTag(template.ThirdCooldownTagId);
+                }
+            }
         }
         SendPacket(packets);
+
+        void ResetTag(int tagId)
+        {
+            if (tagId <= 0 || !tags.Add(tagId))
+                return;
+            Cooldowns.RemoveTagCooldown(tagId);
+            packets.AddPacket(new SCSkillCooldownResetPacket(this, 0, (uint)tagId, triggerGcd));
+        }
     }
 
     public void SetPirate(bool pirate)
@@ -1962,7 +2038,8 @@ public partial class Character : Unit, ICharacter
 
     public TimeSpan OnlineTime { get; set; } = TimeSpan.Zero;
 
-    public override void ReduceCurrentHp(BaseUnit attacker, int value, KillReason killReason = KillReason.Damage)
+    public override void ReduceCurrentHp(BaseUnit attacker, int value, KillReason killReason = KillReason.Damage,
+        DamageType? damageType = null)
     {
         if (AppConfiguration.Instance.World.GodMode)
         {
@@ -1980,7 +2057,7 @@ public partial class Character : Unit, ICharacter
         if (attacker is Character enemyChar && value > 0 && enemyChar.Id != this.Id)
             RecordPvpDamageFrom(enemyChar);
 
-        base.ReduceCurrentHp(attacker, value, killReason);
+        base.ReduceCurrentHp(attacker, value, killReason, damageType);
     }
 
     public void DoRepair(List<Item> items)
@@ -2167,9 +2244,11 @@ public partial class Character : Unit, ICharacter
                         Level = reader.GetByte("level"),
                         Experience = reader.GetInt32("experience"),
                         RecoverableExp = reader.GetInt32("recoverable_exp"),
+                        PenaltiedExp = reader.GetInt32("penaltied_exp"),
                         Hp = reader.GetInt32("hp"),
                         Mp = reader.GetInt32("mp")
                     };
+                    character.SetHeirExperience(reader.GetUInt32("heir_exp"));
                     character._savedHp = character.Hp; // save for later
                     character._savedMp = character.Mp;
                     // character.LaborPower = reader.GetInt16("labor_power");
@@ -2286,7 +2365,9 @@ public partial class Character : Unit, ICharacter
                     character.Gender = (Gender)reader.GetByte("gender");
                     character.Level = reader.GetByte("level");
                     character.Experience = reader.GetInt32("experience");
+                    character.SetHeirExperience(reader.GetUInt32("heir_exp"));
                     character.RecoverableExp = reader.GetInt32("recoverable_exp");
+                    character.PenaltiedExp = reader.GetInt32("penaltied_exp");
                     character.Hp = reader.GetInt32("hp");
                     character.Mp = reader.GetInt32("mp");
                     character._savedHp = character.Hp; // save for later
@@ -2486,6 +2567,7 @@ public partial class Character : Unit, ICharacter
             Actability.Load(connection);
             Skills = new CharacterSkills(this);
             Skills.Load(connection);
+            SkillActiveTypes.Load(connection);
             Appellations = new CharacterAppellations(this);
             Appellations.Load(connection);
             Portals = new CharacterPortals(this);
@@ -2546,6 +2628,8 @@ public partial class Character : Unit, ICharacter
         bool result;
         try
         {
+            var (money, _, heirSelections) = Skills?.CaptureHeirStateForSave() ?? (Money, HeirExp, null);
+            var progression = CaptureExperienceState();
             var unitModelParams = ModelParams.Write(new PacketStream()).GetBytes();
 
             Updated = DateTime.UtcNow; // обновим время записи информации
@@ -2558,7 +2642,7 @@ public partial class Character : Unit, ICharacter
                 // ----
                 command.CommandText =
                     "REPLACE INTO `characters` " +
-                    "(`id`,`account_id`,`name`,`access_level`,`race`,`gender`,`unit_model_params`,`level`,`experience`,`recoverable_exp`," +
+                    "(`id`,`account_id`,`name`,`access_level`,`race`,`gender`,`unit_model_params`,`level`,`experience`,`heir_exp`,`recoverable_exp`,`penaltied_exp`," +
                     "`hp`,`mp`,`consumed_lp`,`ability1`,`ability2`,`ability3`," +
                     "`world_id`,`zone_id`,`x`,`y`,`z`,`roll`,`pitch`,`yaw`," +
                     "`faction_id`,`faction_name`,`expedition_id`,`family`,`dead_count`,`dead_time`,`rez_wait_duration`,`rez_time`,`rez_penalty_duration`,`leave_time`," +
@@ -2567,7 +2651,7 @@ public partial class Character : Unit, ICharacter
                     "`delete_request_time`,`transfer_request_time`,`delete_time`,`auto_use_aapoint`,`prev_point`,`point`,`gift`," +
                     "`num_inv_slot`,`num_bank_slot`,`expanded_expert`,`slots`,`created_at`,`updated_at`,`return_district`,`online_time`" +
                     ") VALUES (" +
-                    "@id,@account_id,@name,@access_level,@race,@gender,@unit_model_params,@level,@experience,@recoverable_exp," +
+                    "@id,@account_id,@name,@access_level,@race,@gender,@unit_model_params,@level,@experience,@heir_exp,@recoverable_exp,@penaltied_exp," +
                     "@hp,@mp,@consumed_lp,@ability1,@ability2,@ability3," +
                     "@world_id,@zone_id,@x,@y,@z,@yaw,@pitch,@roll," +
                     "@faction_id,@faction_name,@expedition_id,@family,@dead_count,@dead_time,@rez_wait_duration,@rez_time,@rez_penalty_duration,@leave_time," +
@@ -2583,9 +2667,11 @@ public partial class Character : Unit, ICharacter
                 command.Parameters.AddWithValue("@race", (byte)Race);
                 command.Parameters.AddWithValue("@gender", (byte)Gender);
                 command.Parameters.AddWithValue("@unit_model_params", unitModelParams);
-                command.Parameters.AddWithValue("@level", Level);
-                command.Parameters.AddWithValue("@experience", Experience);
-                command.Parameters.AddWithValue("@recoverable_exp", RecoverableExp);
+                command.Parameters.AddWithValue("@level", progression.Level);
+                command.Parameters.AddWithValue("@experience", progression.Experience);
+                command.Parameters.AddWithValue("@heir_exp", progression.HeirExp);
+                command.Parameters.AddWithValue("@recoverable_exp", progression.RecoverableExp);
+                command.Parameters.AddWithValue("@penaltied_exp", progression.PenaltiedExp);
                 command.Parameters.AddWithValue("@hp", Hp);
                 command.Parameters.AddWithValue("@mp", Mp);
                 command.Parameters.AddWithValue("@consumed_lp", ConsumedLaborPower);
@@ -2625,7 +2711,7 @@ public partial class Character : Unit, ICharacter
                 command.Parameters.AddWithValue("@rez_time", RezTime);
                 command.Parameters.AddWithValue("@rez_penalty_duration", RezPenaltyDuration);
                 command.Parameters.AddWithValue("@leave_time", LeaveTime);
-                command.Parameters.AddWithValue("@money", Money);
+                command.Parameters.AddWithValue("@money", money);
                 command.Parameters.AddWithValue("@money2", Money2);
                 command.Parameters.AddWithValue("@honor_point", HonorPoint);
                 command.Parameters.AddWithValue("@vocation_point", VocationPoint);
@@ -2680,7 +2766,8 @@ public partial class Character : Unit, ICharacter
             Portals?.Save(connection, transaction);
             Friends?.Save(connection, transaction);
             Blocked?.Save(connection, transaction);
-            Skills?.Save(connection, transaction);
+            Skills?.Save(connection, transaction, heirSelections);
+            SkillActiveTypes.Save(connection, transaction);
             Quests?.Save(connection, transaction);
             Mates?.Save(connection, transaction);
 
@@ -2833,24 +2920,10 @@ public partial class Character : Unit, ICharacter
     /// Adds crime, and returns the new (current) crime value
     /// </summary>
     /// <param name="amount"></param>
-    public void AddCrime(short amount)
+    public void AddCrime(int amount)
     {
-        var newAmount = CrimePoint + amount;
-        if (newAmount > short.MaxValue)
-        {
-            CrimePoint = short.MaxValue; // current crime point can't go over short MaxValue
-        }
-        if (newAmount < 0)
-        {
-            CrimePoint = 0;
-        }
-        else
-        {
-            CrimePoint = (short)newAmount;
-        }
-        CrimeRecord += amount; // total amount
-        if (CrimeRecord < 0)
-            CrimeRecord = 0;
+        CrimePoint = (short)Math.Clamp((long)CrimePoint + amount, 0, short.MaxValue);
+        CrimeRecord = (int)Math.Clamp((long)CrimeRecord + amount, 0, int.MaxValue);
 
         SendPacket(new SCCrimeChangedPacket(amount, CrimePoint, CrimeRecord, 0));
     }

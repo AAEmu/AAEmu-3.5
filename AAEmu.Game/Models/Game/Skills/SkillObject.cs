@@ -12,17 +12,33 @@ public enum SkillObjectType
     Unk4 = 4,
     Unk5 = 5,
     Unk6 = 6,
-    ItemGradeEnchantingSupport = 7
+    ItemGradeEnchantingSupport = 7,
+    SpecialAbility = 18
 }
 
 public class SkillObject : PacketMarshaler
 {
+    private const byte WireTypeMask = 0x3F;
+    private const byte WireFlagMask = 0x80;
+    private byte _wireFlag;
+
+    internal bool IsItemProc { get; init; }
     public SkillObjectType Flag { get; set; } = SkillObjectType.None;
 
     public override PacketStream Write(PacketStream stream)
     {
-        stream.Write((byte)Flag);
+        stream.Write((byte)((byte)Flag | _wireFlag));
         return stream;
+    }
+
+    internal static SkillObject ReadFrom(PacketStream stream, byte flag)
+    {
+        var type = (SkillObjectType)(flag & WireTypeMask);
+        var result = GetByType(type);
+        result._wireFlag = (byte)(flag & WireFlagMask);
+        if (type != SkillObjectType.None)
+            result.Read(stream);
+        return result;
     }
 
     public static SkillObject GetByType(SkillObjectType flag)
@@ -51,6 +67,9 @@ public class SkillObject : PacketMarshaler
             case SkillObjectType.ItemGradeEnchantingSupport:
                 obj = new SkillObjectItemGradeEnchantingSupport();
                 break;
+            case SkillObjectType.SpecialAbility:
+                obj = new SkillObjectSpecialAbility();
+                break;
             case SkillObjectType.None:
             default:
                 obj = new SkillObject();
@@ -59,6 +78,24 @@ public class SkillObject : PacketMarshaler
 
         obj.Flag = flag;
         return obj;
+    }
+}
+
+public sealed class SkillObjectSpecialAbility : SkillObject
+{
+    public uint Ability { get; set; }
+
+    public SkillObjectSpecialAbility()
+    {
+        Flag = SkillObjectType.SpecialAbility;
+    }
+
+    public override void Read(PacketStream stream) => Ability = stream.ReadUInt32();
+
+    public override PacketStream Write(PacketStream stream)
+    {
+        base.Write(stream);
+        return stream.Write(Ability);
     }
 }
 

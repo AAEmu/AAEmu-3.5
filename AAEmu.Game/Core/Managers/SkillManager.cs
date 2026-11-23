@@ -15,6 +15,7 @@ using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.World;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Utils.DB;
+using Microsoft.Data.Sqlite;
 using Newtonsoft.Json.Linq;
 using NLog;
 
@@ -37,6 +38,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
     private Dictionary<(Race Race, Gender Gender), List<DefaultSkill>> _characterStartingActionSkills;
     private List<uint> _commonSkills;
     private Dictionary<AbilityType, List<SkillTemplate>> _startAbilitySkills;
+    internal readonly record struct HighAbilityData(uint Id, int Capacity, bool OrUnitReqs);
+    private volatile Dictionary<(AbilityType Ability, byte Kind), HighAbilityData> _highAbilityCapacities;
     private Dictionary<uint, PassiveBuffTemplate> _passiveBuffs;
     private Dictionary<uint, EffectType> _types;
     private Dictionary<string, Dictionary<uint, EffectTemplate>> _effects;
@@ -99,6 +102,8 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
         return _defaultSkills.ContainsKey(id);
     }
 
+    internal DefaultSkill GetDefaultSkill(uint id) => _defaultSkills?.GetValueOrDefault(id);
+
     public bool IsCommonSkill(uint id)
     {
         return _commonSkills.Contains(id);
@@ -110,6 +115,41 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             return skills;
 
         return [];
+    }
+
+    internal void LoadHighAbilityResources(SqliteConnection connection)
+    {
+        var capacities = new Dictionary<(AbilityType Ability, byte Kind), HighAbilityData>();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, ability_id, high_ability_id, max_high_ability_resource, or_unit_reqs FROM high_abilities";
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            capacities[((AbilityType)reader.GetInt32(1), (byte)reader.GetInt32(2))] =
+                new HighAbilityData((uint)reader.GetInt32(0), reader.GetInt32(3), reader.GetBoolean(4));
+        _highAbilityCapacities = capacities;
+    }
+
+    internal bool TryGetHighAbility(AbilityType ability, byte kind, out HighAbilityData data)
+    {
+        var capacities = _highAbilityCapacities;
+        data = default;
+        return capacities != null && capacities.TryGetValue((ability, kind), out data);
+    }
+
+    internal bool TryGetHighAbilityCapacity(AbilityType first, AbilityType second, AbilityType third, out int capacity)
+    {
+        var capacities = _highAbilityCapacities;
+        capacity = 0;
+        if (capacities == null)
+            return false;
+
+        if (first != AbilityType.None && capacities.TryGetValue((first, 1), out var firstCapacity))
+            capacity += firstCapacity.Capacity;
+        if (second != AbilityType.None && second != first && capacities.TryGetValue((second, 1), out var secondCapacity))
+            capacity += secondCapacity.Capacity;
+        if (third != AbilityType.None && third != first && third != second && capacities.TryGetValue((third, 1), out var thirdCapacity))
+            capacity += thirdCapacity.Capacity;
+        return true;
     }
 
     public List<DefaultSkill> GetDefaultSkills()
@@ -347,6 +387,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
         using (var connection2 = SQLite.CreateConnection("Data", "compact.server.table.sqlite3"))
         using (var connection = SQLite.CreateConnection())
         {
+            LoadHighAbilityResources(connection);
             Logger.Info("Loading skills...");
             using (var command = connection.CreateCommand())
             {
@@ -2162,7 +2203,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         trigger.CheckTagSrcInOwner = reader.GetBoolean("check_tag_src_in_owner");
                         trigger.CheckTagSrcInSource = reader.GetBoolean("check_tag_src_in_source");
                         trigger.CheckTagSrcInTarget = reader.GetBoolean("check_tag_src_in_target");
-                        trigger.DelayTime = reader.GetUInt32("delay_time", 0);
+                        trigger.DelayTime = reader.GetInt32("delay_time", 0);
                         trigger.EffectId = reader.GetUInt32("effect_id");
                         trigger.Effect = GetEffectTemplate(trigger.EffectId);
                         trigger.EventId = reader.GetUInt32("event_id");

@@ -18,10 +18,7 @@ public class GiveCrimePoint : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
         if (caster is Character player)
-        {
-            Logger.Debug($"Special effects: GiveCrimePoint value1 {value1}, value2 {value2}, value3 {value3}, value4 {value4}");
-        }
+            player.AddCrime(value1);
     }
 }

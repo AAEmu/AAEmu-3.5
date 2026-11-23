@@ -1,4 +1,7 @@
 ﻿using AAEmu.Game.Core.Packets;
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.DoodadObj;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 
@@ -14,6 +17,22 @@ public class DoodadItemChangeEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Trace("DoodadItemChangeEffect {0}", Id);
+        if (caster is not Character player || source?.Skill is not { } skill)
+            return;
+
+        var result = (target as Doodad)?.ApplyItemChange(player, skill.Template, Idx) ?? SkillResult.InvalidTarget;
+        if (result == SkillResult.Success)
+            return;
+
+        skill.Cancelled = true;
+        player.SendErrorMessage(GetInteractionError(result));
     }
+
+    internal static ErrorMessageType GetInteractionError(SkillResult result) => result switch
+    {
+        SkillResult.NeedReagent => ErrorMessageType.NotEnoughRequiredItem,
+        SkillResult.NoPerm => ErrorMessageType.InteractionPermissionDeny,
+        SkillResult.TooFarRange => ErrorMessageType.TooFarAway,
+        _ => ErrorMessageType.NoInteractionAvailable
+    };
 }

@@ -5,6 +5,8 @@ namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class HealPet : SpecialEffectAction
 {
+    protected override SpecialType SpecialEffectActionType => SpecialType.HealPet;
+
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
         BaseUnit target,
@@ -18,7 +20,13 @@ public class HealPet : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: HealPet value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (caster is not Character owner || skill?.Id != CharacterMates.RecoveryPotionSkillId)
+            return;
+
+        if (casterObj is SkillItem potion && owner.Mates?.TryUseRecoveryPotion(potion.ItemId, targetObj, time) == true)
+            return;
+
+        owner.ConditionChance = false;
+        skill.Cancelled = true;
     }
 }

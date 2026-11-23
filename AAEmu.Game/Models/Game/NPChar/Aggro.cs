@@ -21,6 +21,7 @@ public class Aggro(Unit owner)
     }
 
     private int _healAggro;
+    private int _otherAggro;
     public int HealAggro
     {
         get
@@ -38,7 +39,7 @@ public class Aggro(Unit owner)
         {
             lock (_lock)
             {
-                return _damageAggro + _healAggro;
+                return (int)Math.Clamp((long)_damageAggro + _healAggro + _otherAggro, int.MinValue, int.MaxValue);
             }
         }
     }
@@ -51,8 +52,50 @@ public class Aggro(Unit owner)
                 _damageAggro += amount;
             else if (kind == AggroKind.Heal)
                 _healAggro += (int)(amount * 0.6f);
+            else if (kind == AggroKind.Etc)
+                _otherAggro += amount;
+        }
+    }
+
+    internal void RaiseTotalAggroTo(int minimum)
+    {
+        lock (_lock)
+        {
+            var other = (long)minimum - _damageAggro - _healAggro;
+            if (other > _otherAggro)
+                _otherAggro = (int)Math.Min(other, int.MaxValue);
         }
     }
 
     public void RemoveAggro(AggroKind kind, int amount) => AddAggro(kind, -amount);
+
+    internal int ResetComponents(bool damage, bool heal, bool other, int value)
+    {
+        lock (_lock)
+        {
+            if (damage)
+                _damageAggro = value;
+            if (heal)
+                _healAggro = value;
+            if (other)
+                _otherAggro = value;
+            return (int)Math.Clamp((long)_damageAggro + _healAggro + _otherAggro, int.MinValue, int.MaxValue);
+        }
+    }
+
+    internal (int Damage, int Heal, int Other) GetComponents()
+    {
+        lock (_lock)
+            return (_damageAggro, _healAggro, _otherAggro);
+    }
+
+    internal void SetComponents(int damage, int heal, int other)
+    {
+        lock (_lock)
+        {
+            _damageAggro = damage;
+            _healAggro = heal;
+            _otherAggro = other;
+        }
+    }
 }

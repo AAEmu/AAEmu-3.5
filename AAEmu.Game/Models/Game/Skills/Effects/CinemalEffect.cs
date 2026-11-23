@@ -1,4 +1,5 @@
 ﻿using AAEmu.Game.Core.Packets;
+using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 
@@ -14,6 +15,7 @@ public class CinemalEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Trace("CinemalEffect");
+        if (caster is Character character)
+            character.CurrentlyPlayingCinemaId = CinemaId;
     }
 }

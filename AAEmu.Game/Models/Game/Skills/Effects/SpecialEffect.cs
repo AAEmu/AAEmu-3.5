@@ -16,6 +16,9 @@ public class SpecialEffect : EffectTemplate
 
     public override bool OnActionTime => false;
 
+    internal override bool HandlesSourceItemConsumption => SpecialEffectTypeId is SpecialType.RechargeItemBuff or SpecialType.RevertItemLook;
+    internal override bool HandlesItemTemplateConsumption => SpecialEffectTypeId == SpecialType.LearnSpecialAbility;
+
     public override void Apply(BaseUnit caster, SkillCaster casterObj, BaseUnit target, SkillCastTarget targetObj,
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)

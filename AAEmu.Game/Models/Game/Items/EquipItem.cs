@@ -9,7 +9,8 @@ public class EquipItem : Item
     public override ItemDetailType DetailType => ItemDetailType.Equipment;
     public override uint DetailBytesLength => 38; // 38 - 3.5.0.3, 35 - 3.0.3.0, 55 - 1.2
 
-    public uint EfainCubeId { get; set; }
+    private uint _dyeItemId;
+
     public uint RemainingExperience { get; set; }
     public uint LunaStone { get; set; }
 
@@ -28,7 +29,7 @@ public class EquipItem : Item
     /// <summary>
     /// The item ID of the dye pot that was used on the equipment.
     /// </summary>
-    public uint DyeItemId { get; set; }
+    public uint DyeItemId { get => _dyeItemId; set { _dyeItemId = value; IsDirty = true; } }
 
     public int RepairCost
     {
@@ -64,7 +65,7 @@ public class EquipItem : Item
             return;
         Durability = stream.ReadByte();       // durability
         ChargeCount = stream.ReadInt16();     // chargeCount
-        ChargeTime = stream.ReadDateTime();   // chargeTime
+        ChargeTime = ReadChargeTime(stream);
         TemperPhysical = stream.ReadUInt16(); // scaledA
         TemperMagical = stream.ReadUInt16();  // scaledB
 
@@ -73,8 +74,8 @@ public class EquipItem : Item
         ImageItemTemplateId = (uint)mGems[0];
         GemIds[1] = (uint)mGems[1];  // Luna Stone
         LunaStone = GemIds[1];
-        GemIds[2] = (uint)mGems[2];  // эффект эфенских кубов
-        EfainCubeId = GemIds[2];
+        GemIds[2] = (uint)mGems[2];  // dyeing item
+        DyeItemId = GemIds[2];
         GemIds[3] = (uint)mGems[3];  // Synthesis experience
         RemainingExperience = GemIds[3];
 
@@ -113,7 +114,7 @@ public class EquipItem : Item
 
         GemIds[0] = ImageItemTemplateId;
         GemIds[1] = LunaStone;
-        GemIds[2] = EfainCubeId;
+        GemIds[2] = DyeItemId;
         GemIds[3] = RemainingExperience;
 
         stream.WritePisc(GemIds[0], GemIds[1], GemIds[2], GemIds[3]);
@@ -135,13 +136,14 @@ public class EquipItem : Item
         GemIds[1] = stream.ReadUInt32();  // Luna Gem, TemplateId EnchantingGem - Позволяет зачаровать предмет снаряжения.
         RuneId = (ushort)GemIds[1];
 
-        ChargeTime = stream.ReadDateTime(); // ChargeStartTime
+        ChargeTime = ReadChargeTime(stream);
         if (Template.BindType == ItemBindType.BindOnUnpack)
             UnpackTime = ChargeTime;
         else
             ChargeStartTime = ChargeTime;
 
-        GemIds[2] = stream.ReadUInt32();  //
+        GemIds[2] = stream.ReadUInt32();  // dyeing item
+        DyeItemId = GemIds[2];
         GemIds[4] = stream.ReadUInt32();  // 1 crescent stone, TemplateId Socket - Позволяет придать предмету снаряжения дополнительные свойства.
         GemIds[5] = stream.ReadUInt32();  // 2 crescent stone
         GemIds[6] = stream.ReadUInt32();  // 3 crescent stone
@@ -180,8 +182,8 @@ public class EquipItem : Item
 
         stream.Write(Template.BindType == ItemBindType.BindOnUnpack ? UnpackTime : ChargeStartTime);
 
-        GemIds[2] = (uint)EfainCubeId;
-        stream.Write(GemIds[2]);  // эффект эфенских кубов
+        GemIds[2] = DyeItemId;
+        stream.Write(GemIds[2]);  // dyeing item
         // смещение 24 для версии 3+, 5+
         stream.Write(GemIds[4]);  // 1 crescent stone, TemplateId Socket - Позволяет придать предмету снаряжения дополнительные свойства.
         stream.Write(GemIds[5]);  // 2 crescent stone
@@ -204,6 +206,15 @@ public class EquipItem : Item
         stream.Write(GemIds[15]); // 2 Additional Effects
         stream.Write(GemIds[16]); // 3 Additional Effects
         stream.Write(GemIds[17]); // 4 Additional Effects
+    }
+
+    private static DateTime ReadChargeTime(PacketStream stream)
+    {
+        var seconds = stream.ReadInt64();
+        if (seconds < 0)
+            return DateTime.MinValue;
+
+        return DateTimeOffset.FromUnixTimeSeconds(Math.Min(seconds, DateTimeOffset.MaxValue.ToUnixTimeSeconds())).UtcDateTime;
     }
 
     private void NormalizeSynthesisExperienceForSerialization()

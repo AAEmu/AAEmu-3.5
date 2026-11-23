@@ -1,7 +1,6 @@
 ﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
-using AAEmu.Game.Models.Tasks.Skills;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
@@ -32,21 +31,14 @@ public class CSStopCastingPacket() : GamePacket(CSOffsets.CSStopCastingPacket, 5
             }
         }
 
-        if (Connection.ActiveChar.SkillTask == null || Connection.ActiveChar.SkillTask.Skill.TlId != tlId)
+        var character = Connection.ActiveChar;
+        var task = character.SkillTask;
+        if (task == null || task.Skill.TlId != tlId)
         {
             Logger.Warn($"Stop requested, but no skill active? Tl: {tlId}, Pid: {plotTlId}, objId: {objId}, Character: {Connection.ActiveChar.Name}");
             return;
         }
 
-        Connection.ActiveChar.SkillTask.Cancel();
-
-        if (Connection.ActiveChar.SkillTask is EndChannelingTask ect)
-        {
-            Connection.ActiveChar.SkillTask.Skill.Stop(Connection.ActiveChar, ect._channelDoodad);
-        }
-        else
-        {
-            Connection.ActiveChar.SkillTask.Skill.Stop(Connection.ActiveChar);
-        }
+        task.Skill.Stop(character, task);
     }
 }

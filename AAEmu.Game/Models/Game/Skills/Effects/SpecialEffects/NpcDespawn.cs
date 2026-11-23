@@ -1,10 +1,12 @@
-﻿using AAEmu.Game.Models.Game.Char;
+﻿using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class NpcDespawn : SpecialEffectAction
 {
+    protected override SpecialType SpecialEffectActionType => SpecialType.NpcDespawn;
+
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
         BaseUnit target,
@@ -18,7 +20,7 @@ public class NpcDespawn : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: NpcDespawn value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (caster is Npc npc)
+            npc.ParentWorld?.SpawnManager?.TryQueueEffectDespawn(npc, scheduleRespawn: false);
     }
 }

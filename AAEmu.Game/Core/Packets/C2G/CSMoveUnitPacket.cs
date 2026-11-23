@@ -3,6 +3,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Movements;
@@ -17,6 +18,8 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
 
     private uint _objId;
     private MoveType _moveType;
+    private static readonly OnMovementArgs s_movementArgs = new();
+    private static readonly OnLandingArgs s_landingArgs = new();
 
     public override void Read(PacketStream stream)
     {
@@ -119,13 +122,14 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
                 }
             case UnitMoveType dmt:
                 {
+                    var canRaiseBuffEvents = CanRaiseBuffEvents(character, targetUnit);
                     // Logger.Debug($"{targetUnit.Name} => ActorFlags: 0x{dmt.ActorFlags:X} - ClimbData: {dmt.ClimbData:X} - GcId: {dmt.GcId}");
 
                     // Its moving Pets, handle Pet XP for moving
                     if (targetUnit is Mate mate)
                     {
                         // Pet moved
-                        RemoveEffects(targetUnit, _moveType);
+                        RemoveEffects(targetUnit, _moveType, canRaiseBuffEvents);
 
                         // TODO: Check if we're the owner, or allowed to otherwise control this pet
                         if (dmt.VelX != 0 || dmt.VelY != 0)
@@ -139,7 +143,7 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
                             if (passenger != null)
                             {
                                 // passenger.Transform = mate.Transform.CloneDetached(passenger);
-                                RemoveEffects(passenger, _moveType);
+                                RemoveEffects(passenger, _moveType, canRaiseBuffEvents);
                             }
                         }
                     }
@@ -150,7 +154,7 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
                         // TODO : check target has Telekinesis buff if target is a player
                         // Just forward it to the packet, not safe for exploits/hacking
                         // We moved
-                        RemoveEffects(player, _moveType);
+                        RemoveEffects(player, _moveType, canRaiseBuffEvents);
 
                         if (player.IsRiding)
                         {
@@ -252,6 +256,8 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
                     // Handle Fall Velocity
                     if (dmt.FallVel > 0 && targetUnit is Unit unit)
                     {
+                        if (canRaiseBuffEvents && IsFreeLanding(unit))
+                            unit.Events.OnLanding(unit, s_landingArgs);
                         _ = unit.DoFallDamage(dmt.FallVel);
                         // character.SendMessage("{0} took {1} fall damage {2}/{3} HP left", unit.Name, fallDmg, unit.Hp, unit.MaxHp);
                     }
@@ -264,10 +270,21 @@ public class CSMoveUnitPacket() : GamePacket(CSOffsets.CSMoveUnitPacket, 5)
         }
     }
 
-    private static void RemoveEffects(BaseUnit unit, MoveType moveType)
+    internal static bool CanRaiseBuffEvents(Character sender, BaseUnit mover) =>
+        ReferenceEquals(sender, mover) || (mover is Mate mate && sender.ObjId != 0 &&
+            (mate.OwnerObjId == sender.ObjId || mate.Passengers.GetValueOrDefault(AttachPointKind.Driver)?._objId == sender.ObjId));
+
+    internal static bool IsFreeLanding(Unit unit) => unit.Transform is { Parent: null, StickyParent: null } &&
+        unit is not Character { Bonding: not null };
+
+    private static void RemoveEffects(BaseUnit unit, MoveType moveType, bool canRaiseBuffEvents)
     {
-        if (moveType.VelX != 0 || moveType.VelY != 0 || moveType.VelZ != 0)
-            unit.Buffs.TriggerRemoveOn(BuffRemoveOn.Move);
+        if (moveType.VelX == 0 && moveType.VelY == 0 && moveType.VelZ == 0)
+            return;
+
+        if (canRaiseBuffEvents && unit is Unit moved)
+            moved.Events.OnMovement(moved, s_movementArgs);
+        unit.Buffs.TriggerRemoveOn(BuffRemoveOn.Move);
     }
 
     public override string Verbose()

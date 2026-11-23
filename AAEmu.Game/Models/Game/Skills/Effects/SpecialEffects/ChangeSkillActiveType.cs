@@ -18,7 +18,9 @@ public class ChangeSkillActiveType : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: ChangeSkillActiveType value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (caster is not Character character || value1 <= 0 || value2 is < 0 or > 3)
+            return;
+
+        character.SkillActiveTypes.Set((uint)value1, (byte)(value2 == 0 ? 1 : value2));
     }
 }

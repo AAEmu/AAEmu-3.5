@@ -17,6 +17,7 @@ using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.IO;
 using AAEmu.Game.Models;
 using AAEmu.Game.Models.Game;
+using AAEmu.Game.Models.Tasks.Skills;
 using AAEmu.Game.Utils.DB;
 using AAEmu.Game.Utils.Scripts;
 
@@ -48,7 +49,7 @@ public sealed class GameService : IHostedService, IDisposable
         Logger.Info("Starting daemon: AAEmu.Game");
 
         // Check for updates
-        using (var connection = MySQL.CreateConnection())
+        using (var connection = MySQL.CreateConnection(allowUserVariables: true))
         {
             if (!MySqlDatabaseUpdater.Run(connection, "aaemu_game", AppConfiguration.Instance.Connections.MySQLProvider.Database,
                     AppConfiguration.Instance.Connections.AutoApplyUpdates))
@@ -119,6 +120,7 @@ public sealed class GameService : IHostedService, IDisposable
 
         CharacterManager.Instance.CheckForDeletedCharacters();
         CharacterManager.Instance.StartOnlineTracking();
+        TaskManager.Instance.Schedule(new CrowdBuffTask(), TimeSpan.Zero, TimeSpan.FromSeconds(2));
 
         // Initialize encryption manager
         EncryptionManager.Instance.Load();

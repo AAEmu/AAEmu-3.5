@@ -329,6 +329,55 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
         return null;
     }
 
+    internal List<Unit> GetUnitsWithinRadius(GameObject source, float radius) =>
+        GetObjectsWithinRadius(source, radius, _units);
+
+    internal List<Doodad> GetDoodadsWithinRadius(GameObject source, float radius) =>
+        GetObjectsWithinRadius(source, radius, _doodads);
+
+    private List<T> GetObjectsWithinRadius<T>(GameObject source, float radius, ConcurrentDictionary<uint, T> index)
+        where T : GameObject
+    {
+        var result = new List<T>();
+        var regions = Regions;
+        if (regions == null || regions.Length == 0 || radius <= 0)
+            return result;
+
+        var position = source.Transform.World.Position;
+        var lastX = regions.GetLength(0) - 1;
+        var lastY = regions.GetLength(1) - 1;
+        var minX = (int)Math.Clamp((position.X - radius) / WorldManager.REGION_SIZE, 0, lastX);
+        var maxX = (int)Math.Clamp((position.X + radius) / WorldManager.REGION_SIZE, 0, lastX);
+        var minY = (int)Math.Clamp((position.Y - radius) / WorldManager.REGION_SIZE, 0, lastY);
+        var maxY = (int)Math.Clamp((position.Y + radius) / WorldManager.REGION_SIZE, 0, lastY);
+        var radiusSquared = radius * radius;
+        var regionCount = (maxX - minX + 1L) * (maxY - minY + 1L);
+
+        // Large scripted effects can span an entire map. Prefer the populated index for a sparse area.
+        if (regionCount > 25 && regionCount > index.Count)
+        {
+            foreach (var (id, obj) in index)
+            {
+                if (id == source.ObjId || obj.Region == null)
+                    continue;
+
+                var objectPosition = obj.Transform.World.Position;
+                var dx = objectPosition.X - position.X;
+                var dy = objectPosition.Y - position.Y;
+                if (dx * dx + dy * dy < radiusSquared)
+                    result.Add(obj);
+            }
+        }
+        else
+        {
+            for (var x = minX; x <= maxX; x++)
+            for (var y = minY; y <= maxY; y++)
+                regions[x, y]?.GetList(result, source.ObjId, position.X, position.Y, radiusSquared);
+        }
+
+        return result;
+    }
+
     /// <summary>
     /// Gets all T GameObjects within a given Cell
     /// </summary>
@@ -639,6 +688,15 @@ public partial class WorldInstance(WorldTemplate template, uint channelId, bool 
             res |= _mates.TryRemove(mate.ObjId, out _);
 
         return res;
+    }
+
+    internal IEnumerable<Unit> GetUnitsTargeting(Unit target)
+    {
+        foreach (var (_, worldObject) in _objects)
+        {
+            if (worldObject is Unit unit && ReferenceEquals(unit.CurrentTarget, target))
+                yield return unit;
+        }
     }
 
     /// <summary>

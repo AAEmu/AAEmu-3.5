@@ -1,9 +1,8 @@
-﻿using AAEmu.Game.Core.Managers.World;
-using AAEmu.Game.Core.Packets;
-using AAEmu.Game.Models.Game.Char;
+﻿using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Models.Game.World;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects;
 
@@ -20,35 +19,37 @@ public class KillNpcWithoutCorpseEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Info($"KillNpcWithoutCorpseEffect npc={NpcId}, Radius={Radius}, Vanish={Vanish}");
+        var origin = target ?? caster;
+        if (origin?.ParentWorld is not { SpawnManager: { } } world)
+            return;
 
-        if (caster is Character) { return; } // does not apply to the character
-        if (Vanish)
-        {
-            // Fixed: "Trainer Daru" disappears after selling a bear
-            // quest 3449, buff=4112
-            RemoveEffectsAndDelete((Unit)caster);
-        }
-        else
-        {
-            var npcs = WorldManager.GetAround<Npc>(target, Radius);
-            if (caster is Npc thisNpc)
-                npcs.Add(thisNpc);
-            if (npcs == null) { return; }
-            foreach (var npc in npcs.Where(npc => npc.TemplateId == NpcId))
-            {
-                RemoveEffectsAndDelete((Unit)caster);
-            }
-        }
+        TryRemove(target as Npc, world, caster, target);
+        if (Vanish && !ReferenceEquals(caster, target))
+            TryRemove(caster as Npc, world, caster, target);
+
+        if (NpcId == 0 || Radius <= 0 || origin.Region == null)
+            return;
+        foreach (var unit in world.GetUnitsWithinRadius(origin, Radius))
+            TryRemove(unit as Npc, world, caster, target);
     }
 
-    private static void RemoveEffectsAndDelete(Unit unit)
+    private void TryRemove(Npc npc, WorldInstance world, BaseUnit caster, BaseUnit target)
     {
-        unit.Buffs.RemoveAllEffects();
-        if (unit is Npc npc && npc.Spawner != null)
-        {
-            npc.DoDespawn(npc);
-            npc.Spawner.DespawnWithRespawn(npc);
-        }
+        if (npc == null || npc.IsDead)
+            return;
+
+        if (NpcId == 0 ? !Vanish || !ReferenceEquals(caster, npc) : npc.TemplateId != NpcId)
+            return;
+
+        if (!world.SpawnManager.TryQueueEffectDespawn(npc, scheduleRespawn: true) || !GiveExp)
+            return;
+
+        var character = caster?.GetOwnerCharacter() ?? npc.CurrentAggroTarget?.GetOwnerCharacter() ??
+            target?.GetOwnerCharacter();
+        if (character == null)
+            return;
+        var experience = npc.KillExp;
+        if (experience > 0)
+            character.AddExp(experience, true);
     }
 }

@@ -15,7 +15,7 @@ public class DeadBehavior : BaseCombatBehavior
         Ai.Owner.CurrentAlertness = MoveTypeAlertness.Idle;
         if (Ai.Owner is { } npc)
         {
-            npc.Events.OnDeath(this, new OnDeathArgs { Killer = npc, Victim = npc });
+            npc.Events.RaiseDeath(this, new OnDeathArgs { Killer = npc, Victim = npc });
         }
         _enter = true;
     }

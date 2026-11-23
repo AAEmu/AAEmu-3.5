@@ -21,10 +21,28 @@ public class Cooldown : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO only for server
-        if (caster is Character) { Logger.Debug("Special effects: Cooldown cooldownTime {0}, value2 {1}, value3 {2}, value4 {3}", cooldownTime, value2, value3, value4); }
+        if (cooldownTime <= 0 || caster is not Unit unit || skill is not { Template: { Id: > 0 } template })
+            return;
 
-        var cooldownDuration = caster.ApplySkillModifiers(skill, SkillAttribute.Cooldown, cooldownTime);
-        ((Unit)caster).Cooldowns.AddCooldown(skill.Template.Id, (uint)cooldownDuration);
+        var modified = unit.ApplySkillModifiers(skill, SkillAttribute.Cooldown, cooldownTime);
+        if (!double.IsFinite(modified) || modified < 1)
+            return;
+
+        var duration = (uint)Math.Min(modified, uint.MaxValue);
+        lock (unit.GcdLock)
+        {
+            if (skill.Cancelled || skill.ActivePlotState?.CancellationRequested() == true)
+                return;
+
+            if (unit is Character player)
+            {
+                if (!player.IgnoreSkillCooldowns)
+                    unit.Cooldowns.AddSkillCooldown(template, duration);
+            }
+            else
+            {
+                unit.Cooldowns.AddCooldown(template.Id, duration);
+            }
+        }
     }
 }

@@ -106,7 +106,9 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSChallengeDuelPacket, 5, typeof(CSChallengeDuelPacket));
         RegisterPacket(CSOffsets.CSStartDuelPacket, 5, typeof(CSStartDuelPacket));
         RegisterPacket(CSOffsets.CSStartSkillPacket, 5, typeof(CSStartSkillPacket));
+        RegisterPacket(CSOffsets.CSItemChangerPacket, 5, typeof(CSItemChangerPacket));
         RegisterPacket(CSOffsets.CSStopCastingPacket, 5, typeof(CSStopCastingPacket));
+        RegisterPacket(CSOffsets.CSFireCastingSkillPacket, 5, typeof(CSFireCastingSkillPacket));
         RegisterPacket(CSOffsets.CSRemoveBuffPacket, 5, typeof(CSRemoveBuffPacket));
         RegisterPacket(CSOffsets.CSConstructHouseTaxPacket, 5, typeof(CSConstructHouseTaxPacket));
         RegisterPacket(CSOffsets.CSCreateHousePacket, 5, typeof(CSCreateHousePacket));
@@ -170,7 +172,11 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSLearnSkillPacket, 5, typeof(CSLearnSkillPacket));
         RegisterPacket(CSOffsets.CSLearnBuffPacket, 5, typeof(CSLearnBuffPacket));
         RegisterPacket(CSOffsets.CSResetSkillsPacket, 5, typeof(CSResetSkillsPacket));
+        RegisterPacket(CSOffsets.CSActivateHeirSkillPacket, 5, typeof(CSActivateHeirSkillPacket));
+        RegisterPacket(CSOffsets.CSResetHeirSkillPacket, 5, typeof(CSResetHeirSkillPacket));
+        RegisterPacket(CSOffsets.CSHeirLevelUpPacket, 5, typeof(CSHeirLevelUpPacket));
         RegisterPacket(CSOffsets.CSSwapAbilityPacket, 5, typeof(CSSwapAbilityPacket));
+        RegisterPacket(CSOffsets.CSSelectHighAbilityPacket, 5, typeof(CSSelectHighAbilityPacket));
         RegisterPacket(CSOffsets.CSSendMailPacket, 5, typeof(CSSendMailPacket));
         RegisterPacket(CSOffsets.CSListMailPacket, 5, typeof(CSListMailPacket));
         RegisterPacket(CSOffsets.CSListMailContinuePacket, 5, typeof(CSListMailContinuePacket));

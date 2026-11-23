@@ -1,5 +1,13 @@
 CREATE DATABASE IF NOT EXISTS `aaemu_game_3500aac`;
 USE aaemu_game_3500aac;
+
+CREATE TABLE IF NOT EXISTS `character_high_abilities` (
+  `owner` INT UNSIGNED NOT NULL,
+  `ability1` TINYINT UNSIGNED NOT NULL DEFAULT 13,
+  `ability2` TINYINT UNSIGNED NOT NULL DEFAULT 13,
+  `ability3` TINYINT UNSIGNED NOT NULL DEFAULT 13,
+  PRIMARY KEY (`owner`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- ----------------------------------------------------------------------------------------------
 -- Make sure to remove the above two lines if you want use your own DB/Schema names during import
 -- This script is idempotent. It can be run multiple times without causing errors, and does not
@@ -9,6 +17,13 @@ USE aaemu_game_3500aac;
 SET NAMES utf8;
 SET time_zone = '+00:00';
 SET foreign_key_checks = 0;
+
+CREATE TABLE IF NOT EXISTS `skill_active_types` (
+  `owner` INT UNSIGNED NOT NULL,
+  `skill_id` INT UNSIGNED NOT NULL,
+  `active_type` TINYINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`owner`, `skill_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `abilities` (
   `id` tinyint unsigned NOT NULL,
@@ -31,6 +46,8 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `last_loyalty_tick` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `divine_clock_time` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Time that has been passed already',
   `divine_clock_taken` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Number of clicks taken today',
+  `auction_post_allowed` TINYINT UNSIGNED DEFAULT NULL COMMENT 'Explicit account-wide auction posting status',
+  `auction_post_changed_at` DATETIME(6) DEFAULT NULL,
   PRIMARY KEY (`account_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Account specific values not related to login';
 
@@ -96,7 +113,9 @@ CREATE TABLE IF NOT EXISTS `blocked` (
 CREATE TABLE IF NOT EXISTS `character_active_buffs` (
   `character_id`  INT UNSIGNED NOT NULL COMMENT 'Character who owns this buff',
   `buff_id`       INT UNSIGNED NOT NULL COMMENT 'BuffTemplate.Id from game data',
-  `caster_id`     INT UNSIGNED NOT NULL COMMENT 'Character who originally cast this buff',
+  `caster_id`     INT UNSIGNED NOT NULL COMMENT 'Persistent character ID for typed character sources',
+  `caster_kind`   TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0=legacy, 1=self, 2=character, 3=unavailable',
+  `caster_life`   CHAR(36) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL COMMENT 'Life token for source-death buffs',
   `skill_id`      INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Source skill template ID (0 if none)',
   `ab_level`      INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Ability level for bonus scaling',
   `duration`      INT NOT NULL COMMENT 'Total duration in milliseconds',
@@ -120,7 +139,9 @@ CREATE TABLE IF NOT EXISTS `characters` (
   `unit_model_params` blob NOT NULL,
   `level` tinyint NOT NULL,
   `experience` int NOT NULL,
+  `heir_exp` int UNSIGNED NOT NULL DEFAULT '0',
   `recoverable_exp` int NOT NULL,
+  `penaltied_exp` int NOT NULL DEFAULT 0,
   `hp` int NOT NULL,
   `mp` int NOT NULL,
   `consumed_lp` int NOT NULL,
@@ -437,6 +458,21 @@ CREATE TABLE IF NOT EXISTS `skills` (
   `owner` int unsigned NOT NULL,
   PRIMARY KEY (`id`,`owner`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Learned character skills';
+
+CREATE TABLE IF NOT EXISTS `character_skill_cooldowns` (
+  `character_id` INT UNSIGNED NOT NULL,
+  `skill_id` INT UNSIGNED NOT NULL,
+  `duration` INT UNSIGNED NOT NULL,
+  `ends_at` DATETIME(3) NOT NULL,
+  PRIMARY KEY (`character_id`, `skill_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `character_heir_skills` (
+  `owner` int unsigned NOT NULL,
+  `heir_group_id` smallint unsigned NOT NULL,
+  `successor_id` smallint unsigned NOT NULL,
+  PRIMARY KEY (`owner`,`heir_group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COMMENT='Selected Heir skills';
 
 
 CREATE TABLE IF NOT EXISTS `uccs` (

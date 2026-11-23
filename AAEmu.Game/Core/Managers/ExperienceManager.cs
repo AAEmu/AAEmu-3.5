@@ -4,6 +4,7 @@ using AAEmu.Commons.Utils;
 using AAEmu.Game.Models.Game;
 using AAEmu.Game.Utils.DB;
 
+using Microsoft.Data.Sqlite;
 using NLog;
 
 namespace AAEmu.Game.Core.Managers;
@@ -26,6 +27,7 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     // TODO: Put this in the configuration files
     /// <summary>Artificial level cap for players. If database contains more levels than this, they will be ignored.</summary>
     private static byte PlayerLevelCap => 55;
+    internal const byte HeirUnlockLevel = 55;
     /// <summary>Artificial level cap for mates (mounts, pets). If database contains more levels than this, they will be ignored.</summary>
     private static byte MateLevelCap => 50;
 
@@ -174,6 +176,38 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
         return _heirLevels.TryGetValue(level, out var template) ? template : null;
     }
 
+    internal byte GetHeirLevelFromExp(uint experience)
+    {
+        // Each row holds the XP needed to cross from that row to the next level.
+        byte level = 0;
+        while (level < MaxPlayerHeirLevel && GetHeirLevelTemplate(level) is { ReqTotalExp: > 0 } row &&
+               experience >= row.ReqTotalExp)
+            level++;
+        return level;
+    }
+
+    internal uint ApplyHeirExperience(byte characterLevel, uint experience, int delta)
+    {
+        if (characterLevel < HeirUnlockLevel)
+            return experience;
+
+        var level = GetHeirLevelFromExp(experience);
+        if (level >= MaxPlayerHeirLevel || GetHeirLevelTemplate(level) is not { ReqTotalExp: > 0 } row)
+            return experience;
+
+        return (uint)Math.Clamp((long)experience + delta, 0, row.ReqTotalExp - 1);
+    }
+
+    internal ExperienceHeirLevelTemplate? GetHeirLevelUpRequirement(byte characterLevel, uint experience)
+    {
+        if (characterLevel < HeirUnlockLevel)
+            return null;
+
+        var level = GetHeirLevelFromExp(experience);
+        return level < MaxPlayerHeirLevel && GetHeirLevelTemplate(level) is { ReqTotalExp: > 0 } row &&
+               experience == row.ReqTotalExp - 1 ? row : null;
+    }
+
     /// <summary>
     /// Loads heir level templates from the <c>heir_levels</c> table.
     /// </summary>
@@ -188,13 +222,12 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     ///   <item><description><c>step</c> int → <see cref="ExperienceHeirLevelTemplate.Step"/></description></item>
     /// </list>
     /// </remarks>
-    private void LoadHeirLevels()
+    internal void LoadHeirLevels(SqliteConnection connection)
     {
         _heirLevels = [];
 
         Logger.Info("Loading heir levels...");
 
-        using var connection = SQLite.CreateConnection();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT * FROM heir_levels ORDER BY level ASC, step ASC";
         command.Prepare();
@@ -229,7 +262,8 @@ public class ExperienceManager : Singleton<ExperienceManager>, IExperienceManage
     public void Load()
     {
         Load(new SqliteExperienceLevelTemplateLoader(Logger), PlayerLevelCap, MateLevelCap);
-        LoadHeirLevels();
+        using var connection = SQLite.CreateConnection();
+        LoadHeirLevels(connection);
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game;
+using Microsoft.Data.Sqlite;
 
 namespace AAEmu.UnitTests.Game.Core.Managers;
 
@@ -8,6 +9,51 @@ public class ExperienceManagerTests
     private ExperienceManager _cut = null!;
     private const int maxPlayerExp = 200;
     private const int maxMateExp = 100;
+
+    [Test]
+    public async Task HeirExperienceStopsOnePointBeforeTheCurrentLevelsItemRequirement()
+    {
+        LoadHeirLevels();
+
+        await Assert.That(_cut.ApplyHeirExperience(54, 0, 1000)).IsEqualTo(0u);
+        await Assert.That(_cut.ApplyHeirExperience(55, 3777150, 1000)).IsEqualTo(3777157u);
+        await Assert.That(_cut.GetHeirLevelFromExp(3777157u)).IsEqualTo((byte)0);
+        await Assert.That(_cut.ApplyHeirExperience(55, 3777158u, 1000)).IsEqualTo(3778158u);
+        await Assert.That(_cut.GetHeirLevelFromExp(3777158u)).IsEqualTo((byte)1);
+        await Assert.That(_cut.ApplyHeirExperience(55, 0, -10)).IsEqualTo(0u);
+    }
+
+    [Test]
+    public async Task HeirUpgradeUsesCurrentLevelRowAndRequiresItsExactExperienceGate()
+    {
+        LoadHeirLevels();
+
+        await Assert.That(_cut.GetHeirLevelUpRequirement(54, 3777157)).IsNull();
+        await Assert.That(_cut.GetHeirLevelUpRequirement(55, 3777156)).IsNull();
+        var requirement = _cut.GetHeirLevelUpRequirement(55, 3777157);
+        await Assert.That(requirement?.ReqItemId).IsEqualTo(8001964);
+        await Assert.That(requirement?.ReqItemCount).IsEqualTo(8);
+        await Assert.That(requirement?.ReqTotalExp).IsEqualTo(3777158u);
+        await Assert.That(_cut.GetHeirLevelUpRequirement(55, 5309103)?.ReqItemCount).IsEqualTo(10);
+        await Assert.That(_cut.GetHeirLevelUpRequirement(55, 14117792)).IsNull();
+    }
+
+    private void LoadHeirLevels()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE heir_levels (id, level, req_item_count, req_item_id, req_total_exp, step);
+            INSERT INTO heir_levels VALUES
+                (1, 0, 8, 8001964, 3777158, 0), (2, 1, 10, 8001964, 5309104, 1),
+                (3, 2, 10, 8001964, 6841050, 1), (4, 3, 10, 8001964, 8372996, 1),
+                (5, 4, 12, 8001964, 10287928, 2), (6, 5, 12, 8001964, 12202860, 2),
+                (7, 6, 12, 8001964, 14117792, 2), (8, 7, 14, 8001964, 16511457, 3);
+            """;
+        command.ExecuteNonQuery();
+        _cut.LoadHeirLevels(connection);
+    }
 
     [Before(Test)]
     public void Setup()

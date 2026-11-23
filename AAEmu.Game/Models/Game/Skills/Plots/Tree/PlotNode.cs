@@ -36,11 +36,13 @@ public class PlotNode
 
     public bool CheckConditions(PlotState state, PlotTargetInfo targetInfo)
     {
+        state.UpdateEffectedTargetCount(targetInfo);
         return Event.Conditions.All(condition => condition.CheckCondition(state, targetInfo));
     }
 
     public void Execute(PlotState state, PlotTargetInfo targetInfo, CompressedGamePackets packets = null)
     {
+        state.UpdateEffectedTargetCount(targetInfo);
         //Logger.Debug("Executing plot node with id {0}", Event.Id);
 
         var stopwatch = new Stopwatch();

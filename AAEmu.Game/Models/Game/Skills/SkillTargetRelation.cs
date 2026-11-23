@@ -7,5 +7,6 @@ public enum SkillTargetRelation : byte
     Party = 2,
     Raid = 3,
     Hostile = 4,
-    Others = 5
+    Others = 5,
+    Family = 8
 }

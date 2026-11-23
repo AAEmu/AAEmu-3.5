@@ -20,27 +20,32 @@ public class SetVariable : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: SetVariable index {0}, value {1}, operation {2}, value4 {3}", value1, value2, value3, value4); }
-
-        var index = value1;
-        var value = value2;
-        var operation = value3;
-        //value 4 unused
-
-        //There is a high chance this is not implemented correctly..
-        //If refactoring. See PlotConditions -> Variable as well
-        if (skill.ActivePlotState != null)
+        var state = skill?.ActivePlotState;
+        if (state == null)
         {
-            if (operation == 1)
-                skill.ActivePlotState.Variables[index] += value;
-            else if (operation == 11)
-                skill.ActivePlotState.Variables[index] = value;
-            else
-                Logger.Error("Invalid Plot Variable Operation Kind.");
-        }
-        else
             Logger.Error("No active plot state located.");
-        Logger.Trace("value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4);
+            return;
+        }
+        if (value1 < 0 || value1 >= state.Variables.Length)
+        {
+            Logger.Error("SetVariable index {0} out of range", value1);
+            return;
+        }
+
+        switch (value3)
+        {
+            case 1:
+                state.Variables[value1] += value2;
+                break;
+            case 11:
+                state.Variables[value1] = value2;
+                break;
+            case 12:
+                state.Variables[value1] = state.LastEffectedTargetCount;
+                break;
+            default:
+                Logger.Error("Invalid Plot Variable Operation Kind {0}.", value3);
+                break;
+        }
     }
 }

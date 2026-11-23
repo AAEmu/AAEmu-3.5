@@ -269,7 +269,7 @@ public class Item : PacketMarshaler, IComparable<Item>
         Count = stream.ReadInt32();
 
         DetailType = (ItemDetailType)stream.ReadByte();
-        ReadDetails(stream);
+        ReadClientDetails(stream);
 
         CreateTime = stream.ReadDateTime();
         LifespanMins = stream.ReadInt32();
@@ -292,7 +292,7 @@ public class Item : PacketMarshaler, IComparable<Item>
         stream.Write(Count); // stackSize
 
         stream.Write((byte)DetailType); // detailType
-        WriteDetails(stream);
+        WriteClientDetails(stream);
 
         stream.Write(CreateTime);
         stream.Write(LifespanMins);
@@ -401,6 +401,10 @@ public class Item : PacketMarshaler, IComparable<Item>
             stream.Write(Detail);
         }
     }
+
+    protected virtual void ReadClientDetails(PacketStream stream) => ReadDetails(stream);
+
+    protected virtual void WriteClientDetails(PacketStream stream) => WriteDetails(stream);
 
     public virtual void ReadAdditionalDetails(PacketStream stream)
     {

@@ -11,6 +11,7 @@ public interface IAccountManager : IInitializable
     int Count();
     AccountDetails GetAccountDetailsInternal(ulong accountId);
     AccountDetails GetAccountDetails(ulong accountId);
+    AuctionPostingAccess GetAuctionPostingAccess(ulong accountId);
     bool AddCredits(ulong accountId, int creditsAmount);
     bool RemoveCredits(ulong accountId, int credits);
     bool AddLoyalty(ulong accountId, int loyaltyAmount);

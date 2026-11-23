@@ -14,6 +14,7 @@ using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Faction;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
+using AAEmu.Game.Models.Game.Items.Procs;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills.Effects;
@@ -41,6 +42,7 @@ public class Skill
 
     public uint Id { get; set; }
     public SkillTemplate Template { get; set; }
+    internal bool IsItemProc { get; private set; }
     public byte Level { get; set; }
     public ushort TlId { get; set; }
     public PlotState ActivePlotState { get; set; }
@@ -48,6 +50,7 @@ public class Skill
     public BaseUnit InitialTarget { get; set; }//Temp Hack Fix. Replace this with UnitsEffected
     private bool _bypassGcd;
     public bool Cancelled { get; set; } = false;
+    internal int? EarlyCastingProgress { get; set; }
     public Action Callback { get; set; }
 
     /// <summary>
@@ -98,9 +101,21 @@ public class Skill
         // Cast character for future reference
         var character = caster as Character;
 
+        if (character != null && Template.HighAbilityId > 0 &&
+            character.Abilities?.IsHighAbilityActive(Template.HighAbilityId, Template.AbilityId) != true)
+            return SkillResult.InvalidSkill;
+
         unit.ConditionChance = true;
 
-        var requirementResult = UnitRequirementsGameData.Instance.CanUseSkill(Template, caster, casterCaster);
+        if (Id == CharacterMates.RecoveryPotionSkillId)
+        {
+            if (character == null || casterCaster is not SkillItem potion)
+                return SkillResult.InvalidSource;
+            if (character.Mates?.CanUseRecoveryPotion(potion.ItemId, targetCaster, DateTime.UtcNow) != true)
+                return SkillResult.InvalidTarget;
+        }
+
+        var requirementResult = UnitRequirementsGameData.Instance.CanUseSkill(Template, caster, casterCaster, targetCaster);
         if (requirementResult.ResultKey != SkillResultKeys.ok)
         {
             if (character != null)
@@ -109,6 +124,10 @@ public class Skill
             skillResultValueUInt = requirementResult.ResultUInt;
             return SkillResultHelper.SkillResultErrorKeyToId(requirementResult.ResultKey);
         }
+
+        // The skill's minimum is a required cost, not an upper bound on accumulated resource.
+        if (Math.Max(0, unit.HighAbilityRsc) / 100 < Template.MinHighAbilityResource)
+            return SkillResult.LackHighAbilityResource;
 
         _bypassGcd = bypassGcd;
         if (!_bypassGcd)
@@ -144,12 +163,16 @@ public class Skill
                     }
                 }
 
+                if ((UsesPlayerCooldown(unit, casterCaster) || Id == CharacterMates.RecoveryPotionSkillId) &&
+                    unit.Cooldowns.CheckSkillCooldown(Template))
+                    return SkillResult.CooldownTime;
+
                 unit.SkillLastUsed = DateTime.UtcNow;
             }
         }
 
         // Cancel buffs if Template asks for it
-        if (Template.CancelOngoingBuffs)
+        if (!bypassGcd && Template.CancelOngoingBuffs)
         {
             if (caster is Units.Mate)
                 caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.UseSkill, Template.CancelOngoingBuffExceptionTagId);
@@ -158,9 +181,15 @@ public class Skill
 
         // Create a new skillObject if needed
         skillObject ??= new SkillObject();
+        IsItemProc = skillObject.IsItemProc;
 
         // Grab current target
         var target = GetInitialTarget(caster, casterCaster, targetCaster);
+        if (SkillTargetingUtil.IsTargetRestricted(caster, target))
+            return SkillResult.NoTarget;
+        if (character != null && target is Unit && !ReferenceEquals(target, character) &&
+            !ReferenceEquals(target, character.CurrentTarget) && character.Buffs is Units.Buffs effects && effects.HoldsCurrentTarget())
+            return SkillResult.NoTarget;
         InitialTarget = target;
         if (target == null)
         {
@@ -233,7 +262,8 @@ public class Skill
             maxRangeCheck = maxWeaponRange;
         }
 
-        if (targetDist < minRangeCheck)
+        var rangeFailure = CheckTargetRange(caster, target, targetDist, minRangeCheck, maxRangeCheck);
+        if (rangeFailure == SkillResult.TooCloseRange)
         {
             SkillTlIdManager.ReleaseId(TlId);
             TlId = 0;
@@ -243,7 +273,7 @@ public class Skill
 
         // TODO: Remove exception for doodads
         // TODO: Remove exceptions for slave initiated by Doodads (needed to fix repair points on ships)
-        if (targetDist > maxRangeCheck && target is not Doodad && target is not Slave)
+        if (rangeFailure == SkillResult.TooFarRange)
         {
             SkillTlIdManager.ReleaseId(TlId);
             TlId = 0;
@@ -321,6 +351,14 @@ public class Skill
 
         if (castTime > 0)
         {
+            var task = new CastTask(this, caster, casterCaster, target, targetCaster, skillObject, castTime, Environment.TickCount64);
+            if (skillObject.IsItemProc && !unit.TrySetSkillTask(task))
+            {
+                SkillTlIdManager.ReleaseId(TlId);
+                TlId = 0;
+                return SkillResult.Failure;
+            }
+
             // Has casting time, schedule a task for it
             caster.BroadcastPacket(new SCSkillStartedPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
             {
@@ -328,8 +366,9 @@ public class Skill
                 RealCastTimeDiv10 = (ushort)(castTime / 10), // calculate with adjustments
             }, true);
 
-            unit.SkillTask = new CastTask(this, caster, casterCaster, target, targetCaster, skillObject);
-            TaskManager.Instance.Schedule(unit.SkillTask, TimeSpan.FromMilliseconds(castTime));
+            if (!skillObject.IsItemProc)
+                unit.SkillTask = task;
+            TaskManager.Instance.Schedule(task, TimeSpan.FromMilliseconds(castTime));
         }
         else
         {
@@ -338,6 +377,18 @@ public class Skill
         }
 
         return SkillResult.Success;
+    }
+
+    internal static SkillResult? CheckTargetRange(BaseUnit caster, BaseUnit target, double distance, double minRange, double maxRange)
+    {
+        // Self-targeted attacks can still have an authored range for the NPC's choice of cast.
+        if (ReferenceEquals(caster, target))
+            return null;
+
+        if (distance < minRange)
+            return SkillResult.TooCloseRange;
+
+        return distance > maxRange && target is not Doodad && target is not Slave ? SkillResult.TooFarRange : null;
     }
 
     private BaseUnit GetInitialTarget(BaseUnit caster, SkillCaster skillCaster, SkillCastTarget targetCaster)
@@ -603,6 +654,28 @@ public class Skill
         return positionUnit;
     }
 
+    private bool UsesPlayerCooldown(Unit unit, SkillCaster caster) =>
+        !_bypassGcd && unit is Character { IgnoreSkillCooldowns: false } && caster is SkillCasterUnit &&
+        Template.AbilityId is not (AbilityType.General or AbilityType.None) && Template.Id is not (2 or 3 or 4);
+
+    internal void RecordCooldown(Unit unit, SkillCaster caster)
+    {
+        // The Ember's acquisition and return timers start after their effects succeed.
+        if (Template.Id is TerritoryMemoryEmber.AcquireSkillId or TerritoryMemoryEmber.ReturnSkillId)
+            return;
+
+        if (UsesPlayerCooldown(unit, caster))
+        {
+            var modified = unit.ApplySkillModifiers(this, SkillAttribute.Cooldown, Template.CooldownTime);
+            lock (unit.GcdLock)
+                unit.Cooldowns.AddSkillCooldown(Template, (uint)Math.Clamp(modified, 0, uint.MaxValue));
+        }
+        else
+        {
+            unit.Cooldowns.AddCooldown(Template.Id, (uint)Math.Max(Template.CooldownTime, 0));
+        }
+    }
+
     public void Cast(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject)
     {
         if (caster is not Unit unit) { return; }
@@ -651,10 +724,11 @@ public class Skill
 #pragma warning restore CA1508 // Avoid dead conditional code
             }
         }
-        unit.SkillTask = null;
+        if (unit.SkillTask is CastTask currentCast && ReferenceEquals(currentCast.Skill, this))
+            unit.TryClearSkillTask(currentCast);
 
         ConsumeMana(caster);
-        unit.Cooldowns.AddCooldown(Template.Id, (uint)Template.CooldownTime);
+        RecordCooldown(unit, casterCaster);
 
         // if (Id == 2 || Id == 3 || Id == 4)
         // {
@@ -740,6 +814,9 @@ public class Skill
         {
             ScheduleEffects(caster, casterCaster, target, targetCaster, skillObject);
         }
+
+        if (skillObject?.IsItemProc != true)
+            unit.Procs?.RollProcsForKind(ProcChanceKind.FireSkill, target as Unit, this);
     }
 
     /// <summary>
@@ -768,7 +845,7 @@ public class Skill
         if (Template.ChannelingBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ChannelingBuffId);
-            buff.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow);
+            buff.Apply(caster, casterCaster, caster, new SkillCastUnitTarget(caster.ObjId), new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow);
         }
 
         if (Template.ChannelingTargetBuffId != 0)
@@ -787,21 +864,23 @@ public class Skill
         }
 
         caster.BroadcastPacket(new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject), true);
-        unit.SkillTask = new EndChannelingTask(this, caster, casterCaster, target, targetCaster, skillObject, doodad);
-        TaskManager.Instance.Schedule(unit.SkillTask, TimeSpan.FromMilliseconds(Template.ChannelingTime));
+        var channel = new EndChannelingTask(this, unit, casterCaster, target, doodad);
+        channel.Start();
     }
 
-    public void EndChanneling(BaseUnit caster, Doodad channelDoodad, SkillCaster casterCaster)
+    internal void EndChanneling(Unit caster, BaseUnit target, Doodad channelDoodad, SkillCaster casterCaster)
     {
-        if (caster is not Unit unit) { return; }
-        unit.SkillTask = null;
         if (Template.ChannelingBuffId != 0)
         {
-            caster.Buffs.RemoveEffect(Template.ChannelingBuffId, Template.Id);
+            caster.Buffs.RemoveEffect(Template.ChannelingBuffId, this, honorTimeout: !Cancelled);
         }
         if (Template.ChannelingTargetBuffId != 0)
         {
-            InitialTarget.Buffs.RemoveEffect(Template.ChannelingTargetBuffId, Template.Id);
+            target.Buffs.RemoveEffect(Template.ChannelingTargetBuffId, this, honorTimeout: !Cancelled);
+        }
+        if (Cancelled && Template.ToggleBuffId != 0)
+        {
+            caster.Buffs.RemoveEffect(Template.ToggleBuffId, this);
         }
 
         channelDoodad?.Delete();
@@ -815,7 +894,7 @@ public class Skill
             player.ItemUse(item.ItemId);
         }
 
-        unit.Events.OnChannelingCancel(this, new OnChannelingCancelArgs());
+        caster.Events.OnChannelingCancel(this, new OnChannelingCancelArgs());
     }
 
     public void ScheduleEffects(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject)
@@ -901,10 +980,32 @@ public class Skill
         return fistAnim;
     }
 
-    private IEnumerable<BaseUnit> FilterAoeUnits(BaseUnit caster, IEnumerable<BaseUnit> units)
+    internal float GetAreaRadius(BaseUnit caster) => Template.TargetAreaRadius > 0
+        ? (float)Math.Max(0, caster.ApplySkillModifiers(this, SkillAttribute.AreaRadius, Template.TargetAreaRadius))
+        : 0;
+
+    internal List<BaseUnit> SelectAreaTargets(BaseUnit caster, BaseUnit center, List<BaseUnit> nearby)
     {
-        units = SkillTargetingUtil.FilterWithRelation(Template.TargetRelation, caster, units);
-        return units;
+        // The world query excludes the center. A resolved unit can still receive the hit.
+        if (Template.TargetSelection is SkillTargetSelection.Source or SkillTargetSelection.Target &&
+            center.ObjId is > 0 and not uint.MaxValue)
+            nearby.Add(center);
+
+        var sweep = Template.TargetAreaAngle is > 0 and < 360 ? Template.TargetAreaAngle : Template.FrontAngle;
+        var halfAngle = sweep is > 0 and < 360 ? sweep / 2d : 0d;
+        var targets = new List<BaseUnit>(nearby.Count);
+        foreach (var target in SkillTargetingUtil.FilterWithRelation(Template.TargetRelation, caster, nearby))
+        {
+            if (target.ObjId == uint.MaxValue)
+                continue;
+            if (halfAngle > 0 && target.ObjId != caster.ObjId &&
+                Math.Abs(MathUtil.ClampDegAngle(MathUtil.CalculateAngleFrom(caster, target))) > halfAngle)
+                continue;
+
+            targets.Add(target);
+        }
+
+        return targets;
     }
 
     public void ApplyEffects(BaseUnit caster, SkillCaster casterCaster, BaseUnit targetSelf, SkillCastTarget targetCaster, SkillObject skillObject)
@@ -920,20 +1021,17 @@ public class Skill
             possibleTargets.Add(targetSelf);
         }
         else
-        if (Template.TargetAreaRadius > 0)
         {
-            var units = WorldManager.GetAround<BaseUnit>(targetSelf, Template.TargetAreaRadius, true);
-            if (Template.TargetSelection == SkillTargetSelection.Source)
-                units.Add(targetSelf); // Add main target as well
-            units = FilterAoeUnits(caster, units).ToList();
-
-            possibleTargets.AddRange(units);
-            // TODO : Need to check if this is needed
-            //if (targetSelf is Unit) targets.Add(targetSelf);
-        }
-        else
-        {
-            possibleTargets.Add(targetSelf);
+            var radius = GetAreaRadius(caster);
+            if (radius > 0)
+            {
+                var units = WorldManager.GetAround<BaseUnit>(targetSelf, radius, true);
+                possibleTargets = SelectAreaTargets(caster, targetSelf, units);
+            }
+            else
+            {
+                possibleTargets.Add(targetSelf);
+            }
         }
 
         ShipSiegeAoEHit.AppendHostileShipsHitBySiegeHullAoE(caster, Template, targetSelf, targetCaster, possibleTargets);
@@ -1002,6 +1100,12 @@ public class Skill
         // Loop Skill Effects
         foreach (var effect in Template.Effects)
         {
+            if (!IsHighAbilityResourceInRange(unit.HighAbilityRsc, effect.StartHighAbilityResource, effect.EndHighAbilityResource))
+                continue;
+
+            if (EarlyCastingProgress is { } progress && !effect.MatchesCastingUseProgress(progress))
+                continue;
+
             // Get targets for this effect
             var effectedTargets = new List<BaseUnit>();
             switch (effect.ApplicationMethod)
@@ -1114,10 +1218,11 @@ public class Skill
 
         // Handle consumption of items from effects
         // Placed outside the loop to prevent multiple uses
+        var handlesSourceItemConsumption = lastAppliedEffect?.Template?.HandlesSourceItemConsumption == true;
         if (lastAppliedEffect != null)
         {
             // Consume the item
-            if (casterCaster is SkillItem castItem && player != null)
+            if (!handlesSourceItemConsumption && casterCaster is SkillItem castItem && player != null && Id != CharacterMates.RecoveryPotionSkillId)
             {
                 var useItem = ItemManager.Instance.GetItemByItemId(castItem.ItemId);
                 if (lastAppliedEffect.ConsumeSourceItem)
@@ -1130,7 +1235,8 @@ public class Skill
                 }
             }
 
-            if (player != null && lastAppliedEffect.ConsumeItemId != 0 && lastAppliedEffect.ConsumeItemCount > 0)
+            if (player != null && lastAppliedEffect.Template?.HandlesItemTemplateConsumption != true &&
+                lastAppliedEffect.ConsumeItemId != 0 && lastAppliedEffect.ConsumeItemCount > 0)
             {
                 if (lastAppliedEffect.ConsumeSourceItem)
                 {
@@ -1233,34 +1339,16 @@ public class Skill
             // Template can be null for some reason.
             if (effect.Template != null)
             {
-                var thisTargetCaster = target.ObjId == targetCaster.ObjId
+                var thisTargetCaster = target.ObjId == targetCaster.ObjId ||
+                                       (ReferenceEquals(target, caster) && Template.TargetType == SkillTargetType.Item &&
+                                        targetCaster is SkillCastItemTarget)
                     ? targetCaster
                     : new SkillCastUnitTarget(target.ObjId);
 
-                if (effect.Template is KillNpcWithoutCorpseEffect nsse)
-                {
-                    // для квеста 3478, требуется чтобы caster был Npc
-                    // для квеста 3993 должен выполняться эффект, а он прерывался из-за неправильного сравнения!
-                    var npc = caster.ParentWorld.GetNpcByTemplateId(nsse.NpcId);
-                    var effectiveNpc = npc ?? target as Npc;
-
-                    // If we have an effective NPC and it is dead, skip the effect - KillNPCWithoutCorpse happens before death
-                    if (effectiveNpc != null && effectiveNpc.IsDead)
-                    {
-                        // Logger.Warn("Effective NPC is dead, skipping KillNpcWithoutCorpseEffect.");
-                    }
-                    else
-                    {
-                        effect.Template.Apply(npc ?? caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId),
-                            new EffectSource(this), skillObject, DateTime.UtcNow, packets);
-                    }
-                }
-                else
-                {
-                    effect.Template.Apply(caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow, packets);
-
-                    if (player is { SkillCancelled: true }) { Cancelled = true; }
-                }
+                effect.Template.Apply(caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId),
+                    new EffectSource(this), skillObject, DateTime.UtcNow, packets);
+                if (player is { SkillCancelled: true })
+                    Cancelled = true;
 
                 // Implement consumption of item sets
                 if (effect.ItemSetId > 0)
@@ -1284,7 +1372,7 @@ public class Skill
 
         // TODO Call OnItemUse() moved to the ApplyEffects() method from the effects and add trigger ConditionChance;
         // If the probability of passing the effect is greater than the chance, then run the check on the use of the item for the quest
-        if (casterCaster is SkillItem skillItem && unit.ConditionChance)
+        if (!handlesSourceItemConsumption && casterCaster is SkillItem skillItem && unit.ConditionChance)
         {
             if (player == null)
                 return;
@@ -1295,8 +1383,9 @@ public class Skill
             // The item however is marked with use_skill_as_reagent, so if it requires reagent according to the item
             // but has none attached, consume 1 of the source item instead
             // TODO: Check if this is intended behaviour, or if this is a bug in the compact.sqlite3 file
-            var item = ItemManager.Instance.GetItemByItemId(skillItem.ItemId);
-            if (item?.Template.UseSkillAsReagent == true && reagents.Count <= 0 && skillProducts.Count <= 0 && consumedItems.Count <= 0)
+            if (Id != CharacterMates.RecoveryPotionSkillId && reagents.Count <= 0 &&
+                skillProducts.Count <= 0 && consumedItems.Count <= 0 &&
+                ItemManager.Instance.GetItemByItemId(skillItem.ItemId) is { Template.UseSkillAsReagent: true } item)
             {
                 consumedItems.Add((item, 1));
                 Logger.Debug($"Consumed item template 1 x {item.TemplateId} ({item.Id}) because of missing reagent information with skill {Template.Id}");
@@ -1340,6 +1429,7 @@ public class Skill
             }
         }
     }
+
 
     /// <summary>
     /// End skill in a normal way
@@ -1390,30 +1480,52 @@ public class Skill
     /// <summary>
     /// Used for interrupting skills
     /// </summary>
-    /// <param name="caster"></param>
-    /// <param name="channelDoodad"></param>
-    public void Stop(BaseUnit caster, Doodad channelDoodad = null, SkillCaster casterCaster = null)
+    public void Stop(BaseUnit caster)
     {
-        if (caster is not Unit unit) { return; }
-        if (Template.ChannelingTime > 0)
+        if (caster is Unit unit && unit.SkillTask is { } task && ReferenceEquals(task.Skill, this))
+            Stop(unit, task);
+    }
+
+    internal void Stop(Unit unit, SkillTask task)
+    {
+        if (task is EndChannelingTask channel)
         {
-            EndChanneling(caster, channelDoodad, casterCaster);
+            channel.Interrupt();
+            return;
         }
 
+        if (task is CastTask cast)
+        {
+            // The scheduled callback can already be queued. The cast task arbitrates which path wins.
+            if (!cast.TryStop(unit))
+                return;
+            cast.Cancel();
+        }
+        else
+        {
+            if (!unit.TryClearSkillTask(task))
+                return;
+            Cancelled = true;
+            task.Cancel();
+        }
+        FinishStoppedCast(unit);
+    }
+
+    internal void FinishStoppedCast(Unit unit)
+    {
+        Cancelled = true;
         if (Template.ToggleBuffId != 0)
         {
-            caster.Buffs.RemoveEffect(Template.ToggleBuffId, Template.Id);
+            unit.Buffs.RemoveEffect(Template.ToggleBuffId, Template.Id);
         }
-        caster.BroadcastPacket(new SCCastingStoppedPacket(TlId, 0), true);
-        caster.BroadcastPacket(new SCSkillEndedPacket(TlId), true);
+        unit.BroadcastPacket(new SCCastingStoppedPacket(TlId, 0), true);
+        unit.BroadcastPacket(new SCSkillEndedPacket(TlId), true);
         Callback?.Invoke();
         unit.OnSkillEnd(this);
-        unit.SkillTask = null;
-        Cancelled = true;
         SkillTlIdManager.ReleaseId(TlId);
         TlId = 0;
 
-        if (caster is Character character && character.IgnoreSkillCooldowns)
+        if (unit is Character character && character.IgnoreSkillCooldowns)
             character.ResetSkillCooldown(Template.Id, false);
     }
 
@@ -1504,6 +1616,8 @@ AlwaysHit:
                 || hitType == SkillHitType.RangedParry
                 || hitType == SkillHitType.RangedBlock
                 || hitType == SkillHitType.RangedMiss
+                || hitType == SkillHitType.SpellMiss
+                || hitType == SkillHitType.SpellResist
                 || hitType == SkillHitType.Immune;
         }
         Logger.Error($"Unit[{objId}] was not found in the CbtDiceRolls.");
@@ -1521,6 +1635,15 @@ AlwaysHit:
         var cost2 = baseCost * Template.ManaLevelMd + Template.ManaCost;
         var manaCost = (int)caster.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.ManaCost, cost2);
         return manaCost;
+    }
+
+    internal static bool IsHighAbilityResourceInRange(int resource, int minimum, int maximum)
+    {
+        if (minimum == 0 && maximum == 0)
+            return true;
+
+        var level = Math.Max(0, resource) / 100;
+        return level >= minimum && level <= maximum;
     }
 
     public void ConsumeMana(BaseUnit caster)

@@ -25,9 +25,19 @@ public class RestoreManaEffect : EffectTemplate
     {
         Logger.Trace("RestoreManaEffect");
 
-        if (target is not Unit)
+        if (target is not Unit trg)
             return;
-        var trg = (Unit)target;
+
+        var value = Percent && UseFixedValue
+            ? EffectResourceMath.RollPercentageOfPool(trg.MaxMp, FixedMin, FixedMax)
+            : RollAbsoluteMana(caster, source);
+        trg.BroadcastPacket(new SCUnitHealedPacket(castObj, casterObj, trg.ObjId, HealType.Mana, HealHitType.HealHit, value), true);
+        trg.Mp = (int)Math.Clamp((long)trg.Mp + value, 0, trg.MaxMp);
+        trg.BroadcastPacket(new SCUnitPointsPacket(trg.ObjId, trg.Hp, trg.Mp, trg.HighAbilityRsc), true);
+    }
+
+    private int RollAbsoluteMana(BaseUnit caster, EffectSource source)
+    {
         var min = 0;
         var max = 0;
         if (UseFixedValue)
@@ -36,33 +46,23 @@ public class RestoreManaEffect : EffectTemplate
             max += FixedMax;
         }
 
-        var unk = 0f;
-        var unk2 = 1f;
+        var levelBonus = 0f;
         var skillLevel = 1;
-        if (source != null && source.Skill != null)
+        if (source?.Skill is { } skill)
         {
-            skillLevel = (source.Skill.Level - 1) * source.Skill.Template.LevelStep + source.Skill.Template.AbilityLevel;
-            if (skillLevel >= source.Skill.Template.AbilityLevel)
-                unk = 0.15f * (skillLevel - source.Skill.Template.AbilityLevel + 1);
-            unk2 = (1 + unk) * 1.3f;
+            skillLevel = (skill.Level - 1) * skill.Template.LevelStep + skill.Template.AbilityLevel;
+            if (skillLevel >= skill.Template.AbilityLevel)
+                levelBonus = 0.15f * (skillLevel - skill.Template.AbilityLevel + 1);
         }
 
-        if (UseLevelValue)
+        if (UseLevelValue && caster is Unit unit)
         {
-            var levelMd = (unk + 1) * LevelMd;
-            min += (int)(((Unit)caster).LevelDps * levelMd + 0.5f);
+            var levelMd = (levelBonus + 1) * LevelMd;
+            min += (int)(unit.LevelDps * levelMd + 0.5f);
             max += (int)((((skillLevel - 1) * 0.020408163f * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.0099999998f + 1f) *
-                         ((Unit)caster).LevelDps * levelMd + 0.5f);
+                         unit.LevelDps * levelMd + 0.5f);
         }
 
-        // TODO ...
-        // min += (int)((caster.MDps + caster.MDpsInc) * 0.001f * unk2 + 0.5f);
-        // max += (int)((caster.MDps + caster.MDpsInc) * 0.001f * unk2 + 0.5f);
-
-        var value = Random.Shared.Next(min, max);
-        trg.BroadcastPacket(new SCUnitHealedPacket(castObj, casterObj, trg.ObjId, HealType.Mana, HealHitType.HealHit, value), true);
-        trg.Mp += value;
-        trg.Mp = Math.Min(trg.Mp, trg.MaxMp);
-        trg.BroadcastPacket(new SCUnitPointsPacket(trg.ObjId, trg.Hp, trg.Mp, trg.HighAbilityRsc), true);
+        return Random.Shared.Next(Math.Min(min, max), Math.Max(min, max));
     }
 }

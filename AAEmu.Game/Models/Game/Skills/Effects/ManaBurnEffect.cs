@@ -22,38 +22,40 @@ public class ManaBurnEffect : EffectTemplate
         CompressedGamePackets packetBuilder = null)
     {
         Logger.Trace("ManaBurnEffect");
-        var min = 0.0f;
-        var max = 0.0f;
 
-        min += BaseMin;
-        max += BaseMax;
+        if (caster is not Unit casterUnit || target is not Unit { Hp: > 0 } targetUnit)
+            return;
+        if (targetUnit.Buffs.HasEffectsMatchingCondition(static buff => buff is { InUse: true, Template.ManaBurnImmune: true }))
+            return;
 
-        //var levelMin = 0.0f;
-        //var levelMax = 0.0f;
+        var lvlMd = casterUnit.LevelDps * LevelMd;
+        var levelModifier = (((source?.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
+        var min = BaseMin + lvlMd - levelModifier * lvlMd + 0.5f;
+        var max = BaseMax + (levelModifier + 1) * lvlMd + 0.5f;
 
-        var lvlMd = ((Unit)caster).LevelDps * LevelMd;
-        // Hack null-check on skill
-        var levelModifier = (((source.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
-
-        min += lvlMd - levelModifier * lvlMd + 0.5f;
-        max += (levelModifier + 1) * lvlMd + 0.5f;
-
-        if (source.Buff?.TickEffects.Count > 0 && source.Buff.Duration != 0)
+        if (source?.Buff?.TickEffects.Count > 0 && source.Buff.Duration != 0)
         {
             min = (float)(min * (source.Buff.Tick / source.Buff.Duration));
             max = (float)(max * (source.Buff.Tick / source.Buff.Duration));
         }
 
-        var finalDamage = Random.Shared.Next(min, max);
+        var charge = (int)Random.Shared.Next(min, max);
+        if (charge <= 0 || targetUnit.Mp <= 0)
+            return;
 
-        if (target is Unit targetUnit)
+        var previousMana = targetUnit.Mp;
+        targetUnit.ReduceCurrentMp(casterUnit, charge);
+        var burnedMana = Math.Max(0, previousMana - targetUnit.Mp);
+
+        // damage_ratio expresses health damage as a per-ten-thousand share of the mana lost.
+        var healthDamage = (int)Math.Min((long)burnedMana * Math.Max(0, DamageRatio) / 10000, int.MaxValue);
+        if (healthDamage > 0)
+            targetUnit.ReduceCurrentHp(casterUnit, healthDamage);
+
+        var packet = new SCUnitDamagedPacket(castObj, casterObj, casterUnit.ObjId, targetUnit.ObjId, healthDamage, 0)
         {
-            targetUnit.ReduceCurrentMp(caster, (int)finalDamage);
-            var packet = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 0, 0)
-            {
-                _manaBurn = (int)finalDamage
-            };
-            target.BroadcastPacket(packet, true);
-        }
+            _manaBurn = burnedMana
+        };
+        targetUnit.BroadcastPacket(packet, true);
     }
 }

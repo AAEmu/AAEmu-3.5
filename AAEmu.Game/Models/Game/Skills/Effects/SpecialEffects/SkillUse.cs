@@ -1,5 +1,4 @@
 ﻿using AAEmu.Game.Core.Managers;
-using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Tasks.Skills;
 
@@ -8,6 +7,8 @@ namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 public class SkillUse : SpecialEffectAction
 {
     protected override SpecialType SpecialEffectActionType => SpecialType.SkillUse;
+
+    internal static bool PassesChanceRoll(int chance, int roll) => chance == 0 || chance >= 100 || roll < chance;
 
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
@@ -22,24 +23,27 @@ public class SkillUse : SpecialEffectAction
         int chance,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: SkillUse skillId {0}, delay {1}, value3 {2}, value4 {3}", skillId, delay, chance, value4); }
+        if (caster is not Unit unit)
+            return;
 
-        if (Random.Shared.Next(0, 100) > chance && chance != 0)
+        var roll = chance is > 0 and < 100 ? Random.Shared.Next(100) : 0;
+        if (!PassesChanceRoll(chance, roll) || delay < 0 || skillId <= 0 ||
+            SkillManager.Instance.GetSkillTemplate((uint)skillId) is not { } template)
         {
-            ((Unit)caster).ConditionChance = false;
+            unit.ConditionChance = false;
             return;
         }
-        else
-        {
-            ((Unit)caster).ConditionChance = true;
-        }
+        unit.ConditionChance = true;
 
-        //target = ((Unit)caster).CurrentTarget;
-        var useSkill = new Skill(SkillManager.Instance.GetSkillTemplate((uint)skillId));
+        var useSkill = new Skill(template);
         targetObj = new SkillCastUnitTarget(target?.ObjId ?? 0);
-        caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.UseSkill);//Not sure if it belongs here.
+        // A buff tick can outlive its item and a plot can select a different actor.
+        if ((castObj is CastBuff && casterObj is SkillItem) ||
+            (castObj is CastPlot && casterObj?.ObjId != unit.ObjId))
+            casterObj = new SkillCasterUnit(unit.ObjId);
+        // Buff-triggered casts can drive the same buff's ongoing behavior, such as the Yata dance spread.
+        if (castObj is not CastBuff)
+            caster.Buffs.TriggerRemoveOn(Buffs.BuffRemoveOn.UseSkill);
         TaskManager.Instance.Schedule(new UseSkillTask(useSkill, caster, casterObj, target, targetObj, skillObject), TimeSpan.FromMilliseconds(delay));
-        //useSkill.ApplyEffects(caster, casterObj, target, targetObj, skillObject);
     }
 }

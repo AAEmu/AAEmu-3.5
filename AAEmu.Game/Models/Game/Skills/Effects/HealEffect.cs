@@ -2,6 +2,7 @@
 using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Items.Procs;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
@@ -39,11 +40,7 @@ public class HealEffect : EffectTemplate
     {
         Logger.Trace("HealEffect {0}", Id);
 
-        if (target is not Unit)
-            return;
-        var trg = (Unit)target;
-
-        if (trg.Hp <= 0)
+        if (caster is not Unit healer || target is not Unit { Hp: > 0 } trg)
             return;
 
         var min = 0.0f;
@@ -54,18 +51,18 @@ public class HealEffect : EffectTemplate
 
         if (UseLevelHeal)
         {
-            var lvlMd = ((Unit)caster).LevelDps * LevelMd;
-            var levelModifier = (((source.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
+            var lvlMd = healer.LevelDps * LevelMd;
+            var levelModifier = (((source?.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
 
             levelMin += lvlMd - levelModifier * lvlMd + 0.5f;
             levelMax += (levelModifier + 1) * lvlMd + 0.5f;
         }
 
-        max += ((Unit)caster).HDps * 0.001f * DpsMultiplier;
+        max += healer.HDps * 0.001f * DpsMultiplier;
 
         var minCastBonus = 1000f;
         // Hack null-check on skill
-        var castTimeMod = source.Skill?.Template.CastingTime ?? 0; // This mod depends on casting_inc too!
+        var castTimeMod = source?.Skill?.Template.CastingTime ?? 0; // This mod depends on casting_inc too!
         if (castTimeMod <= 1000)
             minCastBonus = min > 0 ? min : minCastBonus;
         else
@@ -75,8 +72,14 @@ public class HealEffect : EffectTemplate
         min = variableDamage + levelMin;
         max = variableDamage + levelMax;
 
+        if (!UseFixedHeal && source?.Skill is { } skill)
+        {
+            min = (float)healer.ApplySkillModifiers(skill, SkillAttribute.Heal, min);
+            max = (float)healer.ApplySkillModifiers(skill, SkillAttribute.Heal, max);
+        }
+
         var tickModifier = 1.0f;
-        if (source.Buff?.TickEffects.Count > 0 && source.Buff.Duration != 0)
+        if (source?.Buff?.TickEffects.Count > 0 && source.Buff.Duration != 0)
         {
             tickModifier = (float)(source.Buff.Tick / source.Buff.Duration);
         }
@@ -95,22 +98,27 @@ public class HealEffect : EffectTemplate
             }
         }
 
-        var criticalHeal = Random.Shared.Next(0f, 100f) < ((Unit)caster).HealCritical;
+        var criticalHeal = Random.Shared.Next(0f, 100f) < healer.HealCritical;
 
-        var value = (int)Random.Shared.Next(min, max);
+        var percentageHeal = Percent && UseFixedHeal;
+        var value = percentageHeal
+            ? EffectResourceMath.RollPercentageOfPool(trg.MaxHp, FixedMin, FixedMax)
+            : (int)Random.Shared.Next(min, max);
 
         if (criticalHeal)
         {
-            value = (int)(value * (1 + ((Unit)caster).HealCriticalBonus / 100));
-            caster.CombatBuffs.TriggerCombatBuffs((Unit)caster, trg, SkillHitType.SpellCritical, true);
+            value = (int)(value * (1 + healer.HealCriticalBonus / 100));
+            healer.CombatBuffs.TriggerCombatBuffs(healer, trg, SkillHitType.SpellCritical, true, source?.Skill);
+            if (!ReferenceEquals(healer, trg))
+                trg.CombatBuffs.TriggerCombatBuffs(healer, trg, SkillHitType.SpellCritical, true, source?.Skill);
         }
 
         value = (int)(value * trg.IncomingHealMul);
 
-        if (UseFixedHeal)
+        if (UseFixedHeal && !percentageHeal)
         {
             value = Random.Shared.Next(FixedMin, FixedMax);
-            if (source.Buff != null && source.IsTrigger)
+            if (source?.Buff != null && source.IsTrigger)
             {
                 value = (int)(value / 1000.0f * source.Amount);
             }
@@ -118,21 +126,12 @@ public class HealEffect : EffectTemplate
                 value = (int)(value * tickModifier);
         }
 
-        value = (int)(value * ((Unit)caster).HealMul);
+        value = (int)(value * healer.HealMul);
 
         // Check if Healing is based on proficiency
-        if (caster is Character player && ActabilityGroupId > 0)
-        {
-            // Bonus effect based on skill level
-            if (player.Actability.Actabilities.TryGetValue(ActabilityGroupId, out var actability))
-            {
-                var steps = actability.Point / ActabilityStep;
-                if (ActabilityAdd != 0f)
-                    value += (int)(steps * ActabilityAdd);
-                if (ActabilityMul != 0f)
-                    value += (int)(value * (float)steps * ActabilityMul);
-            }
-        }
+        if (caster is Character player && ActabilityGroupId > 0 &&
+            player.Actability?.Actabilities.TryGetValue(ActabilityGroupId, out var actability) == true)
+            value = EffectResourceMath.ApplyActability(value, actability.Point, ActabilityStep, ActabilityAdd, ActabilityMul);
 
         var healHitType = criticalHeal ? HealHitType.CriticalHealHit : HealHitType.HealHit;
 
@@ -143,8 +142,7 @@ public class HealEffect : EffectTemplate
             trg.BroadcastPacket(packet, true);
 
         var oldHp = trg.Hp;
-        trg.Hp += value;
-        trg.Hp = Math.Min(trg.Hp, trg.MaxHp);
+        trg.Hp = (int)Math.Min((long)trg.Hp + value, trg.MaxHp);
         trg.BroadcastPacket(new SCUnitPointsPacket(trg.ObjId, trg.Hp, trg.Mp, trg.HighAbilityRsc), true);
 
         // PvP assist tracking: a healer on the target's side earns assist credit
@@ -155,7 +153,20 @@ public class HealEffect : EffectTemplate
             targetChar.RecordPvpHealFrom(healerChar);
         }
 
-        trg.Events.OnHealed(this, new OnHealedArgs { Healer = (Unit)caster, HealAmount = value });
+        trg.Events.OnHealed(this, new OnHealedArgs
+        {
+            Healer = healer,
+            HealAmount = value,
+            IgnoreHealAggro = IgnoreHealAggro
+        });
         trg.PostUpdateCurrentHp(trg, oldHp, trg.Hp, KillReason.Unknown);
+
+        if (value > 0 && skillObject?.IsItemProc != true && source?.Skill?.IsItemProc != true)
+        {
+            var triggeringSkill = source?.Skill;
+            healer.Procs?.RollProcsForKind(ProcChanceKind.HitHeal, trg, triggeringSkill);
+            if (criticalHeal)
+                healer.Procs?.RollProcsForKind(ProcChanceKind.HitHealCrit, trg, triggeringSkill);
+        }
     }
 }

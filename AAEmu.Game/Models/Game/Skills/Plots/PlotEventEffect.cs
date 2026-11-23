@@ -44,7 +44,19 @@ public class PlotEventEffect
                 throw new InvalidOperationException("This can't happen");
         }
 
+        if (template == null)
+            return;
+
+        if (targetInfo.EffectedTargets.Count == 0 && TargetId != PlotEffectTarget.Target)
+        {
+            ApplyToTarget(targetInfo.Target);
+            return;
+        }
+
         foreach (var newTarget in targetInfo.EffectedTargets)
+            ApplyToTarget(newTarget);
+
+        void ApplyToTarget(BaseUnit newTarget)
         {
             BaseUnit target;
             switch (TargetId)
@@ -71,18 +83,13 @@ public class PlotEventEffect
             if (channeled && buffEffect != null)
                 state.ChanneledBuffs.Add((target, buffEffect.BuffId));
 
-            if (template == null)
-            {
-                return;
-            }
-
             template.Apply(
                 source,
                 state.CasterCaster,
                 target,
                 state.TargetCaster,
                 new CastPlot(evt.PlotId, state.ActiveSkill.TlId, evt.Id, state.ActiveSkill.Template.Id),
-                new EffectSource(state.ActiveSkill),
+                new EffectSource(state.ActiveSkill) { AoeDiminishing = evt.AoeDiminishing },
                 state.SkillObject,
                 DateTime.UtcNow,
                 gamePackets);

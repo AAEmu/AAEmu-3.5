@@ -163,6 +163,9 @@ public class FlytrapAttackBehavior : Behavior
 
     private bool UpdateTarget()
     {
+        if (Ai.Owner.TryFocusTaunt())
+            return true;
+
         // We might want to optimize this somehow...
         var aggroList = Ai.Owner.AggroTable.Values;
         var abusers = aggroList.OrderByDescending(o => o.TotalAggro).Select(o => o.Owner).ToList();

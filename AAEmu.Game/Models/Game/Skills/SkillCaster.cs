@@ -1,5 +1,6 @@
 ﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items;
 
 namespace AAEmu.Game.Models.Game.Skills;
@@ -124,10 +125,31 @@ public class SkillItem : SkillCaster
     public override void Read(PacketStream stream)
     {
         base.Read(stream);
-        ItemId = stream.ReadUInt64();
+        _itemId = stream.ReadUInt64();
+        SkillSourceItem = null;
         ItemTemplateId = stream.ReadUInt32();
         Type1 = stream.ReadByte();
         Type2 = stream.ReadUInt32();
+    }
+
+    internal bool ResolveSourceItem(Character sender)
+    {
+        var item = _itemId > 0 ? ItemManager.Instance.GetItemByItemId(_itemId) : null;
+        if (item == null || item.OwnerId != sender.Id)
+            return false;
+
+        var container = item.SlotType switch
+        {
+            SlotType.Inventory => sender.Inventory?.Bag,
+            SlotType.Equipment => sender.Inventory?.Equipment,
+            _ => null
+        };
+        if (!ReferenceEquals(container?.GetItemBySlot(item.Slot), item))
+            return false;
+
+        SkillSourceItem = item;
+        ItemTemplateId = item.TemplateId;
+        return true;
     }
 
     public override PacketStream Write(PacketStream stream)

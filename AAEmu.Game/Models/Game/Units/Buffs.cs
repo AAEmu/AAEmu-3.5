@@ -1,23 +1,26 @@
 ﻿using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
+using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
+using AAEmu.Game.Models.Game.Skills.Utils;
+using AAEmu.Game.Models.Game.Units.Static;
 using AAEmu.Game.Models.StaticValues;
 using MySql.Data.MySqlClient;
 using NLog;
 
 namespace AAEmu.Game.Models.Game.Units;
 
-public class Buffs : IBuffs
+public partial class Buffs : IBuffs
 {
     // ReSharper disable once InconsistentNaming
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
-    private const int MinimumBuffDurationToSave = 60000;
 
     // [GEAR-SLOT-FIX] Slot reserved for gear bonuses (see Unit.UpdateGearBonuses,
     // which does `Bonuses[1] = []`). The buff allocator MUST skip this index, otherwise the first
@@ -28,6 +31,9 @@ public class Buffs : IBuffs
 
     // ReSharper disable once ChangeFieldTypeToSystemThreadingLock
     private readonly object _lock = new();
+    internal object SyncRoot => _lock;
+    private bool _worldEffectsDetached;
+    private bool _persistentBuffsLoaded;
     private uint _nextIndex;
 
     private WeakReference _owner;
@@ -49,30 +55,81 @@ public class Buffs : IBuffs
         _toleranceCounters = [];
     }
 
-    public bool CheckBuffImmune(uint buffId)
+    public bool CheckBuffImmune(BuffTemplate candidate, BaseUnit caster, Skill castingSkill = null)
     {
-        // Create a copy of the list of effects to avoid changing the list while iterating
-        IEnumerable<Buff> effects;
+        var owner = GetOwner();
+        if (owner == null)
+            return false;
+
+        var manager = SkillManager.Instance;
+        var candidateTags = manager.GetBuffTags(candidate.Id);
+        if (candidateTags.Count == 0)
+            return false;
+
+        Buff[] effects;
         lock (_lock)
         {
             effects = _effects.ToArray();
         }
 
+        var data = BuffGameData.Instance;
         foreach (var effect in effects)
         {
-            if (effect == null)
+            if (effect is not { InUse: true, Template: { } immunity } || effect.IsEnded())
                 continue;
 
-            if (effect.Template.ImmuneBuffTagId == 0)
+            var immuneTags = data.GetImmuneBuffTags(immunity.Id);
+            if (immuneTags == null)
                 continue;
 
-            var buffs = SkillManager.Instance.GetBuffsByTagId(effect.Template.ImmuneBuffTagId);
-            if (buffs != null && buffs.Contains(buffId))
+            var blocked = false;
+            foreach (var tag in candidateTags)
+            {
+                if (!immuneTags.Contains(tag))
+                    continue;
+
+                // A shared immunity tag permits the granting buff's own refresh or stack. An
+                // exclusive tag still gates reapplication, as with internal cooldown buffs.
+                if (immunity.Id == candidate.Id && CanReapplyToSharedTag(candidate) &&
+                    manager.GetBuffsByTagId(tag) is { Count: > 1 })
+                    continue;
+
+                blocked = true;
+                break;
+            }
+
+            if (!blocked)
+                continue;
+
+            if (immunity.ImmuneExceptCreator && caster != null &&
+                (ReferenceEquals(caster, effect.Caster) || (caster.ObjId != 0 && caster.ObjId == effect.Caster?.ObjId)))
+                continue;
+
+            if (immunity.ImmuneExceptSkillTagId != 0 && castingSkill?.Template is { } skill &&
+                manager.GetSkillTags(skill.Id).Contains(immunity.ImmuneExceptSkillTagId))
+                continue;
+
+            if (immunity.ImmuneExceptCreatorRelationCheck && caster != null &&
+                immunity.ImmuneExceptCreatorRelationId is > 0 and <= byte.MaxValue)
+            {
+                var relation = (SkillTargetRelation)immunity.ImmuneExceptCreatorRelationId;
+                if (Enum.IsDefined(relation) && SkillTargetingUtil.IsRelationValid(relation, caster, owner))
+                    continue;
+            }
+
+            if (effect.InUse && !effect.IsEnded())
                 return true;
         }
 
         return false;
     }
+
+    private static bool CanReapplyToSharedTag(BuffTemplate template) => template.StackRule switch
+    {
+        BuffStackRule.Refresh or BuffStackRule.ChargeRefresh or BuffStackRule.Extend => true,
+        BuffStackRule.Multiple => template.MaxStack > 1,
+        _ => false
+    };
 
     public bool CheckDamageImmune(DamageType damageType)
     {
@@ -162,16 +219,18 @@ public class Buffs : IBuffs
 
     public bool CheckBuff(uint id)
     {
-        // Create a copy of the list of effects to avoid changing the list while iterating
-        IEnumerable<Buff> effects;
+        if (id == 0)
+            return false;
+
         lock (_lock)
         {
-            effects = _effects.ToArray();
+            foreach (var buff in _effects)
+            {
+                if (!buff.IsEnded() && buff.Template.Id == id)
+                    return true;
+            }
         }
 
-        foreach (var effect in effects.ToList())
-            if (effect != null && effect.Template.BuffId > 0 && effect.Template.BuffId == id)
-                return true;
         return false;
     }
 
@@ -181,16 +240,15 @@ public class Buffs : IBuffs
         if (buffs == null)
             return false;
 
-        // Create a copy of the list of effects to avoid changing the list while iterating
-        IEnumerable<Buff> effects;
         lock (_lock)
         {
-            effects = _effects.ToArray();
+            foreach (var buff in _effects)
+            {
+                if (!buff.IsEnded() && buffs.Contains(buff.Template.Id))
+                    return true;
+            }
         }
 
-        foreach (var effect in effects.ToList())
-            if (effect != null && buffs.Contains(effect.Template.BuffId))
-                return true;
         return false;
     }
 
@@ -332,17 +390,112 @@ public class Buffs : IBuffs
     public void AddBuff(uint buffId, BaseUnit caster)
     {
         var buff = SkillManager.Instance.GetBuffTemplate(buffId);
+        if (buff == null)
+            return;
+
         var casterObj = new SkillCasterUnit(caster.ObjId);
         AddBuff(new Buff(GetOwner(), caster, casterObj, buff, null, DateTime.UtcNow));
     }
 
     public void AddBuff(Buff buff, uint index = 0, int forcedDuration = 0)
     {
-        var finalToleranceBuffId = 0u;
+        AddBuff(buff, index, forcedDuration, null);
+    }
+
+    private void AddBuff(Buff buff, uint index, int forcedDuration, CrowdChange? crowdChange)
+    {
+        Buff started = null;
+        List<Buff> replaced = null;
+        List<BrokenBuff> broken = null;
+        try
+        {
+            AddBuffCore(buff, index, forcedDuration, ref started, ref replaced, ref broken, crowdChange);
+        }
+        finally
+        {
+            if (broken != null)
+                CompleteBrokenBuffs(broken);
+        }
+
+        try
+        {
+            CompleteBuffApplication(started, replaced);
+        }
+        finally
+        {
+            if (broken != null)
+                RaiseBroken(broken);
+        }
+    }
+
+    private void CompleteBuffApplication(Buff started, List<Buff> replaced)
+    {
+
+        if (replaced != null)
+        {
+            foreach (var oldBuff in replaced)
+                oldBuff.CompleteDispel();
+        }
+
+        if (started == null || started.IsEnded())
+            return;
+
+        ApplyFormPassives(started);
+
+        // Cancelling a channel can remove a buff from another unit, and start triggers
+        // can apply effects there. Keep both outside the owner's collection lock.
+        var template = started.Template;
+        if (template.BuffId > 0)
+        {
+            if (started.Owner is Character { IsRiding: true } character && (template.Stun || template.Sleep || template.Root))
+            {
+                var mateList = character.ParentWorld.MateManager.GetActiveMates(character.Id);
+                foreach (var mate in mateList)
+                    character.ParentWorld.MateManager.UnMountMate(character, mate.TlId, AttachPointKind.Driver, AttachUnitReason.None);
+            }
+
+            if (template.Stun || template.Silence || template.Sleep)
+                started.Owner.InterruptSkills();
+        }
+
+        if (!started.IsEnded() && !started.IsRestored)
+        {
+            if ((template.Taunt || template.TauntWithTopAggro) && started.Caster is { Hp: > 0 } taunter &&
+                !ReferenceEquals(started.Owner, taunter))
+            {
+                if (started.Owner is Npc npc)
+                    npc.BeginTaunt(taunter, template.TauntWithTopAggro);
+                else if (template.ImpossibleChangeTargeting && started.Owner is Character player &&
+                         ReferenceEquals(player.ParentWorld, taunter.ParentWorld))
+                {
+                    player.CurrentTarget = taunter;
+                    player.BroadcastPacket(new Core.Packets.G2C.SCTargetChangedPacket(player.ObjId, taunter.ObjId), true);
+                }
+            }
+
+            started.Events.OnBuffStarted(started, new OnBuffStartedArgs());
+        }
+    }
+
+    private void AddBuffCore(Buff buff, uint index, int forcedDuration, ref Buff started, ref List<Buff> replaced,
+        ref List<BrokenBuff> broken, CrowdChange? crowdChange = null)
+    {
+        if (buff?.Template == null)
+            return;
+
         lock (_lock)
         {
             var owner = GetOwner();
-            if (owner == null)
+            if (owner == null || _worldEffectsDetached)
+                return;
+            if (crowdChange is { } change && !CanApplyCrowdGrant(buff, change))
+                return;
+            if (buff.IsRestored && CheckBuff(buff.Template.Id))
+                return;
+            if (buff.AuraSource != null && CheckBuff(buff.Template.Id))
+                return;
+            if (buff.FormPassiveSource is { } form &&
+                (form.IsEnded() || !_effects.Contains(form) || CheckBuff(buff.Template.Id)))
                 return;
 
             buff.State = EffectState.Created;
@@ -359,133 +512,111 @@ public class Buffs : IBuffs
             }
 
             var buffIds = SkillManager.Instance.GetBuffTags(buff.Template.Id);
-            var buffTolerance = buffIds
-                .Select(buffId => BuffGameData.Instance.GetBuffToleranceForBuffTag(buffId))
-                .FirstOrDefault(t => t != null);
-            if (buffTolerance != null && _toleranceCounters.TryGetValue(buffTolerance.Id, out var toleranceCounter) && !CheckBuff(buffTolerance.FinalStepBuffId))
+            if (!buff.IsRestored)
             {
-                if (DateTime.UtcNow > toleranceCounter.LastStep + TimeSpan.FromSeconds(buffTolerance.StepDuration))
-                    toleranceCounter.CurrentStep = buffTolerance.GetFirstStep();
-                else
+                if (!TryAdvanceTolerance(buff, buffIds, out var toleranceCounter, ref started, ref replaced, ref broken))
+                    return;
+
+                BreakBuffs(buff, buffIds, ref broken);
+
+                buff.Duration = buff.Template.GetDuration(buff.AbLevel);
+                if (buff.Caster != null)
+                    buff.Duration = (int)buff.Caster.BuffModifiersCache.ApplyModifiers(buff.Template, BuffAttribute.Duration, buff.Duration);
+                buff.Duration = (int)buff.Owner.BuffModifiersCache.ApplyModifiers(buff.Template, BuffAttribute.InDuration, buff.Duration);
+
+                if (toleranceCounter != null)
                 {
-                    var nextStep = buffTolerance.GetStepAfter(toleranceCounter.CurrentStep);
-                    if (nextStep.TimeReduction <= toleranceCounter.CurrentStep.TimeReduction)
-                    {
-                        // Apply immune buff
-                        finalToleranceBuffId = toleranceCounter.Tolerance.FinalStepBuffId;
-                        // reset to first
-                        toleranceCounter.CurrentStep = buffTolerance.GetFirstStep();
-                    }
-                    else
-                    {
-                        toleranceCounter.CurrentStep = nextStep;
-                    }
+                    buff.Duration = (int)(buff.Duration * ((100 - toleranceCounter.CurrentStep.TimeReduction) / 100.0));
+
+                    if (buff.Caster is Character && buff.Owner is Character)
+                        buff.Duration = (int)(buff.Duration * ((100 - toleranceCounter.Tolerance.CharacterTimeReduction) / 100.0));
                 }
 
-                toleranceCounter.LastStep = DateTime.UtcNow;
+                if (forcedDuration != 0)
+                    buff.Duration = forcedDuration;
+
+                buff.Duration = buff.Template.ClampDuration(buff.Duration);
+                buff.BaseDuration = buff.Duration;
             }
-            else if (buffTolerance != null)
-            {
-                _toleranceCounters.Add(buffTolerance.Id, new BuffToleranceCounter
-                {
-                    Tolerance = buffTolerance,
-                    CurrentStep = buffTolerance.GetFirstStep(),
-                    LastStep = DateTime.UtcNow
-                });
-            }
-
-            buff.Duration = buff.Template.GetDuration(buff.AbLevel);
-            if (buff.Caster != null)
-            {
-                buff.Duration = (int)buff.Caster.BuffModifiersCache.ApplyModifiers(buff.Template, BuffAttribute.Duration, buff.Duration);
-            }
-            buff.Duration = (int)buff.Owner.BuffModifiersCache.ApplyModifiers(buff.Template, BuffAttribute.InDuration, buff.Duration);
-
-            if (buffTolerance != null)
-            {
-                var buffCounter = _toleranceCounters[buffTolerance.Id];
-                buff.Duration = (int)(buff.Duration * ((100 - buffCounter.CurrentStep.TimeReduction) / 100.0));
-
-                if (buff.Caster is Character && buff.Owner is Character)
-                    buff.Duration = (int)(buff.Duration * ((100 - buffTolerance.CharacterTimeReduction) / 100.0));
-            }
-
-            if (forcedDuration != 0)
-                buff.Duration = forcedDuration;
-
-            if (buff.Duration > 0 && buff.StartTime == DateTime.MinValue)
-            {
+            var maxStack = (int)Math.Clamp((long)buff.Template.MaxStack, 1L, int.MaxValue);
+            if (buff.Template.StackRule is BuffStackRule.Multiple or BuffStackRule.Independent)
+                buff.Stack = Math.Clamp(buff.Stack, 1, maxStack);
+            if (buff.StartTime == DateTime.MinValue)
                 buff.StartTime = DateTime.UtcNow;
+            if (buff.Duration > 0)
                 buff.EndTime = buff.StartTime.AddMilliseconds(buff.Duration);
-            }
 
             Buff last = null;
             switch (buff.Template.StackRule)
             {
                 case BuffStackRule.Refresh:
-                    foreach (var e in new List<Buff>(_effects))
-                        if (e is { InUse: true } && e.Template.BuffId == buff.Template.BuffId)
-                            if (buff.GetTimeLeft() < e.GetTimeLeft())
-                                return;
-                            else
-                                last = e;
+                    last = FindLiveBuff(buff, casterScoped: false);
+                    if (last != null && buff.GetTimeLeft() < last.GetTimeLeft())
+                        return;
                     break;
                 case BuffStackRule.ChargeRefresh:
-                    foreach (var e in new List<Buff>(_effects))
-                        if (e is { InUse: true } && e.Template.BuffId == buff.Template.BuffId)
-                            if (buff.Charge < e.Charge)
-                                return;
-                            else
-                                last = e;
+                    last = FindLiveBuff(buff, casterScoped: false);
+                    buff.InitializeCharge();
+                    if (last != null && buff.Charge < last.Charge)
+                        return;
                     break;
-                default:
-                    if (buff.Template.MaxStack > 0 && GetBuffCountById(buff.Template.BuffId) >= buff.Template.MaxStack)
-                        foreach (var e in new List<Buff>(_effects))
-                            if (e is { InUse: true } && e.Template.BuffId == buff.Template.BuffId)
-                                if (e.GetTimeLeft() < buff.GetTimeLeft())
-                                    last = e;
+                case BuffStackRule.ChargeExtend:
+                    last = FindLiveBuff(buff, casterScoped: false);
+                    buff.InitializeCharge();
+                    if (last != null)
+                    {
+                        last.ExtendCharge(buff.Charge);
+                        return;
+                    }
+                    break;
+                case BuffStackRule.Extend:
+                    last = FindLiveBuff(buff, casterScoped: false);
+                    break;
+                case BuffStackRule.Multiple:
+                case BuffStackRule.Independent:
+                    last = FindLiveBuff(buff, casterScoped: true);
+                    if (last != null && last.Stack < maxStack)
+                    {
+                        var stack = (int)Math.Min(maxStack, (long)last.Stack + buff.Stack);
+                        if (stack == maxStack && buff.Template.TransformBuffId != 0 &&
+                            ApplyReplacementBuff(last, buff, buff.Template.TransformBuffId, ref started, ref replaced, ref broken))
+                            return;
+
+                        last.IncreaseStack(stack);
+                        return;
+                    }
                     break;
             }
             if (last != null)
             {
+                if (last.Duration == 0 && buff.Duration == 0)
+                {
+                    last.IsCrowdGrant = false;
+                    return;
+                }
+
                 last.OverwriteWith(buff);
             }
             else
             {
+                if (!buff.PrepareRestoredSource())
+                    return;
+
                 _effects.Add(buff);
+                if (buff.FormPassiveSource is { } passiveSource)
+                    (passiveSource.GrantedFormPassives ??= []).Add(buff);
                 buff.Triggers.SubscribeEvents();
-                buff.Events.OnBuffStarted(buff, new OnBuffStartedArgs());
 
                 if (buff.Template.BuffId > 0)
                 {
-                    var buffTemplate = SkillManager.Instance.GetBuffTemplate(buff.Template.BuffId);
                     owner.SkillModifiersCache.AddModifiers(buff.Template.BuffId);
                     owner.BuffModifiersCache.AddModifiers(buff.Template.BuffId);
                     owner.CombatBuffs.AddCombatBuffs(buff.Template.BuffId);
-
-                    if (owner is Character { IsRiding: true } character && (buffTemplate.Stun || buffTemplate.Sleep || buffTemplate.Root))
-                    {
-                        var mateList = character.ParentWorld.MateManager.GetActiveMates(character.Id);
-                        foreach (var mate in mateList)
-                        {
-                            // TODO: handle passengers
-                            character.ParentWorld.MateManager.UnMountMate(character, mate.TlId, AttachPointKind.Driver, AttachUnitReason.None);
-                        }
-                    }
-
-                    if (buffTemplate.Stun || buffTemplate.Silence || buffTemplate.Sleep)
-                        owner.InterruptSkills();
                 }
 
-                //if (buff.Duration > 0)
-                if (buff.Duration > 0 || buff.Template.TickEffects.Count > 0)
-                    buff.SetInUse(true, false);
-                else
-                {
-                    buff.InUse = true;
-                    buff.State = EffectState.Acting;
-                    buff.Template.Start(buff.Caster, owner, buff); // TODO поменять на target
-                }
+                buff.Start();
+                RegisterCrowdSource(buff);
+                started = buff;
 
                 // If Owner has buffs that prevent it from doing combat, then remove the aggro for it
                 if (buffIds.Contains((uint)TagsEnum.NoFight) || buffIds.Contains((uint)TagsEnum.Returning))
@@ -499,9 +630,161 @@ public class Buffs : IBuffs
                 }
             }
         }
-        if (finalToleranceBuffId > 0)
+    }
+
+    private bool TryAdvanceTolerance(Buff buff, List<uint> buffTags, out BuffToleranceCounter counter,
+        ref Buff started, ref List<Buff> replaced, ref List<BrokenBuff> broken)
+    {
+        counter = null;
+        foreach (var tag in buffTags)
         {
-            AddBuff(new Buff(buff.Owner, buff.Caster, buff.SkillCaster, SkillManager.Instance.GetBuffTemplate(finalToleranceBuffId), buff.Skill, DateTime.UtcNow));
+            var tolerance = BuffGameData.Instance.GetBuffToleranceForBuffTag(tag);
+            if (tolerance == null)
+                continue;
+
+            if (CheckBuff(tolerance.FinalStepBuffId))
+                return false;
+            if (tolerance.Steps.Count == 0)
+                return true;
+
+            var now = DateTime.UtcNow;
+            var steps = tolerance.Steps;
+            if (!_toleranceCounters.TryGetValue(tolerance.Id, out counter))
+            {
+                counter = new BuffToleranceCounter { Tolerance = tolerance };
+                _toleranceCounters.Add(tolerance.Id, counter);
+            }
+
+            // Every 3.5 ladder with multiple rows ends with an immunity step, even if its
+            // consecutive reductions are equal. A refused application leaves the ladder fresh.
+            var position = (now - counter.LastStep).TotalSeconds > tolerance.StepDuration
+                ? 0
+                : steps.IndexOf(counter.CurrentStep) + 1;
+            var immunityStep = steps.Count > 1 && position >= steps.Count - 1;
+            counter.CurrentStep = steps[immunityStep ? 0 : Math.Min(position, steps.Count - 1)];
+            counter.LastStep = immunityStep ? DateTime.MinValue : now;
+
+            if (immunityStep && ApplyReplacementBuff(null, buff, tolerance.FinalStepBuffId, ref started, ref replaced, ref broken))
+                return false;
+
+            return true;
+        }
+
+        return true;
+    }
+
+    private Buff FindLiveBuff(Buff incoming, bool casterScoped)
+    {
+        foreach (var effect in _effects)
+        {
+            if (!effect.InUse || effect.IsEnded() || effect.Template.Id != incoming.Template.Id)
+                continue;
+
+            if (!casterScoped || HasSameCaster(effect, incoming))
+                return effect;
+        }
+
+        return null;
+    }
+
+    private static bool HasSameCaster(Buff live, Buff incoming)
+    {
+        if (live.Caster != null && incoming.Caster != null)
+            return ReferenceEquals(live.Caster, incoming.Caster) ||
+                   (live.Caster.ObjId != 0 && live.Caster.ObjId == incoming.Caster.ObjId);
+
+        return live.Caster == incoming.Caster && live.SkillCaster?.Type == incoming.SkillCaster?.Type &&
+               live.SkillCaster?.ObjId == incoming.SkillCaster?.ObjId;
+    }
+
+    private bool ApplyReplacementBuff(Buff live, Buff incoming, uint replacementId, ref Buff started,
+        ref List<Buff> replaced, ref List<BrokenBuff> broken)
+    {
+        if (replacementId == 0 || replacementId == incoming.Template.Id ||
+            SkillManager.Instance.GetBuffTemplate(replacementId) is not { } template ||
+            !template.CanApplyTo(incoming.Owner, incoming.Caster, incoming.Skill))
+            return false;
+
+        if (live != null && live.TryBeginDispel())
+            (replaced ??= []).Add(live);
+
+        var replacement = new Buff(incoming.Owner, incoming.Caster, incoming.SkillCaster, template, incoming.Skill,
+            DateTime.UtcNow) { AbLevel = incoming.AbLevel, Passive = incoming.Passive };
+        AddBuffCore(replacement, 0, 0, ref started, ref replaced, ref broken);
+        return true;
+    }
+
+    private readonly record struct BrokenBuff(Buff Victim, EventHandler<OnBrokenArgs> Handler, BaseUnit Breaker);
+
+    [ThreadStatic]
+    private static HashSet<Buffs> s_dispatchingBreakers;
+
+    private void BreakBuffs(Buff arriving, List<uint> tags, ref List<BrokenBuff> broken)
+    {
+        if (tags.Count == 0)
+            return;
+
+        HashSet<uint> victimIds = null;
+        foreach (var tag in tags)
+        {
+            if (BuffGameData.Instance.GetBuffsBrokenByTag(tag) is { } ids)
+                (victimIds ??= []).UnionWith(ids);
+        }
+        if (victimIds == null)
+            return;
+
+        // Mark victims under the collection lock so stacking and tag checks see the removal
+        // immediately. Their effects and packets are dispatched after acquiring no unit lock.
+        foreach (var victim in _effects)
+        {
+            if (victimIds.Contains(victim.Template.Id) && victim.TryBeginDispel())
+                (broken ??= []).Add(new BrokenBuff(victim, victim.Events.OnBroken, arriving.Caster));
+        }
+    }
+
+    private static void CompleteBrokenBuffs(List<BrokenBuff> broken)
+    {
+        foreach (var (victim, _, _) in broken)
+        {
+            try
+            {
+                victim.CompleteDispel();
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(exception, "Failed to finish broken buff {0}", victim.Template.Id);
+            }
+        }
+    }
+
+    private void RaiseBroken(List<BrokenBuff> broken)
+    {
+        // One breaker effect can itself grant a buff which breaks another member of this collection.
+        var dispatching = s_dispatchingBreakers ??= [];
+        if (!dispatching.Add(this))
+            return;
+
+        try
+        {
+            foreach (var (victim, handler, breaker) in broken)
+            {
+                var args = new OnBrokenArgs { Breaker = breaker };
+                foreach (EventHandler<OnBrokenArgs> row in handler.GetInvocationList())
+                {
+                    try
+                    {
+                        row(victim, args);
+                    }
+                    catch (Exception exception)
+                    {
+                        Logger.Error(exception, "Failed to run breaker trigger for buff {0}", victim.Template.Id);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            dispatching.Remove(this);
         }
     }
 
@@ -511,107 +794,128 @@ public class Buffs : IBuffs
         if (own == null)
             return;
 
-        if (buff == null || _effects?.Contains(buff) != true)
+        if (buff == null)
             return;
 
-        if (_effects == null)
-            return;
-
+        List<Buff> endedFormPassives = null;
+        bool ended;
         lock (_lock)
         {
-            buff.SetInUse(false, false);
-            _effects.Remove(buff);
-            own.SkillModifiersCache.RemoveModifiers(buff.Template.BuffId);
-            own.BuffModifiersCache.RemoveModifiers(buff.Template.BuffId);
-            own.CombatBuffs.RemoveCombatBuff(buff.Template.BuffId);
-            //effect.Triggers.UnsubscribeEvents();
+            ended = buff.IsEnded();
+            if (ended)
+            {
+                if (!_effects.Remove(buff))
+                    return;
 
-            if (buff.Template.Gliding)
-                TriggerRemoveOn(BuffRemoveOn.Land);
+                endedFormPassives = DetachFormPassives(buff);
+
+                if (IsCrowdSource(buff))
+                    _crowdRevision++;
+
+                own.SkillModifiersCache.RemoveModifiers(buff.Template.BuffId);
+                own.BuffModifiersCache.RemoveModifiers(buff.Template.BuffId);
+                own.CombatBuffs.RemoveCombatBuff(buff.Template.BuffId);
+            }
+            else if (!_effects.Contains(buff))
+                return;
         }
+
+        if (endedFormPassives != null)
+        {
+            foreach (var passive in endedFormPassives)
+                passive.CompleteDispel();
+        }
+        if (!ended)
+            buff.Exit();
+        else if (buff.Template.Gliding)
+            TriggerRemoveOn(BuffRemoveOn.Land);
     }
 
     public void RemoveEffect(uint templateId, uint skillId)
     {
-        var own = GetOwner();
-        if (own == null)
-            return;
-
-        if (_effects == null)
-            return;
-
+        Buff[] effects;
         lock (_lock)
+            effects = _effects.ToArray();
+
+        foreach (var buff in effects)
         {
-            foreach (var e in _effects.ToList())
-            {
-                if (e != null && e.Template.Id == templateId && e.Skill.Template.Id == skillId)
-                {
-                    e.Template.Dispel(e.Caster, e.Owner, e);
-                    _effects.Remove(e);
-                    e.SetInUse(false, false);
-                    own.SkillModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.BuffModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.CombatBuffs.RemoveCombatBuff(e.Template.BuffId);
-                    //e.Triggers.UnsubscribeEvents();
-                }
-            }
+            var skill = buff.Skill;
+            if (buff.Template.Id == templateId && skill?.Template?.Id == skillId)
+                buff.ExitSkillEffect(skill, honorTimeout: false);
+        }
+    }
+
+    public void RemoveEffect(uint templateId, Skill skill, bool honorTimeout = false)
+    {
+        Buff[] effects;
+        lock (_lock)
+            effects = _effects.ToArray();
+
+        foreach (var buff in effects)
+        {
+            if (buff.Template.Id == templateId)
+                buff.ExitSkillEffect(skill, honorTimeout);
         }
     }
 
     public void RemoveEffect(uint index)
     {
-        var own = GetOwner();
-        if (own == null)
-            return;
-
-        if (_effects == null)
-            return;
-
+        Buff toRemove = null;
         lock (_lock)
         {
-            foreach (var e in _effects.ToList())
+            foreach (var buff in _effects)
             {
-                if (e?.Index == index)
+                if (buff.Index == index && !buff.IsEnded())
                 {
-                    e.Template.Dispel(e.Caster, e.Owner, e);
-                    _effects.Remove(e);
-                    e.SetInUse(false, false);
-                    own.SkillModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.BuffModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.CombatBuffs.RemoveCombatBuff(e.Template.BuffId);
-                    //e.Triggers.UnsubscribeEvents();
+                    toRemove = buff;
                     break;
                 }
             }
         }
+
+        toRemove?.Exit();
     }
 
     public void RemoveBuff(uint buffId)
     {
-        var own = GetOwner();
-        if (own == null)
-            return;
-
-        if (_effects == null)
-            return;
-
+        Buff toRemove = null;
         lock (_lock)
         {
-            foreach (var e in _effects.ToList())
+            foreach (var buff in _effects)
             {
-                if (e != null && e.Template.BuffId == buffId)
+                if (buff.Template.BuffId == buffId && !buff.IsEnded())
                 {
-                    e.Template.Dispel(e.Caster, e.Owner, e);
-                    _effects.Remove(e);
-                    e.SetInUse(false, false);
-                    own.SkillModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.BuffModifiersCache.RemoveModifiers(e.Template.BuffId);
-                    own.CombatBuffs.RemoveCombatBuff(e.Template.BuffId);
-                    //e.Triggers.UnsubscribeEvents();
+                    toRemove = buff;
                     break;
                 }
             }
         }
+
+        toRemove?.Exit();
+    }
+
+    internal bool TryConsumeBeneficialBuff()
+    {
+        Buff consumed = null;
+        lock (_lock)
+        {
+            foreach (var buff in _effects)
+            {
+                if (buff is not { Passive: false, AuraSource: null, IsCrowdGrant: false, WorldEffectsDetached: false,
+                        Template: { Kind: BuffKind.Good, System: false, Exempt: false } template } ||
+                    template is { AuraRadius: > 0, AuraSlaveBuffId: > 0 } || !buff.TryBeginDispel())
+                    continue;
+
+                consumed = buff;
+                break;
+            }
+        }
+
+        if (consumed == null)
+            return false;
+
+        consumed.CompleteDispel();
+        return true;
     }
 
     public void RemoveBuffs(BuffKind kind, int count, uint buffTagId = 0)
@@ -654,6 +958,27 @@ public class Buffs : IBuffs
             }
     }
 
+    public void RemoveTaggedApplications(uint buffTagId, int applications)
+    {
+        var templates = SkillManager.Instance.GetBuffsByTagId(buffTagId);
+        if (templates.Count == 0 || applications <= 0)
+            return;
+
+        Buff[] effects;
+        lock (_lock)
+            effects = _effects.ToArray();
+
+        foreach (var effect in effects)
+        {
+            if (!templates.Contains(effect.Template.Id))
+                continue;
+
+            applications -= effect.TakeStacks(applications);
+            if (applications <= 0)
+                return;
+        }
+    }
+
     public void RemoveBuffs(uint buffTagId, int count)
     {
         var own = GetOwner();
@@ -664,14 +989,17 @@ public class Buffs : IBuffs
             return;
 
         // Create a copy of the list of effects to avoid changing the list while iterating
-        IEnumerable<Buff> effects;
+        Buff[] effects;
         lock (_lock)
         {
             effects = _effects.ToArray();
         }
 
         var buffIds = SkillManager.Instance.GetBuffsByTagId(buffTagId);
-        foreach (var e in effects.ToList())
+        if (buffIds == null)
+            return;
+
+        foreach (var e in effects)
             if (e != null)
             {
                 if (!buffIds.Contains(e.Template.BuffId))
@@ -763,8 +1091,8 @@ public class Buffs : IBuffs
                     effect.Exit();
                 else if (template.RemoveOnMove && on == BuffRemoveOn.Move)
                     effect.Exit();
-                else if (template.RemoveOnSourceDead && on == BuffRemoveOn.SourceDead && value == effect.Caster.ObjId)
-                    effect.Exit();//Need to investigate this one
+                else if (template.RemoveOnSourceDead && on == BuffRemoveOn.SourceDead && value == effect.Caster?.ObjId)
+                    effect.Exit();
                 else if (template.RemoveOnStartSkill && on == BuffRemoveOn.StartSkill)
                 {
                     if (value == 0)
@@ -830,16 +1158,155 @@ public class Buffs : IBuffs
         return _owner?.Target as BaseUnit;
     }
 
-    public IEnumerable<Buff> GetAbsorptionEffects()
+    // The caller holds SyncRoot while checking lethal damage and consuming one-time protection.
+    internal Buff GetImmortalityForDamage(DamageType? damageType, KillReason killReason)
     {
-        // Create a copy of the list of effects to avoid changing the list while iterating
-        IEnumerable<Buff> effects;
-        lock (_lock)
+        Buff protection = null;
+        foreach (var buff in _effects)
         {
-            effects = _effects.ToArray();
+            if (!buff.InUse || buff.IsEnded() || buff.WorldEffectsDetached)
+                continue;
+
+            var protects = damageType switch
+            {
+                DamageType.Melee => buff.Template.MeleeImmortality,
+                DamageType.Ranged => buff.Template.RangedImmortality,
+                DamageType.Magic => buff.Template.SpellImmortality,
+                DamageType.Siege => buff.Template.SiegeImmortality,
+                _ => killReason == KillReason.Fall && buff.Template.FallDamageImmortality
+            };
+            if (!protects)
+                continue;
+            if (!buff.Template.OneTimeImmortality)
+                return buff;
+
+            protection ??= buff;
+        }
+        return protection;
+    }
+
+    // The caller holds SyncRoot until the resulting HP and MP are committed.
+    internal (int Damage, int ManaCost, int Reflected) ResolveDamageProtection(int damage, int availableMana,
+        DamageType? reflectableDamageType)
+    {
+        if (damage <= 0)
+            return (damage, 0, 0);
+
+        var reflectionMask = reflectableDamageType switch
+        {
+            DamageType.Melee => 1u,
+            DamageType.Magic => 2u,
+            DamageType.Ranged => 4u,
+            DamageType.Siege => 8u,
+            _ => 0u
+        };
+        var reflected = 0;
+        uint shieldRatio = 0;
+        foreach (var effect in _effects)
+        {
+            if (!effect.InUse || effect.IsEnded() || effect.WorldEffectsDetached)
+                continue;
+
+            var template = effect.Template;
+            shieldRatio = Math.Max(shieldRatio, template.ManaShieldRatio);
+            if ((template.ReflectionTypeId & reflectionMask) == 0 || template.ReflectionChance == 0 ||
+                Random.Shared.Next(100) >= template.ReflectionChance)
+                continue;
+
+            reflected = (int)Math.Min((long)reflected + (long)damage * template.ReflectionTargetRatio / 100, int.MaxValue);
+            damage = (int)Math.Min((long)damage * template.ReflectionRatio / 100, int.MaxValue);
         }
 
-        return effects.Where(e => e.Template.DamageAbsorptionTypeId > 0);
+        if (availableMana <= 0 || shieldRatio == 0 || damage == 0)
+            return (damage, 0, reflected);
+
+        // 10000 absorbs one HP per MP. The 15000 shield spends mana more efficiently.
+        var covered = (int)Math.Min((long)availableMana * shieldRatio / 10000, damage);
+        var manaCost = (int)(((long)covered * 10000 + shieldRatio - 1) / shieldRatio);
+        return (damage - covered, manaCost, reflected);
+    }
+
+    public IEnumerable<Buff> GetAbsorptionEffects()
+    {
+        List<Buff> effects = null;
+        lock (_lock)
+        {
+            foreach (var effect in _effects)
+            {
+                if (effect.InUse && !effect.IsEnded() && effect.Template.DamageAbsorptionTypeId > 0)
+                    (effects ??= []).Add(effect);
+            }
+        }
+
+        return effects == null ? Array.Empty<Buff>() : effects;
+    }
+
+    internal bool RestrictsTargetSelection(BaseUnit targeter)
+    {
+        List<(SkillTargetRelation Relation, BaseUnit Subject)> rules = null;
+        lock (_lock)
+        {
+            foreach (var effect in _effects)
+            {
+                if (effect is not { InUse: true, Template.ImpossibleTargeting: true } || effect.IsEnded())
+                    continue;
+
+                var template = effect.Template;
+                var subject = template.TargetingUseOriginSource ? effect.Caster ?? effect.Owner : effect.Owner;
+                if (template.TargetingRelationId <= byte.MaxValue)
+                    (rules ??= []).Add(((SkillTargetRelation)template.TargetingRelationId, subject));
+            }
+        }
+
+        if (rules == null)
+            return false;
+
+        foreach (var (relation, subject) in rules)
+        {
+            var blocked = relation switch
+            {
+                SkillTargetRelation.Any => true,
+                SkillTargetRelation.Party => subject.ObjId == targeter.ObjId ||
+                    TeamManager.Instance.GetTeamByObjId(subject.ObjId)?.IsObjMember(targeter.ObjId) == true,
+                SkillTargetRelation.Friendly or SkillTargetRelation.Hostile or SkillTargetRelation.Raid or
+                    SkillTargetRelation.Others or SkillTargetRelation.Family =>
+                    SkillTargetingUtil.IsRelationValid(relation, subject, targeter),
+                _ => false
+            };
+            if (blocked)
+                return true;
+        }
+        return false;
+    }
+
+    internal Unit GetTauntSource()
+    {
+        lock (_lock)
+        {
+            for (var index = _effects.Count - 1; index >= 0; index--)
+            {
+                var effect = _effects[index];
+                if (effect.InUse && !effect.IsEnded() && !effect.WorldEffectsDetached &&
+                    (effect.Template.Taunt || effect.Template.TauntWithTopAggro) &&
+                    effect.Caster is { Hp: > 0 } caster && !ReferenceEquals(caster, effect.Owner) &&
+                    ReferenceEquals(caster.ParentWorld, effect.Owner.ParentWorld))
+                    return caster;
+            }
+        }
+        return null;
+    }
+
+    internal bool HoldsCurrentTarget()
+    {
+        lock (_lock)
+        {
+            foreach (var effect in _effects)
+            {
+                if (effect.InUse && !effect.IsEnded() && !effect.WorldEffectsDetached && effect.Template.ImpossibleChangeTargeting)
+                    return true;
+            }
+        }
+        return false;
     }
 
     public bool HasEffectsMatchingCondition(Func<Buff, bool> predicate)
@@ -851,7 +1318,12 @@ public class Buffs : IBuffs
             effects = _effects.ToArray();
         }
 
-        return effects.Any(predicate);
+        foreach (var effect in effects)
+        {
+            if (predicate(effect))
+                return true;
+        }
+        return false;
     }
 
     public (bool Frozen, bool DriveBlocked, bool TurnBlocked) GetShipControlRestrictions()
@@ -876,124 +1348,73 @@ public class Buffs : IBuffs
 
     #region Buff Persistence
     /// <summary>
-    /// Determines whether a buff should be saved to the database on logout.
-    /// </summary>
-    private static bool ShouldPersistBuff(Buff buff)
-    {
-        if (buff == null)
-            return false;
-
-        // Only save buffs with SaveRuleId > 0
-        if (buff.Template.SaveRuleId == (uint)BuffSaveRuleType.DontSave)
-            return false;
-
-        // Passive buffs are restored via the skill system
-        if (buff.Passive)
-            return false;
-
-        // Permanent buffs (Duration=0) are race/template buffs
-        if (buff.Duration <= 0)
-            return false;
-
-        // Don't save already expired buffs
-        if (buff.GetTimeLeft() <= 0)
-            return false;
-
-        // Don't save buffs in Finishing/Finished state
-        if (buff.State == EffectState.Finishing || buff.State == EffectState.Finished)
-            return false;
-
-        // --- SaveRule differentiation ---
-
-        // Rule 2: Premium/Crafting (Cash-Shop, Mastery, Proficiency) → always save
-        // Rule 3: Special (Inn/Sleep, Battlefield, Cosmetics) → always save
-        if (buff.Template.SaveRuleId >= (uint)BuffSaveRuleType.CharacterPersistent)
-            return true;
-
-        // Rule 1: Standard buffs — only save beneficial buffs with ≥60s duration.
-        // Filters out short combat debuffs (stuns, bleeds, knockdowns).
-        if (buff.Template.SaveRuleId == (uint)BuffSaveRuleType.Normal)
-        {
-            // Don't save debuffs (combat effects should not persist through logout)
-            if (buff.Template.Kind == BuffKind.Bad)
-                return false;
-
-            // Very short buffs (< 60s) are combat abilities, not consumables
-            if (buff.Duration < MinimumBuffDurationToSave)
-                return false;
-
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Saves all persistable active buffs to the database.
-    /// Called during Character.Save().
+    /// Saves the active buff snapshot in the caller's character transaction.
     /// </summary>
     public void SaveActiveBuffs(MySqlConnection connection, MySqlTransaction transaction, uint characterId)
     {
+        var rows = new List<PersistedBuff>();
+        lock (_lock)
+        {
+            // A selecting character is already in the world index. Don't overwrite
+            // the saved snapshot before that character has read it.
+            if (!_persistentBuffsLoaded)
+                return;
+
+            var now = DateTime.UtcNow;
+            foreach (var buff in _effects)
+            {
+                if (PersistedBuff.Capture(buff, characterId, now) is { } row)
+                    rows.Add(row);
+            }
+        }
+
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+
         try
         {
-            // Delete previously saved buffs
-            using (var deleteCmd = connection.CreateCommand())
+            command.CommandText = "SAVEPOINT character_active_buffs_save";
+            command.ExecuteNonQuery();
+            try
             {
-                deleteCmd.Connection = connection;
-                deleteCmd.Transaction = transaction;
-                deleteCmd.CommandText = "DELETE FROM `character_active_buffs` WHERE `character_id` = @characterId";
-                deleteCmd.Parameters.AddWithValue("@characterId", characterId);
-                deleteCmd.ExecuteNonQuery();
+                command.CommandText = "DELETE FROM character_active_buffs WHERE character_id = @characterId";
+                command.Parameters.AddWithValue("@characterId", characterId);
+                command.ExecuteNonQuery();
+
+                var supportsSourceIdentity = true;
+                foreach (var row in rows)
+                {
+                    BindBuffRow(command, row, characterId);
+                    command.CommandText = supportsSourceIdentity ? InsertBuffWithSourceSql : InsertLegacyBuffSql;
+
+                    try
+                    {
+                        command.ExecuteNonQuery();
+                    }
+                    catch (MySqlException ex) when (supportsSourceIdentity && ex.Number == (int)MySqlErrorCode.BadFieldError)
+                    {
+                        // Installations with updates deferred still save and load ordinary buffs.
+                        // The legacy schema cannot represent source identity.
+                        supportsSourceIdentity = false;
+                        command.CommandText = InsertLegacyBuffSql;
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch
+            {
+                command.CommandText = "ROLLBACK TO SAVEPOINT character_active_buffs_save";
+                command.ExecuteNonQuery();
+                throw;
+            }
+            finally
+            {
+                command.CommandText = "RELEASE SAVEPOINT character_active_buffs_save";
+                command.ExecuteNonQuery();
             }
 
-            // Snapshot active buffs
-            Buff[] effects;
-            lock (_lock)
-            {
-                effects = _effects.ToArray();
-            }
-
-            var savedCount = 0;
-            foreach (var buff in effects)
-            {
-                if (!ShouldPersistBuff(buff))
-                    continue;
-
-                var timeLeft = (int)buff.GetTimeLeft();
-                if (timeLeft <= 0)
-                    continue;
-
-                using var cmd = connection.CreateCommand();
-                cmd.Connection = connection;
-                cmd.Transaction = transaction;
-                cmd.CommandText =
-                    "INSERT INTO `character_active_buffs` " +
-                    "(`character_id`, `buff_id`, `caster_id`, `skill_id`, `ab_level`, " +
-                    " `duration`, `time_left`, `charge`, `stack_count`, `real_time`, `saved_at`) " +
-                    "VALUES (@characterId, @buffId, @casterId, @skillId, @abLevel, " +
-                    "        @duration, @timeLeft, @charge, @stackCount, @realTime, @savedAt) " +
-                    "ON DUPLICATE KEY UPDATE " +
-                    "`caster_id`=@casterId, `skill_id`=@skillId, `ab_level`=@abLevel, " +
-                    "`duration`=@duration, `time_left`=@timeLeft, `charge`=@charge, " +
-                    "`stack_count`=@stackCount, `real_time`=@realTime, `saved_at`=@savedAt";
-
-                cmd.Parameters.AddWithValue("@characterId", characterId);
-                cmd.Parameters.AddWithValue("@buffId", buff.Template.Id);
-                cmd.Parameters.AddWithValue("@casterId", buff.Caster?.Id ?? characterId);
-                cmd.Parameters.AddWithValue("@skillId", buff.Skill?.Template?.Id ?? 0u);
-                cmd.Parameters.AddWithValue("@abLevel", buff.AbLevel);
-                cmd.Parameters.AddWithValue("@duration", buff.Duration);
-                cmd.Parameters.AddWithValue("@timeLeft", timeLeft);
-                cmd.Parameters.AddWithValue("@charge", buff.Charge);
-                cmd.Parameters.AddWithValue("@stackCount", 1);
-                cmd.Parameters.AddWithValue("@realTime", buff.Template.RealTime ? 1 : 0);
-                cmd.Parameters.AddWithValue("@savedAt", DateTime.UtcNow);
-                cmd.ExecuteNonQuery();
-                savedCount++;
-            }
-
-            if (savedCount > 0)
-                Logger.Info($"Saved {savedCount} active buff(s) for character {characterId}");
+            if (rows.Count > 0)
+                Logger.Info($"Saved {rows.Count} active buff(s) for character {characterId}");
         }
         catch (Exception ex)
         {
@@ -1001,109 +1422,111 @@ public class Buffs : IBuffs
         }
     }
 
-    /// <summary>
-    /// Loads saved buffs from the database and reapplies them to the character.
-    /// RealTime buffs: offline time is subtracted.
-    /// GameTime buffs: timer was paused, full remaining time is restored.
-    /// </summary>
+    // REPLACE preserves the schema's single row per character and buff template.
+    private const string InsertBuffWithSourceSql = """
+        REPLACE INTO character_active_buffs
+            (character_id, buff_id, caster_id, caster_kind, caster_life, skill_id, ab_level,
+             duration, time_left, charge, stack_count, real_time, saved_at)
+        VALUES (@characterId, @buffId, @casterId, @casterKind, @casterLife, @skillId, @abLevel,
+                @duration, @timeLeft, @charge, @stackCount, @realTime, @savedAt)
+        """;
+
+    private const string InsertLegacyBuffSql = """
+        REPLACE INTO character_active_buffs
+            (character_id, buff_id, caster_id, skill_id, ab_level, duration, time_left, charge, stack_count, real_time, saved_at)
+        VALUES (@characterId, @buffId, @casterId, @skillId, @abLevel, @duration, @timeLeft, @charge, @stackCount, @realTime, @savedAt)
+        """;
+
+    private static void BindBuffRow(MySqlCommand command, PersistedBuff row, uint characterId)
+    {
+        command.Parameters.Clear();
+        command.Parameters.AddWithValue("@characterId", characterId);
+        command.Parameters.AddWithValue("@buffId", row.BuffId);
+        command.Parameters.AddWithValue("@casterId", row.CasterId);
+        command.Parameters.AddWithValue("@casterKind", (byte)row.SourceKind);
+        command.Parameters.AddWithValue("@casterLife", (object)row.CasterLife?.ToString() ?? DBNull.Value);
+        command.Parameters.AddWithValue("@skillId", row.SkillId);
+        command.Parameters.AddWithValue("@abLevel", row.AbilityLevel);
+        command.Parameters.AddWithValue("@duration", row.Duration);
+        command.Parameters.AddWithValue("@timeLeft", row.TimeLeft);
+        command.Parameters.AddWithValue("@charge", row.Charge);
+        command.Parameters.AddWithValue("@stackCount", row.Stack);
+        command.Parameters.AddWithValue("@realTime", row.RealTime);
+        command.Parameters.AddWithValue("@savedAt", row.SavedAt);
+    }
+
     public void LoadActiveBuffs(Character character)
     {
         try
         {
-            var restoredCount = 0;
-
+            var rows = new List<PersistedBuff>();
             using var connection = MySQL.CreateConnection();
-            using (var cmd = connection.CreateCommand())
-            {
-                cmd.CommandText =
-                    "SELECT * FROM `character_active_buffs` WHERE `character_id` = @characterId";
-                cmd.Parameters.AddWithValue("@characterId", character.Id);
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM character_active_buffs WHERE character_id = @characterId";
+            command.Parameters.AddWithValue("@characterId", character.Id);
 
-                using var reader = cmd.ExecuteReader();
-                var buffRows = new List<(uint buffId, uint casterId, uint skillId,
-                    ushort abLevel, int duration, int timeLeft, int charge,
-                    bool realTime, DateTime savedAt)>();
+            using (var reader = command.ExecuteReader())
+            {
+                var casterKindColumn = -1;
+                var casterLifeColumn = -1;
+                for (var column = 0; column < reader.FieldCount; column++)
+                {
+                    if (reader.GetName(column) == "caster_kind")
+                        casterKindColumn = column;
+                    else if (reader.GetName(column) == "caster_life")
+                        casterLifeColumn = column;
+                }
 
                 while (reader.Read())
                 {
-                    buffRows.Add((
-                        buffId: reader.GetUInt32("buff_id"),
-                        casterId: reader.GetUInt32("caster_id"),
-                        skillId: reader.GetUInt32("skill_id"),
-                        abLevel: reader.GetUInt16("ab_level"),
-                        duration: reader.GetInt32("duration"),
-                        timeLeft: reader.GetInt32("time_left"),
-                        charge: reader.GetInt32("charge"),
-                        realTime: reader.GetBoolean("real_time"),
-                        savedAt: reader.GetDateTime("saved_at")
-                    ));
-                }
-
-                reader.Close();
-
-                foreach (var row in buffRows)
-                {
-                    var buffTemplate = SkillManager.Instance.GetBuffTemplate(row.buffId);
-                    if (buffTemplate == null)
+                    var casterKind = casterKindColumn >= 0
+                        ? (PersistedBuffSourceKind)reader.GetByte(casterKindColumn)
+                        : PersistedBuffSourceKind.Legacy;
+                    Guid? casterLife = null;
+                    if (casterLifeColumn >= 0)
                     {
-                        Logger.Warn($"LoadActiveBuffs: BuffTemplate {row.buffId} not found, skipping");
-                        continue;
-                    }
-
-                    // Calculate remaining time
-                    int remainingMs;
-                    if (row.realTime)
-                    {
-                        // RealTime: subtract offline time
-                        var offlineMs = (int)(DateTime.UtcNow - row.savedAt).TotalMilliseconds;
-                        remainingMs = row.timeLeft - offlineMs;
-
-                        if (remainingMs <= 0)
+                        casterLife = reader.GetValue(casterLifeColumn) switch
                         {
-                            Logger.Debug($"LoadActiveBuffs: RealTime buff {row.buffId} expired offline");
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        // GameTime: timer was paused → restore full remaining time
-                        remainingMs = row.timeLeft;
+                            Guid life => life,
+                            string value when Guid.TryParse(value, out var life) => life,
+                            _ => null
+                        };
                     }
 
-                    if (remainingMs <= 0)
-                        continue;
-
-                    // Check if buff is already active (e.g. from passive skills)
-                    if (CheckBuff(row.buffId))
-                    {
-                        Logger.Debug($"LoadActiveBuffs: Buff {row.buffId} already active, skipping");
-                        continue;
-                    }
-
-                    // Create and apply the buff
-                    var casterObj = new SkillCasterUnit(character.ObjId);
-                    var buff = new Buff(character, character, casterObj,
-                        buffTemplate, null, DateTime.UtcNow)
-                    {
-                        AbLevel = row.abLevel,
-                        Duration = remainingMs,
-                        Charge = row.charge > 0 ? row.charge : buffTemplate.InitMinCharge
-                    };
-
-                    AddBuff(buff, forcedDuration: remainingMs);
-                    restoredCount++;
-
-                    Logger.Debug($"LoadActiveBuffs: Restored buff {row.buffId} ({remainingMs}ms) for char {character.Id}");
+                    rows.Add(new PersistedBuff(reader.GetUInt32("buff_id"), casterKind, reader.GetUInt32("caster_id"),
+                        casterLife, reader.GetUInt32("skill_id"), reader.GetUInt16("ab_level"), reader.GetInt32("duration"),
+                        reader.GetInt32("time_left"), reader.GetInt32("charge"), reader.GetInt32("stack_count"),
+                        reader.GetBoolean("real_time"), reader.GetDateTime("saved_at")));
                 }
             }
 
-            // Delete saved buffs — they are now active again
-            using (var deleteCmd = connection.CreateCommand())
+            var restoredCount = 0;
+            var manager = SkillManager.Instance;
+            var now = DateTime.UtcNow;
+            foreach (var row in rows)
             {
-                deleteCmd.CommandText =
-                    "DELETE FROM `character_active_buffs` WHERE `character_id` = @characterId";
-                deleteCmd.Parameters.AddWithValue("@characterId", character.Id);
-                deleteCmd.ExecuteNonQuery();
+                if (manager.GetBuffTemplate(row.BuffId) is not { } template)
+                {
+                    Logger.Warn($"LoadActiveBuffs: BuffTemplate {row.BuffId} not found, skipping");
+                    continue;
+                }
+
+                var skill = row.SkillId != 0 ? manager.GetSkillTemplate(row.SkillId) : null;
+                var buff = row.CreateBuff(character, template, skill, FindOnlineCaster, now);
+                if (buff == null)
+                    continue;
+
+                AddBuff(buff);
+                if (buff.InUse)
+                    restoredCount++;
+            }
+
+            // Keep the prior snapshot until a successful save replaces it. A disconnect
+            // during selection can stop restoration before all buffs are active.
+            lock (_lock)
+            {
+                if (!_worldEffectsDetached)
+                    _persistentBuffsLoaded = true;
             }
 
             if (restoredCount > 0)
@@ -1115,37 +1538,64 @@ public class Buffs : IBuffs
         }
     }
 
+    private static Character FindOnlineCaster(uint characterId)
+    {
+        var character = WorldManager.Instance.GetCharacterById(characterId);
+        return character is { IsOnline: true } ? character : null;
+    }
+
     /// <summary>
-    /// Cancels all running buff timers (DispelTasks) without triggering the normal
-    /// dispel/exit flow. Called during logout.
+    /// Detaches runtime buff effects before logout while keeping the buffs available for saving.
     /// </summary>
     public void CancelAllEffectTasks()
     {
         Buff[] effects;
         lock (_lock)
         {
+            if (_worldEffectsDetached)
+                return;
+
+            _worldEffectsDetached = true;
+            s_crowdHolders.Remove(this);
             effects = _effects.ToArray();
         }
 
         foreach (var buff in effects)
         {
-            if (buff == null)
-                continue;
-
-            try
-            {
-                TaskManager.Instance.RemoveTasks(task => {
-                    if (task is AAEmu.Game.Models.Tasks.Skills.DispelTask dt
-                        && dt.Effect.Target is Buff b)
-                        return b == buff;
-                    return false;
-                });
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(ex, $"Error cancelling tasks for buff {buff.Template?.Id}");
-            }
+            buff.StopWorldEffects();
+            if (buff.IsCrowdGrant)
+                RemovePermanentCrowdGrant(buff);
         }
+
+        if (GetOwner() is Unit owner)
+            owner.Events.DetachBuffSource();
+    }
+
+    internal void ResumeAfterLogout()
+    {
+        Buff[] effects;
+        lock (_lock)
+        {
+            if (!_worldEffectsDetached)
+                return;
+
+            effects = _effects.ToArray();
+        }
+
+        // Returning to character selection can reuse the same Character object.
+        // Unregister bonuses and events from the previous session before loading.
+        foreach (var buff in effects)
+            buff.Exit(replace: true);
+
+        lock (_lock)
+        {
+            _toleranceCounters.Clear();
+            _persistentBuffsLoaded = false;
+            _worldEffectsDetached = false;
+        }
+
+        if (GetOwner() is Unit owner)
+            owner.Events.ResumeBuffSource();
     }
     #endregion
 }

@@ -9,6 +9,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Housing;
 using AAEmu.Game.Models.Game.InstantGame;
 using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Game.Units.Route;
 
 namespace AAEmu.Game.Core.Packets.C2G;
@@ -26,6 +27,8 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             // Force player into main_world when coming from character select
             character.Transform.InstanceId = WorldManager.DefaultInstanceId;
             // Despawn any old pets this character might have even before loading it
+            if (character.Buffs is Buffs buffs)
+                buffs.ResumeAfterLogout();
             character.Load();
             character.Connection = Connection;
             var houses = Connection.Houses.Values.Where(x => x.OwnerId == character.Id).ToArray();
@@ -67,6 +70,7 @@ public class CSSelectCharacterPacket() : GamePacket(CSOffsets.CSSelectCharacterP
             //    character.Attendances.Send();
 
             Connection.SendPacket(new CharacterStatePacket(character));
+            character.SkillActiveTypes.SendOnLogin();
             //Connection.SendPacket(new SCAbilitySetUsableSlotCountUpdatedPacket(character.UsableAbilitySetSlotCount));
             //Connection.SendPacket(new SCAbilitySetAllInfoPacket(character));
             Connection.ActiveChar.Inventory.Send();

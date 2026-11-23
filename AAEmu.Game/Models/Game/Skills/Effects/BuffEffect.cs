@@ -13,17 +13,20 @@ public class BuffEffect : EffectTemplate
     public int Stack { get; set; }
     public int AbLevel { get; set; }
     public BuffTemplate Buff { get; set; }
-    public override uint BuffId => Buff.Id;
-    public override bool OnActionTime => Buff.Tick > 0;
+    public override uint BuffId => Buff?.Id ?? 0;
+    public override bool OnActionTime => Buff?.Tick > 0;
 
     public override void Apply(BaseUnit caster, SkillCaster casterObj, BaseUnit target, SkillCastTarget targetObj,
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
+        if (Buff == null || target == null)
+            return;
+
         if (target is Unit trg)
         {
             var hitType = SkillHitType.Invalid;
-            if ((source.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
+            if ((source?.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
                 && (source.Skill?.SkillMissed(trg.ObjId) ?? false))
             {
                 return;
@@ -43,16 +46,14 @@ public class BuffEffect : EffectTemplate
             }
         }
 
-        if (Buff.RequireBuffId > 0 && !target.Buffs.CheckBuff(Buff.RequireBuffId))
-            return; // TODO send error?
-        if (target.Buffs.CheckBuffImmune(Buff.Id))
-            return; // TODO send error of immune?
+        if (!Buff.CanApplyTo(target, caster, source?.Skill))
+            return;
 
         ushort abLevel = 1;
         if (caster is Character character)
         {
             Logger.Warn($"BuffEffect {Buff.Id}");
-            if (source.Skill != null)
+            if (source?.Skill != null)
             {
                 var template = source.Skill.Template;
                 var abilityLevel = character.GetAbLevel(source.Skill.Template.AbilityId);
@@ -64,14 +65,10 @@ public class BuffEffect : EffectTemplate
                 //Dont allow lower than minimum ablevel for skill or infinite debuffs can happen
                 abLevel = (ushort)Math.Max(template.AbilityLevel, (ushort)abLevel);
             }
-            else if (source.Buff != null)
-            {
-                //not sure?
-            }
         }
         else
         {
-            if (source.Skill != null)
+            if (source?.Skill != null)
             {
                 abLevel = (ushort)source.Skill.Template.AbilityLevel;
             }
@@ -82,7 +79,11 @@ public class BuffEffect : EffectTemplate
         //if (Buff.Kind == BuffKind.Bad && !caster.CanAttack(target) && caster != target)
         //    return;
 
-        target.Buffs.AddBuff(new Buff(target, caster, casterObj, Buff, source.Skill, time) { AbLevel = abLevel });
+        target.Buffs.AddBuff(new Buff(target, caster, casterObj, Buff, source?.Skill, time)
+        {
+            AbLevel = abLevel,
+            Stack = Math.Max(1, Stack)
+        });
 
         // Check if a bad buff was applied to a friendly faction (bloodlust)
         var relationToTarget = caster?.GetRelationStateTo(target) ?? RelationState.Neutral;

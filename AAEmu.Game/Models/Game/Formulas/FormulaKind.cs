@@ -47,4 +47,5 @@ public enum FormulaKind
     EloRatingCalculation = 43,
     BlessUthstinConsumeItemNum = 44,
     BlessUthstinExtendMaxStat = 45,
+    ResetHeirSkillCost = 52,
 };

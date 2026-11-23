@@ -14,10 +14,12 @@ using NLog;
 
 namespace AAEmu.Game.Models.Game.Items.Containers;
 
-public class ItemContainer
+public partial class ItemContainer
 {
     protected static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
+    private readonly Lock _consumeLock = new();
+    internal Lock InventoryMutationGate => _consumeLock;
     private int _containerSize;
     private int _freeSlotCount;
     private ICharacter _owner;
@@ -322,6 +324,22 @@ public class ItemContainer
     /// <returns>Fails on Full Inventory or if target slot is invalid</returns>
     public bool AddOrMoveExistingItem(ItemTaskType taskType, Item item, int preferredSlot = -1)
     {
+        var source = item?.HoldingContainer;
+        // Normal transfers between players stage the item through trade or mail.
+        var bag = source?.ContainerType == SlotType.Inventory ? source : ContainerType == SlotType.Inventory ? this : null;
+        if (bag == null)
+            return AddOrMoveExistingItemCore(taskType, item, preferredSlot);
+
+        lock (bag._consumeLock)
+        {
+            if (item is not { Count: > 0 } || item.HoldingContainer != source)
+                return false;
+            return AddOrMoveExistingItemCore(taskType, item, preferredSlot);
+        }
+    }
+
+    private bool AddOrMoveExistingItemCore(ItemTaskType taskType, Item item, int preferredSlot)
+    {
         if (item == null)
         {
             return false;
@@ -473,6 +491,19 @@ public class ItemContainer
     /// <returns></returns>
     public bool RemoveItem(ItemTaskType task, Item item, bool releaseIdAsWell)
     {
+        if (item?.HoldingContainer is not { ContainerType: SlotType.Inventory } bag)
+            return RemoveItemCore(task, item, releaseIdAsWell);
+
+        lock (bag._consumeLock)
+        {
+            if (item.HoldingContainer != bag)
+                return false;
+            return RemoveItemCore(task, item, releaseIdAsWell);
+        }
+    }
+
+    private bool RemoveItemCore(ItemTaskType task, Item item, bool releaseIdAsWell)
+    {
         if (item?.HoldingContainer == null)
         {
             return false;
@@ -485,12 +516,7 @@ public class ItemContainer
 
         var oldSlotNumber = (byte)item.Slot;
 
-        // Handle items that can expire
-        GamePacket sync = null;
-        if (item.ExpirationOnlineMinutesLeft > 0.0 || item.ExpirationTime > DateTime.UtcNow || item.UnpackTime > DateTime.UtcNow)
-        {
-            sync = ItemManager.ExpireItemPacket(item);
-        }
+        var sync = PrepareItemRemovalExpirationSync(item);
 
         if (sync != null)
         {
@@ -517,6 +543,14 @@ public class ItemContainer
         return res;
     }
 
+    private static GamePacket PrepareItemRemovalExpirationSync(Item item)
+    {
+        var now = DateTime.UtcNow;
+        return item.ExpirationOnlineMinutesLeft > 0.0 || item.ExpirationTime > now || item.UnpackTime > now
+            ? ItemManager.ExpireItemPacket(item)
+            : null;
+    }
+
     /// <summary>
     /// Destroys amountToConsume amount of item units with template templateId from the container
     /// </summary>
@@ -527,7 +561,99 @@ public class ItemContainer
     /// <returns>The amount of items that was actually consumed, 0 when failed or not found</returns>
     public int ConsumeItem(ItemTaskType taskType, uint templateId, int amountToConsume, Item preferredItem)
     {
-        if (!GetAllItemsByTemplate(templateId, -1, out var foundItems, out _))
+        lock (_consumeLock)
+            return ConsumeItemCore(taskType, templateId, amountToConsume, preferredItem, requireExact: false);
+    }
+
+    internal bool TryConsumeExact(ItemTaskType taskType, uint templateId, int amountToConsume, Item preferredItem = null)
+    {
+        if (amountToConsume <= 0)
+            return false;
+
+        lock (_consumeLock)
+            return ConsumeItemCore(taskType, templateId, amountToConsume, preferredItem, requireExact: true) == amountToConsume;
+    }
+
+    internal bool TryRechargeEquipment(uint ownerId, ulong reagentId, uint skillId, ulong equipmentId, DateTime time,
+        out Item reagent, out EquipItem equipment)
+    {
+        lock (_consumeLock)
+        {
+            reagent = GetOwnedBagItem(ownerId, reagentId);
+            equipment = GetOwnedBagItem(ownerId, equipmentId) as EquipItem;
+            if (!IsSkillReagent(reagent, skillId) ||
+                equipment?.Template is not EquipItemTemplate { RechargeBuffId: > 0 } template ||
+                ReferenceEquals(reagent, equipment))
+                return false;
+
+            var restrictedReagentId = template switch
+            {
+                ArmorTemplate armor => armor.RechargeRestrictItemId,
+                WeaponTemplate weapon => weapon.RechargeRestrictItemId,
+                AccessoryTemplate accessory => accessory.RechargeRestrictItemId,
+                _ => -1
+            };
+            if (restrictedReagentId != 0 && restrictedReagentId != reagent.TemplateId)
+                return false;
+
+            if (ConsumeItemCore(ItemTaskType.SkillReagents, reagent.TemplateId, 1, reagent, requireExact: true) != 1)
+                return false;
+
+            equipment.ChargeStartTime = time;
+            if (template.BindType == ItemBindType.BindOnUnpack ||
+                (template.BindType == ItemBindType.BindOnPickupPack && equipment.HasFlag(ItemFlag.Unpacked)))
+                equipment.UnpackTime = time;
+            equipment.ChargeTime = time;
+            equipment.ChargeCount = template.ChargeCount;
+            return true;
+        }
+    }
+
+    internal ErrorMessageType RevertItemLook(uint ownerId, ulong reagentId, uint skillId, ulong itemId,
+        out Item reagent, out Item item, out bool clearedUcc)
+    {
+        lock (_consumeLock)
+        {
+            reagent = GetOwnedBagItem(ownerId, reagentId);
+            item = GetOwnedBagItem(ownerId, itemId);
+            clearedUcc = false;
+            var equipment = item as EquipItem;
+            var equipTemplate = equipment?.Template as EquipItemTemplate;
+            if (!IsSkillReagent(reagent, skillId) || ReferenceEquals(reagent, item) ||
+                (equipTemplate == null && item is not Backpack { IsGlider: true }) ||
+                item.ImageItemTemplateId == 0 || item.ImageItemTemplateId == item.TemplateId)
+                return ErrorMessageType.FailedToChangeItemLook;
+            if (item.HasFlag(ItemFlag.Secure))
+                return ErrorMessageType.ItemSecureCondition;
+
+            if (ConsumeItemCore(ItemTaskType.SkillReagents, reagent.TemplateId, 1, reagent, requireExact: true) != 1)
+                return ErrorMessageType.FailedToUseItem;
+
+            clearedUcc = item.UccId != 0 || item.HasFlag(ItemFlag.HasUCC);
+            item.ImageItemTemplateId = 0;
+            if (equipTemplate != null)
+                equipment.DyeItemId = equipTemplate.DefaultDyeItemId;
+            item.UccId = 0;
+            return ErrorMessageType.NoErrorMessage;
+        }
+    }
+
+    private Item GetOwnedBagItem(uint ownerId, ulong itemId)
+    {
+        if (ContainerType == SlotType.Inventory && GetItemByItemId(itemId) is { SlotType: SlotType.Inventory } item &&
+            item.OwnerId == ownerId && item.HoldingContainer == this)
+            return item;
+        return null;
+    }
+
+    private static bool IsSkillReagent(Item item, uint skillId) =>
+        item is { Count: > 0, Template: { UseSkillId: > 0, UseSkillAsReagent: true } } &&
+        item.Template.UseSkillId == skillId && (item.Count != 1 || item.CanDestroy());
+
+    private int ConsumeItemCore(ItemTaskType taskType, uint templateId, int amountToConsume, Item preferredItem, bool requireExact)
+    {
+        if (!GetAllItemsByTemplate(templateId, -1, out var foundItems, out var available) ||
+            (requireExact && available < amountToConsume))
         {
             return 0; // Nothing found
         }
@@ -633,7 +759,16 @@ public class ItemContainer
     /// <param name="crafterId"></param>
     /// <param name="preferredSlot"></param>
     /// <returns></returns>
-    public bool AcquireDefaultItemEx(ItemTaskType taskType, uint templateId, int amountToAdd, int gradeToAdd, out List<Item> newItemsList, out List<Item> updatedItemsList, uint crafterId, int preferredSlot = -1)
+    public bool AcquireDefaultItemEx(ItemTaskType taskType, uint templateId, int amountToAdd, int gradeToAdd, out List<Item> newItemsList, out List<Item> updatedItemsList, uint crafterId, int preferredSlot = -1, Action<Item> prepareNewItem = null)
+    {
+        if (ContainerType != SlotType.Inventory)
+            return AcquireDefaultItemCore(taskType, templateId, amountToAdd, gradeToAdd, out newItemsList, out updatedItemsList, crafterId, preferredSlot, prepareNewItem);
+
+        lock (_consumeLock)
+            return AcquireDefaultItemCore(taskType, templateId, amountToAdd, gradeToAdd, out newItemsList, out updatedItemsList, crafterId, preferredSlot, prepareNewItem);
+    }
+
+    private bool AcquireDefaultItemCore(ItemTaskType taskType, uint templateId, int amountToAdd, int gradeToAdd, out List<Item> newItemsList, out List<Item> updatedItemsList, uint crafterId, int preferredSlot, Action<Item> prepareNewItem)
     {
         newItemsList = [];
         updatedItemsList = [];
@@ -753,6 +888,7 @@ public class ItemContainer
                 }
             }
 
+            prepareNewItem?.Invoke(newItem);
             if (AddOrMoveExistingItem(ItemTaskType.Invalid, newItem, prefSlot)) // Task set to invalid as we send our own packets inside this function
             {
                 itemTasks.Add(new ItemAdd(newItem));

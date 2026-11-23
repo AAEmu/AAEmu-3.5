@@ -79,7 +79,16 @@ public static class SlaveCollisionDamage
         slave.ReduceCurrentHp(attacker ?? slave, damage);
         var dealt = oldHp - slave.Hp;
         if (dealt > 0)
+        {
             slave.BroadcastPacket(new SCEnvDamagePacket(EnvSource.Collision, slave.ObjId, (uint)dealt), true);
+            slave.Events.OnDamagedCollision(slave, new OnDamagedCollisionArgs
+            {
+                Attacker = attacker,
+                Receiver = slave,
+                Amount = dealt,
+                Impact = impact
+            });
+        }
     }
 
     private static double PercentGain(Slave slave, UnitAttribute attribute)

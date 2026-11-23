@@ -14,7 +14,7 @@ namespace AAEmu.Game.Core.Managers;
 /// Метод <c>Load()</c> отсутствует; данные аккаунта хранятся в MySQL-таблице <c>accounts</c>, а не в <c>compact.sqlite3</c> / <c>compact.server.table.sqlite3</c>.
 /// Поля таблицы accounts: account_id, access_level, labor, credits, loyalty, last_updated, last_login, last_labor_tick, last_credits_tick, last_loyalty_tick, divine_clock_time, divine_clock_taken.
 /// </summary>
-public class AccountManager(ITickManager tickManager, ITimedRewardsManager timedRewardsManager) : Singleton<AccountManager>, IAccountManager
+public partial class AccountManager(ITickManager tickManager, ITimedRewardsManager timedRewardsManager) : Singleton<AccountManager>, IAccountManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 

@@ -1,5 +1,6 @@
 ﻿using AAEmu.Commons.Exceptions;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Faction;
 using AAEmu.Game.Models.Game.Items;
@@ -48,13 +49,13 @@ public class PlotCondition
             PlotConditionType.CombatDiceResult => ConditionCombatDiceResult(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3, skill), // Every CombatDiceResult is a NotCondition -> false makes it true.
             PlotConditionType.InstrumentType => ConditionInstrumentType(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Range => ConditionRange(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
-            PlotConditionType.Variable => ConditionVariable(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
+            PlotConditionType.Variable => ConditionVariable(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3, skill),
             PlotConditionType.UnitAttrib => ConditionUnitAttrib(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Actability => ConditionActability(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Stealth => ConditionStealth(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Visible => ConditionVisible(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.ABLevel => ConditionAbLevel(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
-            PlotConditionType.CastingUseable => ConditionCastingUseable(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
+            PlotConditionType.CastingUseable => ConditionCastingUseable(skill, Param1, Param2),
             PlotConditionType.HighAbilityResource => ConditionHighAbilityResource(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.UnitReqs => ConditionUnitReqs(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             _ => true
@@ -223,19 +224,20 @@ public class PlotCondition
 
     // 12
     private static bool ConditionVariable(BaseUnit caster, SkillCaster casterCaster, BaseUnit target,
-        SkillCastTarget targetCaster, SkillObject skillObject, int variableIndex, int operation, int compareValue)
+        SkillCastTarget targetCaster, SkillObject skillObject, int variableIndex, int operation, int compareValue, Skill skill)
     {
-        if (caster is not Unit casterUnit)
-        {
-            Logger.Warn($"PlotCondition Variable check without caster being a Unit");
+        var state = skill?.ActivePlotState ?? (caster as Unit)?.ActivePlotState;
+        if (state == null)
             return false;
-        }
 
-        var variableValue = casterUnit.ActivePlotState.Variables[variableIndex];
-        // There is a high chance this is not implemented correctly ...
-        // If refactoring. See SpecialEffect -> SetVariable as well
+        if (variableIndex == 12)
+            return CompareWithOperator(state.LastEffectedTargetCount, operation, compareValue);
+        if (variableIndex == 11)
+            return CompareWithOperator(0, operation, compareValue);
+        if (variableIndex < 0 || variableIndex >= state.Variables.Length)
+            return false;
 
-        return CompareWithOperator(variableValue, operation, compareValue);
+        return CompareWithOperator(state.Variables[variableIndex], operation, compareValue);
     }
 
     // 13
@@ -307,19 +309,17 @@ public class PlotCondition
     }
 
     // 18
-    private bool ConditionCastingUseable(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
-    {
-        return true; // TODO придумать, что тут надо сделать
-    }
+    private static bool ConditionCastingUseable(Skill skill, int minPercent, int maxPercent) =>
+        skill?.ActivePlotState?.CastingUsePercent is { } progress && progress >= minPercent && progress <= maxPercent;
     // 19
     private bool ConditionHighAbilityResource(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
     {
-        return true; // TODO придумать, что тут надо сделать
+        return caster is Unit unit && Skill.IsHighAbilityResourceInRange(unit.HighAbilityRsc, param1, param2);
     }
     // 20
     private bool ConditionUnitReqs(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, int param1, int param2, int param3)
     {
-        return true; // TODO придумать, что тут надо сделать
+        return UnitRequirementsGameData.Instance.CanPassPlotCondition(this, caster, target);
     }
 
     /// <summary>

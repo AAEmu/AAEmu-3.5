@@ -26,10 +26,11 @@ public class CharacterStatePacket : GamePacket
         _character.Write(stream);            //Character_List_Packet_48B0
 
         stream.Write(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xDB, 0xFB, 0x17, 0xC0 }); //angles
-        stream.Write(_character.Experience);     // exp
-        stream.Write(_character.HeirExp);        // hierExp add in 3.5.0.3 NA
-        stream.Write(_character.RecoverableExp); // recoverableExp
-        stream.Write(0u);                        // penaltiedExp
+        var progression = _character.CaptureExperienceState();
+        stream.Write(progression.Experience);
+        stream.Write(progression.HeirExp);
+        stream.Write(progression.RecoverableExp);
+        stream.Write(progression.PenaltiedExp);
         stream.Write(_character.ReturnDistrictId);        // returnDistrictId
         stream.Write(_character.ReturnDistrictId);        // returnDistrict -> type(id)
         stream.Write(_character.ResurrectionDistrictId);  // resurrectionDistrict -> type(id)
@@ -86,16 +87,7 @@ public class CharacterStatePacket : GamePacket
         stream.Write((byte)0);          // usableAbilSetSlotCount
 
         #region read_1EF0
-        for (var i = 0; i < 2; i++)
-        {
-            for (var j = 0; j < 13; j++)
-            {
-                stream.Write(true);    // active
-                stream.Write((byte)0); // order
-                stream.Write((byte)0); // levelUpStatus
-                stream.Write(0u);      // highAbilityExp
-            }
-        }
+        WriteHighAbilityInfos(stream, _character);
         #endregion
 
         #region read_1F80
@@ -109,5 +101,28 @@ public class CharacterStatePacket : GamePacket
         stream.Write(0);        // applySpecialCount
         #endregion
         return stream;
+    }
+
+    internal static void WriteHighAbilityInfos(PacketStream stream, Character character)
+    {
+        var selected = character.Abilities?.CaptureHighAbilities() ??
+                       (character.HighAbility1, character.HighAbility2, character.HighAbility3);
+        var experience = character.CaptureExperienceState().HeirExp;
+        for (var kind = 0; kind < 2; kind++)
+        {
+            for (var ability = 0; ability < 13; ability++)
+            {
+                var active = kind == 1 && ability > 0 &&
+                             ((byte)selected.Item1 == ability || (byte)selected.Item2 == ability ||
+                              (byte)selected.Item3 == ability);
+                byte order = 0;
+                if (active && character.Abilities?.Abilities.TryGetValue((AbilityType)ability, out var baseAbility) == true)
+                    order = unchecked((byte)(baseAbility.Order + 1));
+                stream.Write(active);
+                stream.Write(order);
+                stream.Write((byte)0);
+                stream.Write(experience);
+            }
+        }
     }
 }

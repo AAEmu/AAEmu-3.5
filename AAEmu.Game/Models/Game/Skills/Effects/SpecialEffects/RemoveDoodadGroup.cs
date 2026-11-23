@@ -1,10 +1,11 @@
-﻿using AAEmu.Game.Models.Game.Char;
-using AAEmu.Game.Models.Game.Units;
+﻿using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class RemoveDoodadGroup : SpecialEffectAction
 {
+    protected override SpecialType SpecialEffectActionType => SpecialType.RemoveDoodadGroup;
+
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
         BaseUnit target,
@@ -13,12 +14,17 @@ public class RemoveDoodadGroup : SpecialEffectAction
         Skill skill,
         SkillObject skillObject,
         DateTime time,
-        int value1,
-        int value2,
+        int doodadGroupId,
+        int radiusMillimeters,
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: RemoveDoodadGroup value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (doodadGroupId <= 0)
+            return;
+
+        foreach (var doodad in DoodadRemovalResolver.FindInRange(caster, target, skill, radiusMillimeters))
+            if (doodad.Template?.GroupId == (uint)doodadGroupId &&
+                DoodadRemovalResolver.IsLooseInWorld(doodad, caster.ParentWorld))
+                doodad.Delete();
     }
 }

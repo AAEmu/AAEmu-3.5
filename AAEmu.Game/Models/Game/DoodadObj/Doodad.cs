@@ -69,7 +69,7 @@ method public void Use(BaseUnit caster, uint skillId) runs in a loop:
  */
 namespace AAEmu.Game.Models.Game.DoodadObj;
 
-public class Doodad : BaseUnit
+public partial class Doodad : BaseUnit
 {
     public static readonly HashSet<string> FuncDrivenLootFuncTypes =
     [
@@ -84,6 +84,7 @@ public class Doodad : BaseUnit
     private float _scale;
     public byte Flag { get; set; }
     private int _data;
+    private readonly Lock _phaseLock = new();
     private uint _funcGroupId;
 
     /// <summary>
@@ -130,8 +131,11 @@ public class Doodad : BaseUnit
         get => _funcGroupId;
         set
         {
-            if (value != _funcGroupId)
+            lock (_phaseLock)
             {
+                if (value == _funcGroupId)
+                    return;
+
                 _funcGroupId = value;
                 PhaseTime = DateTime.UtcNow; // Save PhaseTime at start of new phase (group)
                 if (IsPersistent)
@@ -930,11 +934,12 @@ public class Doodad : BaseUnit
     /// </summary>
     public override void Delete()
     {
-        if (_deleted)
-            return;
-
-        // Mark as deleted early to avoid re-entry/races (e.g. concurrent packet handlers).
-        _deleted = true;
+        lock (_phaseLock)
+        {
+            if (_deleted)
+                return;
+            _deleted = true;
+        }
 
         base.Delete();
         var triggersToRemove = new List<AreaTrigger>(AttachAreaTriggers);

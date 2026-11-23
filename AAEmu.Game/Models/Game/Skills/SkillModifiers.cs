@@ -8,32 +8,50 @@ public class SkillModifiers
 {
     private readonly Dictionary<uint, List<SkillModifier>> _modifiersBySkillId = [];
     private readonly Dictionary<uint, List<SkillModifier>> _modifiersByTagId = [];
+    private readonly object _lock = new();
 
     public double ApplyModifiers(Skill skill, SkillAttribute attribute, double baseValue)
     {
-        var endValue = baseValue;
-
-        var modifiers = GetModifiersForSkillIdWithAttribute(skill.Template.Id, attribute).OrderBy(mod => mod.UnitModifierType).ToList();
-
-        foreach (var tag in SkillManager.Instance.GetSkillTags(skill.Template.Id))
+        lock (_lock)
         {
-            modifiers.AddRange(GetModifiersForTagIdWithAttribute(tag, attribute));
-        }
-
-        foreach (var modifier in modifiers)
-        {
-            switch (modifier.UnitModifierType)
+            var skillId = skill.Template.Id;
+            var value = baseValue;
+            if (_modifiersBySkillId.TryGetValue(skillId, out var bySkill))
             {
-                case UnitModifierType.Percent:
-                    endValue += endValue * (modifier.Value / 100.0f);
-                    break;
-                case UnitModifierType.Value:
-                    endValue += modifier.Value;
-                    break;
-            }
-        }
+                foreach (var modifier in bySkill)
+                    if (modifier.SkillAttribute == attribute && modifier.UnitModifierType == UnitModifierType.Value)
+                        value += modifier.Value;
 
-        return endValue;
+                foreach (var modifier in bySkill)
+                    if (modifier.SkillAttribute == attribute && modifier.UnitModifierType == UnitModifierType.Percent)
+                        value += value * (modifier.Value / 100f);
+            }
+
+            if (_modifiersByTagId.Count == 0)
+                return value;
+
+            foreach (var tag in SkillManager.Instance.GetSkillTags(skillId))
+            {
+                if (!_modifiersByTagId.TryGetValue(tag, out var byTag))
+                    continue;
+                foreach (var modifier in byTag)
+                {
+                    if (modifier.SkillAttribute != attribute)
+                        continue;
+                    switch (modifier.UnitModifierType)
+                    {
+                        case UnitModifierType.Value:
+                            value += modifier.Value;
+                            break;
+                        case UnitModifierType.Percent:
+                            value += value * (modifier.Value / 100f);
+                            break;
+                    }
+                }
+            }
+
+            return value;
+        }
     }
 
     public List<SkillModifier> GetModifiersForSkillIdWithAttribute(uint skillId, SkillAttribute attribute)
@@ -52,62 +70,77 @@ public class SkillModifiers
 
     public List<SkillModifier> GetModifiersForSkillId(uint skillId)
     {
-        if (_modifiersBySkillId.TryGetValue(skillId, out var id))
-            return id;
-        return null;
+        lock (_lock)
+            return _modifiersBySkillId.TryGetValue(skillId, out var modifiers) ? [.. modifiers] : null;
     }
 
     public List<SkillModifier> GetModifiersForTagId(uint tagId)
     {
-        if (_modifiersByTagId.TryGetValue(tagId, out var id))
-            return id;
-        return null;
+        lock (_lock)
+            return _modifiersByTagId.TryGetValue(tagId, out var modifiers) ? [.. modifiers] : null;
     }
 
     public void AddModifiers(uint ownerId)
     {
         var modifiers = SkillManager.Instance.GetModifiersByOwnerId(ownerId);
-        if (modifiers != null)
+        if (modifiers == null)
+            return;
+        lock (_lock)
         {
             foreach (var modifier in modifiers)
-            {
                 AddModifier(modifier);
-            }
         }
     }
 
     public void RemoveModifiers(uint ownerId)
     {
         var modifiers = SkillManager.Instance.GetModifiersByOwnerId(ownerId);
-        foreach (var modifier in modifiers)
+        if (modifiers == null)
+            return;
+        lock (_lock)
         {
-            RemoveModifier(modifier);
+            foreach (var modifier in modifiers)
+                RemoveModifier(modifier);
         }
     }
 
     public void AddModifier(SkillModifier modifier)
     {
-        if (modifier.SkillId > 0)
+        lock (_lock)
         {
-            if (!_modifiersBySkillId.ContainsKey(modifier.SkillId))
-                _modifiersBySkillId.Add(modifier.SkillId, []);
-            _modifiersBySkillId[modifier.SkillId].Add(modifier);
+            if (modifier.SkillId > 0)
+                AddModifier(_modifiersBySkillId, modifier.SkillId, modifier);
+            if (modifier.TagId > 0)
+                AddModifier(_modifiersByTagId, modifier.TagId, modifier);
+        }
+    }
+
+    private static void AddModifier(Dictionary<uint, List<SkillModifier>> byId, uint id, SkillModifier modifier)
+    {
+        if (!byId.TryGetValue(id, out var modifiers))
+        {
+            modifiers = [];
+            byId.Add(id, modifiers);
         }
 
-        if (modifier.TagId > 0)
-        {
-            if (!_modifiersByTagId.ContainsKey(modifier.TagId))
-                _modifiersByTagId.Add(modifier.TagId, []);
-            _modifiersByTagId[modifier.TagId].Add(modifier);
-        }
+        modifiers.Add(modifier);
     }
 
     public void RemoveModifier(SkillModifier modifier)
     {
-        if (_modifiersBySkillId.TryGetValue(modifier.SkillId, out var skillsById))
-            skillsById.Remove(modifier);
+        lock (_lock)
+        {
+            RemoveModifier(_modifiersBySkillId, modifier.SkillId, modifier);
+            RemoveModifier(_modifiersByTagId, modifier.TagId, modifier);
+        }
+    }
 
-        if (_modifiersByTagId.TryGetValue(modifier.TagId, out var skillsByTag))
-            skillsByTag.Remove(modifier);
+    private static void RemoveModifier(Dictionary<uint, List<SkillModifier>> byId, uint id, SkillModifier modifier)
+    {
+        if (!byId.TryGetValue(id, out var modifiers))
+            return;
+        modifiers.Remove(modifier);
+        if (modifiers.Count == 0)
+            byId.Remove(id);
     }
 }

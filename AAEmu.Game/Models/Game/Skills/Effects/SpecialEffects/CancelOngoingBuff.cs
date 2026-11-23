@@ -5,7 +5,7 @@ namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class CancelOngoingBuff : SpecialEffectAction
 {
-    // protected override SpecialType SpecialEffectActionType => SpecialType.CancelOngoingBuff;
+    protected override SpecialType SpecialEffectActionType => SpecialType.CancelOngoingBuff;
     
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
@@ -20,7 +20,12 @@ public class CancelOngoingBuff : SpecialEffectAction
         int value3,
         int value4)
     {
-        if (caster is Character) { Logger.Debug("Special effects: CancelOngoingBuff value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
-        // TODO caster.Effects.RemoveOngoingBuff();
+        if (target == null)
+            return;
+
+        if (value1 > 0)
+            target.Buffs.RemoveBuffs((uint)value1, int.MaxValue);
+        if (value2 > 0)
+            target.Buffs.RemoveBuff((uint)value2);
     }
 }

@@ -17,6 +17,9 @@ public abstract class EffectTemplate
 
     public abstract bool OnActionTime { get; }
 
+    internal virtual bool HandlesSourceItemConsumption => false;
+    internal virtual bool HandlesItemTemplateConsumption => false;
+
     public abstract void Apply(BaseUnit caster, SkillCaster casterObj, BaseUnit target, SkillCastTarget targetObj,
         CastAction castObj,
         EffectSource source, SkillObject skillObject, DateTime time, CompressedGamePackets packetBuilder = null);

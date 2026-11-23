@@ -21,7 +21,13 @@ public enum BuffEventTriggerKind
     Unmount = 17,
     Kill = 18,
     DamagedCollision = 19,
-    Immotality = 20,
+    Immortality = 20,
     Time = 21,
-    KillAny = 22
+    KillAny = 22,
+    Any = 23,
+    Breaker = 31,
+    DamageMelee = 32,
+    DamageSpell = 33,
+    DamageRanged = 34,
+    DamageSiege = 35
 }

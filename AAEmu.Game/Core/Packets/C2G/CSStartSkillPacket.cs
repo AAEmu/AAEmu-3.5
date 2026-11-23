@@ -1,44 +1,32 @@
 ﻿using AAEmu.Commons.Network;
 using AAEmu.Game.Core.Managers;
-using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
-using AAEmu.Game.Models.Game.DoodadObj.Static;
-using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
-using AAEmu.Game.Models.Game.Skills.Static;
+using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Skills.SkillControllers;
-using AAEmu.Game.Physics.Debug;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Physics.Debug;
 
 namespace AAEmu.Game.Core.Packets.C2G;
 
 public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 5)
 {
+    private static readonly SkillAuthority s_authority = new(SkillAuthorityGameData.Instance);
+
     public override void Read(PacketStream stream)
     {
-        // Ignore if there is no active character set
-        if (Connection.ActiveChar == null)
+        var player = Connection.ActiveChar;
+        if (player == null)
             return;
 
-        // Will delay for 150 Milliseconds to eliminate the hanging of the skill
-        using var source = new CancellationTokenSource();
-        var t = Task.Run(async delegate
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(100), source.Token);
-            return 0;
-        });
-        try
-        {
-            t.Wait();
-        }
-        catch (AggregateException ae)
-        {
-            foreach (var e in ae.InnerExceptions)
-                Logger.Trace("{0}: {1}", e.GetType().Name, e.Message);
-        }
+        // Preserve the existing pacing of incoming skill requests.
+        Thread.Sleep(100);
+        if (!ReferenceEquals(Connection.ActiveChar, player))
+            return;
 
         var skillId = stream.ReadUInt32();
 
@@ -51,133 +39,84 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 5)
         skillCastTarget.Read(stream);
 
         var flag = stream.ReadByte();
-        var flagType = flag & 15;
-        var skillObject = SkillObject.GetByType((SkillObjectType)flagType);
-        if (flagType > 0) skillObject.Read(stream);
+        var skillObject = SkillObject.ReadFrom(stream, flag);
+        var flagType = (int)skillObject.Flag;
 
         HarpoonMechanicsDebug.LogCsStartSkillIfHarpoon(skillId, flag, flagType, skillCaster, skillCastTarget, skillObject);
 
-        if (Connection.ActiveChar != null)
-            Connection.ActiveChar.LastPacketActivityTime = DateTime.UtcNow;
-        var world = Connection.ActiveChar?.ParentWorld ?? WorldManager.Instance.GetWorld(WorldManager.DefaultInstanceId);
-        
-        Logger.Info($"StartSkill: Id {skillId}, flag {flag}, caster={skillCaster.ObjId}, target={skillCastTarget.ObjId}");
+        player.LastPacketActivityTime = DateTime.UtcNow;
+        Logger.Info("StartSkill: Id {0}, flag {1}, caster={2}, target={3}", skillId, flag, skillCaster.ObjId, skillCastTarget.ObjId);
 
-        var skillResult = SkillResult.Success;
-        var skillResultErrorValue = 0u;
-        Skill skill = null;
-
-        if (skillCaster is SkillCasterUnit scu)
+        var skillManager = SkillManager.Instance;
+        var template = skillManager.GetSkillTemplate(skillId);
+        var isDefaultSkill = skillManager.IsDefaultSkill(skillId);
+        var mount = skillCaster is SkillCasterMount ? player.ParentWorld?.GetBaseUnit(skillCaster.ObjId) : null;
+        var result = s_authority.Check(player, skillCaster, skillCastTarget, template, mount, isDefaultSkill,
+            out var mountSkillId, out var mountSeat);
+        if (result != SkillResult.Success)
         {
-            var unit = world.GetUnit(scu.ObjId);
-            if (unit is Character character)
-                Logger.Info($"{character.Name}:{character.ObjId} is using skill={skillId}");
+            Refuse(player, skillId, skillCaster, skillCastTarget, skillObject, result);
+            return;
         }
 
-        if (skillCaster is SkillCasterMount scm)
+        if (skillCaster is SkillCasterUnit && player.IsAutoAttack && skillId == player.AutoAttackTask?.Skill?.Template?.Id)
+            return;
+
+        if (skillCaster is SkillItem)
         {
-            // Mount or Slave skill
-            Logger.Trace($"SkillCasterMount - MountSkillTemplateId {scm.MountSkillTemplateId}");
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
-
-            var caster = world.GetBaseUnit(skillCaster.ObjId);
-            var mate = caster as Mate;
-            var slave = caster as Slave;
-            var mountAttachedSkill = 0u;
-
-            if (mate != null || slave != null)
+            foreach (var effect in template.Effects)
             {
-                // check if it's a mate or slave skill and return its rider/operator related skill
-                mountAttachedSkill = MateGameData.Instance.GetMountAttachedSkills(skillId, Connection.ActiveChar?.AttachedPoint ?? AttachPointKind.None);
+                if (effect.Template is MoveToLocationEffect recall && recall.CheckDestination(player, skillCaster, skillObject) is { } error)
+                {
+                    player.SendErrorMessage(error);
+                    Refuse(player, skillId, skillCaster, skillCastTarget, skillObject, SkillResult.InvalidLocation);
+                    return;
+                }
             }
+        }
 
-            // Use the main skill on the mate/slave
-            var mountPrimaryResult = skill.Use(caster, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-            if (mountPrimaryResult != SkillResult.Success)
-            {
-                // skill.Stop(caster, null, skillCaster);
-            }
-            else if (slave != null)
-            {
-                if (skillId == HarpoonMechanicsDebug.ShipLaunchHarpoonSkillId)
-                    ShipHarpoonRopeController.OnLaunchSucceeded(slave, skillCastTarget, Connection.ActiveChar);
-                else if (skillId == HarpoonMechanicsDebug.ShipCutHarpoonRopeSkillId)
-                    ShipHarpoonRopeController.OnCutRope(slave, Connection.ActiveChar);
-            }
+        var owner = skillCaster is SkillCasterUnit && !isDefaultSkill &&
+                    (player.Skills?.IsLearned(skillId) == true || SkillAuthorityGameData.Instance.TryGetHeirSkill(skillId, out _))
+            ? player
+            : null;
+        var skill = new Skill(template, owner);
+        result = skill.Use(mount ?? player, skillCaster, skillCastTarget, skillObject, false, out var errorValue);
+        if (result != SkillResult.Success)
+        {
+            Refuse(player, skillId, skillCaster, skillCastTarget, skillObject, result, errorValue);
+            return;
+        }
 
-            // If no rider/operator skill is linked, we can stop here
-            if (mountAttachedSkill == 0)
+        if (mount is Slave slave)
+        {
+            if (skillId == HarpoonMechanicsDebug.ShipLaunchHarpoonSkillId)
+                ShipHarpoonRopeController.OnLaunchSucceeded(slave, skillCastTarget, player);
+            else if (skillId == HarpoonMechanicsDebug.ShipCutHarpoonRopeSkillId)
+                ShipHarpoonRopeController.OnCutRope(slave, player);
+        }
+
+        if (mountSkillId != 0)
+        {
+            var riderSkill = MateGameData.Instance.GetAttachedSkillByMountSkillId(mountSkillId, mountSeat);
+            if (riderSkill == 0)
                 return;
 
-            // Use player's currently selected for the rider/operator skill
-            var riderTarget = Connection.ActiveChar.CurrentTarget as Unit;
+            result = player.UseSkill(riderSkill, player.CurrentTarget as Unit ?? player);
+            if (result != SkillResult.Success)
+                Refuse(player, skillId, skillCaster, skillCastTarget, skillObject, result);
+        }
+        else if (skillCaster is SkillCasterUnit && skillId is 2 or 3 or 4)
+        {
+            player.IsAutoAttack = true;
+            player.StartAutoSkill(skill);
+        }
+    }
 
-            // Execute the rider/operator skill as the player using either target or self
-            skillResult = Connection.ActiveChar.UseSkill(mountAttachedSkill, riderTarget ?? Connection.ActiveChar);
-        }
-        else if (Connection.ActiveChar.IsAutoAttack && skillId == Connection.ActiveChar.AutoAttackTask?.Skill?.Template?.Id)
-        {
-            // Same as already executing auto-skill, just send the success result.
-            skill = Connection.ActiveChar.AutoAttackTask.Skill;
-            skillResult = SkillResult.Success;
-        }
-        else if (SkillManager.Instance.IsDefaultSkill(skillId) || SkillManager.Instance.IsCommonSkill(skillId) && skillCaster is not SkillItem)
-        {
-            // Is it a common skill?
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId)); // TODO: переделать / rewrite ...
-            skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-            if (skillResult == SkillResult.Success && skillId < 5000 && skillCaster.ObjId == Connection.ActiveChar.ObjId)
-            {
-                // All basic combat skills are below ID 5000, only 2 (melee),3 (offhand) and 4 (ranged) exist, next actual skill used is 5001
-                Connection.ActiveChar.IsAutoAttack = true;
-                Connection.ActiveChar.StartAutoSkill(skill);
-            }
-        }
-        else if (skillCaster is SkillItem si)
-        {
-            // A skill triggered by an item
-            var player = Connection.ActiveChar;
-            // var item = player.Inventory.GetItemById(si.ItemId);
-            // добавил проверку на ItemBindType.BindOnPickup для записи портала с помощью камина в доме
-            if (si.SkillSourceItem == null || skillId != si.SkillSourceItem.Template.UseSkillId && si.SkillSourceItem.Template.BindType != ItemBindType.BindOnPickup)
-                return;
-            // si.ItemTemplateId = item.TemplateId;
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
-            skillResult = skill.Use(player, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-        }
-        else if (Connection.ActiveChar.Skills.Skills.ContainsKey(skillId))
-        {
-            // Is it one of our learned character skills?
-            var template = SkillManager.Instance.GetSkillTemplate(skillId);
-            skill = new Skill(template, Connection.ActiveChar);
-            skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-        }
-        else if (skillId > 0 && Connection.ActiveChar.Skills.IsVariantOfSkill(skillId))
-        {
-            // Variant of learned skill?
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
-            skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-        }
-        else
-        {
-            // No idea what this is
-            Logger.Warn($"StartSkill: Id {skillId}, undefined use type");
-            // If it's a valid skill cast it. This fixes interactions with quest items/doodads.
-            skill = new Skill(SkillManager.Instance.GetSkillTemplate(skillId));
-            skillResult = skill.Use(Connection.ActiveChar, skillCaster, skillCastTarget, skillObject, false, out skillResultErrorValue);
-        }
-
-        if (skillResult != SkillResult.Success)
-        {
-            // It actually sends a skill started packet, but not a skill fired or stopped
-            var scSkillStartedPacket = new SCSkillStartedPacket(skillId, 0, skillCaster, skillCastTarget, skill, skillObject)
-            {
-                RealCastTimeDiv10 = 0, BaseCastTimeDiv10 = 0
-            };
-            // ExtraData at the end of the packet is used to mark a use error
-            scSkillStartedPacket.SetSkillResult(skillResult);
-            scSkillStartedPacket.SetResultUInt(skillResultErrorValue);
-            Connection.ActiveChar.SendPacket(scSkillStartedPacket);
-        }
+    private static void Refuse(Character player, uint skillId, SkillCaster caster, SkillCastTarget target,
+        SkillObject skillObject, SkillResult result, uint errorValue = 0)
+    {
+        player.SendPacket(new SCSkillStartedPacket(skillId, 0, caster, target, null, skillObject)
+            .SetSkillResult(result)
+            .SetResultUInt(errorValue));
     }
 }

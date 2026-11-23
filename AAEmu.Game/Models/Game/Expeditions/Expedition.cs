@@ -11,6 +11,7 @@ namespace AAEmu.Game.Models.Game.Expeditions;
 public class Expedition : SystemFaction
 {
     private readonly List<uint> _removedMembers = [];
+    private readonly Lock _membershipLock = new();
 
     public List<ExpeditionMember> Members { get; set; } = [];
     public List<ExpeditionRolePolicy> Policies { get; set; } = [];
@@ -18,11 +19,18 @@ public class Expedition : SystemFaction
     public DateTime ProtectTime { get; set; }
     public bool isDisbanded { get; set; } = false;
 
+    internal void AddMember(ExpeditionMember member)
+    {
+        lock (_membershipLock)
+            Members.Add(member);
+    }
+
     public void RemoveMember(ExpeditionMember member)
     {
         var character = WorldManager.Instance.GetCharacterById(member.CharacterId);
         ChatManager.Instance.GetGuildChat(this).LeaveChannel(character);
-        Members.Remove(member);
+        lock (_membershipLock)
+            Members.Remove(member);
         _removedMembers.Add(member.CharacterId);
     }
 
@@ -70,10 +78,13 @@ public class Expedition : SystemFaction
 
     public ExpeditionMember GetMember(uint characterId)
     {
-        foreach (var member in Members)
-            if (member.CharacterId == characterId)
-                return member;
-        return null;
+        lock (_membershipLock)
+        {
+            foreach (var member in Members)
+                if (member.CharacterId == characterId)
+                    return member;
+            return null;
+        }
     }
 
     public void SendPacket(GamePacket packet)

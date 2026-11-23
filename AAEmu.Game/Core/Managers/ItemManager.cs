@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using AAEmu.Commons.Network;
 using AAEmu.Commons.Utils;
 using AAEmu.Commons.Utils.DB;
 using AAEmu.Game.Core.Managers.Id;
@@ -66,8 +67,10 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
     private Dictionary<uint, ItemLookConvert> _itemLookConverts;
     private Dictionary<uint, uint> _holdableItemLookConverts;
     private Dictionary<uint, uint> _wearableItemLookConverts;
+    private readonly Dictionary<int, uint> _gliderItemLookConverts = [];
 
     private Dictionary<uint, ItemProcTemplate> _itemProcTemplates;
+    private readonly Dictionary<uint, List<uint>> _itemProcBindings = [];
     private Dictionary<ArmorType, Dictionary<ItemGrade, ArmorGradeBuff>> _armorGradeBuffs;
     private Dictionary<uint, EquipItemSet> _equipItemSets;
     private Dictionary<uint, uint> _defaultDyeIds;
@@ -91,6 +94,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
     {
         return _templates.GetValueOrDefault(id);
     }
+
+    internal ItemLookConvert GetGliderItemLookConvert(int categoryId) =>
+        _gliderItemLookConverts.TryGetValue(categoryId, out var groupId) ? _itemLookConverts.GetValueOrDefault(groupId) : null;
 
     public EquipItemSet GetEquippedItemSet(uint id)
     {
@@ -345,6 +351,9 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
         return _itemProcTemplates.GetValueOrDefault(templateId);
     }
 
+    internal IReadOnlyList<uint> GetBoundItemProcs(uint itemTemplateId) =>
+        _itemProcBindings.TryGetValue(itemTemplateId, out var procIds) ? procIds : Array.Empty<uint>();
+
     public List<BonusTemplate> GetUnitModifiers(uint itemId)
     {
         if (_itemUnitModifiers.TryGetValue(itemId, out var modifiers))
@@ -531,6 +540,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     {
                         var itemLookConvertId = reader.GetUInt32("item_look_convert_id");
                         var wearableId = reader.GetUInt32("wearable_slot_id");
+                        if (wearableId == 30) // The client's synthetic wearable slot for gliders and wings.
+                            _gliderItemLookConverts.TryAdd(reader.GetInt32("item_category_id"), itemLookConvertId);
                         _wearableItemLookConverts.TryAdd(wearableId, itemLookConvertId);
                     }
                 }
@@ -760,6 +771,24 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
 
                         _itemProcTemplates.Add(template.Id, template);
                     }
+                }
+            }
+
+            _itemProcBindings.Clear();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT item_id, proc_id FROM item_proc_bindings ORDER BY id";
+                using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+                while (reader.Read())
+                {
+                    var itemId = reader.GetUInt32("item_id");
+                    var procId = reader.GetUInt32("proc_id");
+                    if (!_itemProcBindings.TryGetValue(itemId, out var procIds))
+                    {
+                        procIds = [];
+                        _itemProcBindings.Add(itemId, procIds);
+                    }
+                    procIds.Add(procId);
                 }
             }
 
@@ -1082,7 +1111,8 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     while (reader.Read())
                     {
                         var id = reader.GetUInt32("id");
-                        var template = _templates.TryGetValue(id, out var templateRes) ? templateRes : new ItemTemplate();
+                        var template = _templates.TryGetValue(id, out var templateRes) ? templateRes :
+                            MemoryEmber.IsTemplate(id) ? new MemoryEmberTemplate() : new ItemTemplate();
                         template.Id = id;
                         template.Name = reader.IsDBNull("name") ? "" : reader.GetString("name");
                         template.CategoryId = reader.GetInt32("category_id");
@@ -1652,8 +1682,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     if (!item.IsDirty)
                         continue;
 
-                    var details = new Commons.Network.PacketStream();
-                    item.WriteDetails(details);
+                    var details = WriteUserItemDetails(item);
 
                     command.CommandText = "REPLACE INTO items (" +
                         "`id`,`type`,`template_id`,`container_id`,`slot_type`,`slot`,`count`,`details`,`lifespan_mins`,`made_unit_id`," +
@@ -1864,7 +1893,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     Type nClass = null;
                     try
                     {
-                        nClass = Type.GetType(itemType);
+                        nClass = MemoryEmber.IsTemplate(itemTemplateId) ? typeof(MemoryEmber) : Type.GetType(itemType);
                     }
                     catch (Exception ex)
                     {
@@ -1918,8 +1947,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
                     item.CreateTime = reader.GetDateTime("created_at");
                     item.ItemFlags = (ItemFlag)reader.GetByte("flags");
                     item.UccId = reader.GetUInt32("ucc"); // Make sure this UCC is set BEFORE reading details as UccItem needs to be able to override it
-                    var details = (Commons.Network.PacketStream)(byte[])reader.GetValue("details");
-                    item.ReadDetails(details);
+                    ReadUserItemDetails(item, reader.GetValue("details"));
 
                     // Overwrite Fixed-grade items, just to make sure. Retail does not do this, but it just feels better if we do
                     if (item.Template.FixedGrade >= 0)
@@ -1984,6 +2012,33 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
         taskManager.Schedule(itemTimerTask, null, TimeSpan.FromSeconds(1));
 
         _loadedUserItems = true;
+    }
+
+    internal static void ReadUserItemDetails(Item item, object value)
+    {
+        var details = value is DBNull && item is Backpack { IsGlider: true } ? null : (PacketStream)(byte[])value;
+        if (item is MemoryEmber ember)
+            ember.ReadBinding(details);
+        else
+            item.ReadDetails(details);
+    }
+
+    internal static PacketStream WriteUserItemDetails(Item item)
+    {
+        var details = new PacketStream();
+        switch (item)
+        {
+            case MemoryEmber ember:
+                ember.WriteBinding(details);
+                break;
+            case Backpack { IsGlider: true } glider:
+                glider.WriteStoredGliderDetails(details);
+                break;
+            default:
+                item.WriteDetails(details);
+                break;
+        }
+        return details;
     }
 
     /// <summary>

@@ -16,6 +16,9 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
     private Dictionary<uint, List<BuffModifier>> _buffModifiers;
     private Dictionary<uint, BuffTolerance> _buffTolerances;
     private Dictionary<uint, BuffTolerance> _buffTolerancesById;
+    private Dictionary<uint, HashSet<uint>> _immuneBuffTags = [];
+    private Dictionary<uint, HashSet<uint>> _requiredBuffTags = [];
+    private Dictionary<uint, HashSet<uint>> _buffsBrokenByTag = [];
 
     public List<BuffModifier> GetModifiersForBuff(uint ownerId)
     {
@@ -27,11 +30,19 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
         return _buffTolerances.TryGetValue(buffTag, out var tolerance) ? tolerance : null;
     }
 
+    public IReadOnlySet<uint> GetImmuneBuffTags(uint buffId) => _immuneBuffTags.GetValueOrDefault(buffId);
+
+    public IReadOnlySet<uint> GetRequiredBuffTags(uint buffId) => _requiredBuffTags.GetValueOrDefault(buffId);
+    public IReadOnlySet<uint> GetBuffsBrokenByTag(uint tagId) => _buffsBrokenByTag.GetValueOrDefault(tagId);
+
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _buffModifiers = [];
         _buffTolerances = [];
         _buffTolerancesById = [];
+        _immuneBuffTags = ReadBuffTags(connection, "SELECT buff_id AS buff_key, buff_tag_id AS buff_value FROM tagged_immune_buffs");
+        _requiredBuffTags = ReadBuffTags(connection, "SELECT buff_id AS buff_key, buff_tag_id AS buff_value FROM tagged_require_buffs");
+        _buffsBrokenByTag = ReadBuffTags(connection2, "SELECT buff_tag_id AS buff_key, buff_id AS buff_value FROM buff_breakers");
 
         using (var command = connection.CreateCommand())
         {
@@ -113,9 +124,31 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
 
     public void PostLoad()
     {
-        foreach (var buffToleranceId in _buffTolerances.Keys)
+        foreach (var tolerance in _buffTolerances.Values)
         {
-            _buffTolerances[buffToleranceId].Steps = _buffTolerances[buffToleranceId].Steps.OrderBy(st => st.Id).ToList();
+            tolerance.Steps.Sort(static (left, right) => left.Id.CompareTo(right.Id));
         }
+    }
+
+    private static Dictionary<uint, HashSet<uint>> ReadBuffTags(SqliteConnection connection, string query)
+    {
+        Dictionary<uint, HashSet<uint>> buffTags = [];
+        using var command = connection.CreateCommand();
+        command.CommandText = query;
+        using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+        while (reader.Read())
+        {
+            var key = reader.GetUInt32("buff_key");
+            var value = reader.GetUInt32("buff_value");
+            if (!buffTags.TryGetValue(key, out var tags))
+            {
+                tags = [];
+                buffTags.Add(key, tags);
+            }
+
+            tags.Add(value);
+        }
+
+        return buffTags;
     }
 }

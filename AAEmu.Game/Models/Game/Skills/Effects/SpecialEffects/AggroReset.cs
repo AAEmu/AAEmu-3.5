@@ -18,7 +18,18 @@ public class AggroReset : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: AggroReset value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (target is not Unit affected)
+            return;
+
+        var resetAll = value1 == 0 && value2 == 0 && value3 == 0 && value4 == 0;
+        if (resetAll)
+            affected.CharacterTagging.ClearAllTaggers();
+
+        foreach (var entry in affected.AggroTable)
+        {
+            var aggro = entry.Value;
+            if (resetAll || aggro.ResetComponents(value1 != 0, value2 != 0, value3 != 0, value4) <= 0)
+                affected.ClearAggroOfUnit(aggro.Owner);
+        }
     }
 }

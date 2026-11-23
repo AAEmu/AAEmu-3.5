@@ -16,6 +16,7 @@ using AAEmu.Game.Models.Game.Items.Containers;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Plots.Tree;
 using AAEmu.Game.Models.Game.Skills.SkillControllers;
 using AAEmu.Game.Models.Game.Skills.Static;
@@ -35,6 +36,9 @@ public class Unit : BaseUnit, IUnit
 {
     public virtual UnitTypeFlag TypeFlag { get => UnitTypeFlag.None; }
     public virtual BaseUnitType BaseUnitType { get; set; } = BaseUnitType.Invalid;
+
+    [ThreadStatic]
+    private static bool s_resolvingReflection;
 
     public virtual UnitEvents Events { get; }
     public uint ModelId { get; set; }
@@ -68,6 +72,49 @@ public class Unit : BaseUnit, IUnit
     public int Hp { get; set; }
 
     public int HighAbilityRsc { get; set; }
+    private int _maxHighAbilityRsc = 400;
+    public virtual int MaxHighAbilityRsc
+    {
+        get => (int)Math.Clamp(CalculateWithBonuses(_maxHighAbilityRsc, UnitAttribute.MaxHighAbilityResource), 0, int.MaxValue);
+        set => _maxHighAbilityRsc = value;
+    }
+    private readonly Lock _highAbilityResourceLock = new();
+
+    public void ChangeHighAbilityResource(int change)
+    {
+        if (change == 0)
+            return;
+
+        lock (_highAbilityResourceLock)
+        {
+            var next = (int)Math.Clamp((long)HighAbilityRsc + change, 0, Math.Max(0, MaxHighAbilityRsc));
+            if (next == HighAbilityRsc)
+                return;
+
+            HighAbilityRsc = next;
+            BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, next), true);
+        }
+    }
+
+    internal bool TrySpendHighAbilityResource(int amount, out int remaining)
+    {
+        lock (_highAbilityResourceLock)
+        {
+            remaining = HighAbilityRsc;
+            if (amount <= 0 || remaining < amount)
+                return false;
+
+            remaining -= amount;
+            HighAbilityRsc = remaining;
+            return true;
+        }
+    }
+
+    internal void BroadcastHighAbilityResource()
+    {
+        lock (_highAbilityResourceLock)
+            BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, HighAbilityRsc), true);
+    }
 
     public int Hpp
     {
@@ -229,7 +276,19 @@ public class Unit : BaseUnit, IUnit
     public bool ForceAttack { get; set; }
     public bool Invisible { get; set; }
     public uint OwnerId { get; set; }
-    public SkillTask SkillTask { get; set; }
+    private SkillTask _skillTask;
+    public SkillTask SkillTask
+    {
+        get => Volatile.Read(ref _skillTask);
+        set => Volatile.Write(ref _skillTask, value);
+    }
+
+    internal bool TrySetSkillTask(SkillTask task) =>
+        Interlocked.CompareExchange(ref _skillTask, task, null) == null;
+
+    internal bool TryClearSkillTask(SkillTask expected) =>
+        ReferenceEquals(Interlocked.CompareExchange(ref _skillTask, null, expected), expected);
+
     public SkillTask AutoAttackTask { get; set; }
     public DateTime GlobalCooldown { get; set; }
     public bool IsGlobalCooldownDone => GlobalCooldown > DateTime.UtcNow;
@@ -334,28 +393,77 @@ public class Unit : BaseUnit, IUnit
     /// <param name="attacker"></param>
     /// <param name="value"></param>
     /// <param name="killReason"></param>
-    public virtual void ReduceCurrentHp(BaseUnit attacker, int value, KillReason killReason = KillReason.Damage)
+    /// <param name="damageType">Combat school, if the hit has one.</param>
+    public virtual void ReduceCurrentHp(BaseUnit attacker, int value, KillReason killReason = KillReason.Damage,
+        DamageType? damageType = null)
     {
         if (Hp <= 0)
             return;
 
-        var oldHp = Hp;
+        foreach (var absorptionEffect in Buffs.GetAbsorptionEffects())
+            value = absorptionEffect.ConsumeCharge(value);
 
-        var absorptionEffects = Buffs.GetAbsorptionEffects().ToList();
-        if (absorptionEffects.Count > 0)
+        var buffCollection = Buffs as Buffs;
+        Buff protection = null;
+        EventHandler<OnImmortalityArgs> survived = null;
+        int oldHp;
+        int newHp;
+        var reflector = attacker as Unit;
+        var reflectable = !s_resolvingReflection && reflector != null && !ReferenceEquals(reflector, this) ? damageType : null;
+        var reflected = 0;
+        lock (buffCollection?.SyncRoot ?? Buffs)
         {
-            // Handle damage absorb
-            foreach (var absorptionEffect in absorptionEffects)
+            oldHp = Hp;
+            if (oldHp <= 0)
+                return;
+
+            if (buffCollection != null)
             {
-                value = absorptionEffect.ConsumeCharge(value);
+                var resolved = buffCollection.ResolveDamageProtection(value, Mp, reflectable);
+                value = resolved.Damage;
+                reflected = resolved.Reflected;
+                Mp -= resolved.ManaCost;
             }
+
+            newHp = (int)Math.Clamp((long)oldHp - value, 0, int.MaxValue);
+            if (newHp == 0 && (damageType != null || killReason == KillReason.Fall))
+            {
+                protection = buffCollection?.GetImmortalityForDamage(damageType, killReason);
+                if (protection != null)
+                {
+                    survived = protection.Events.OnImmortality;
+                    if (protection.Template.OneTimeImmortality)
+                        protection.TryBeginDispel();
+                    newHp = 1;
+                }
+            }
+            Hp = newHp;
         }
 
-        Hp = Math.Max(Hp - value, 0);
+        try
+        {
+            BroadcastPacket(new SCUnitPointsPacket(ObjId, newHp, newHp > 0 ? Mp : 0, HighAbilityRsc), true);
+            PostUpdateCurrentHp(attacker, oldHp, newHp, killReason);
+        }
+        finally
+        {
+            if (protection?.Template.OneTimeImmortality == true)
+                protection.CompleteDispel();
+        }
 
-        BroadcastPacket(new SCUnitPointsPacket(ObjId, Hp, Hp > 0 ? Mp : 0, HighAbilityRsc), true);
+        survived?.Invoke(protection, new OnImmortalityArgs { Attacker = attacker, Amount = value });
+        if (reflected == 0)
+            return;
 
-        PostUpdateCurrentHp(attacker, oldHp, Hp, killReason);
+        s_resolvingReflection = true;
+        try
+        {
+            reflector.ReduceCurrentHp(this, reflected, damageType: damageType);
+        }
+        finally
+        {
+            s_resolvingReflection = false;
+        }
     }
 
     /// <summary>
@@ -400,7 +508,7 @@ public class Unit : BaseUnit, IUnit
             }
         }
 
-        if (Hp > 0)
+        if (newHpValue > 0 || Hp > 0)
             return;
 
         if (attackerBase is Unit attackerUnit)
@@ -414,7 +522,7 @@ public class Unit : BaseUnit, IUnit
                 {
                     world.Events.OnUnitKilled(world, new OnUnitKilledArgs { Killer = attackerUnit, Victim = this });
                     world.Events.OnUnitCombatEnd(world, new OnUnitCombatEndArgs { Npc = this });
-                    Events.OnDeath(this, new OnDeathArgs { Killer = attackerUnit, Victim = this });
+                    Events.RaiseDeath(this, new OnDeathArgs { Killer = attackerUnit, Victim = this });
                 }
             }
         }
@@ -451,12 +559,15 @@ public class Unit : BaseUnit, IUnit
 
         IsInBattle = false;
 
-        Events.OnDeath(this, new OnDeathArgs { Killer = (Unit)killer, Victim = this });
+        Events.RaiseDeath(this, new OnDeathArgs { Killer = (Unit)killer, Victim = this });
         ParentWorld.Events.OnUnitKilled(ParentWorld, new OnUnitKilledArgs { Killer = (Unit)killer, Victim = this });
         ((Unit)killer).Events.OnKill(this, new OnKillArgs { Killer = (Unit)killer, Victim = this });
 
         Buffs.RemoveEffectsOnDeath();
-        killer.BroadcastPacket(new SCUnitDeathPacket(ObjId, killReason, (Unit)killer), true);
+        var deathPacket = this is Character dyingCharacter
+            ? new SCUnitDeathPacket(ObjId, killReason, (Unit)killer, (uint)dyingCharacter.RezWaitDuration, 300_000)
+            : new SCUnitDeathPacket(ObjId, killReason, (Unit)killer);
+        killer.BroadcastPacket(deathPacket, true);
         if (killer == this)
         {
             switch (this)
@@ -814,17 +925,8 @@ public class Unit : BaseUnit, IUnit
     public override void InterruptSkills()
     {
         ActivePlotState?.RequestCancellation();
-        if (SkillTask == null)
-            return;
-        switch (SkillTask)
-        {
-            case EndChannelingTask ect:
-                ect.Skill.Stop(this, ect._channelDoodad);
-                break;
-            default:
-                SkillTask.Skill.Stop(this);
-                break;
-        }
+        if (SkillTask is { } task)
+            task.Skill.Stop(this, task);
     }
 
     public bool IsDead
@@ -864,41 +966,38 @@ public class Unit : BaseUnit, IUnit
     /// <returns>The damage that was dealt</returns>
     public virtual int DoFallDamage(ushort fallVel)
     {
-        var fallDmg = Math.Min(MaxHp, (int)(MaxHp * ((fallVel - 8600) / 15000f)));
-        var multiplier = CalculateWithBonuses(0d, UnitAttribute.FallDamageMul) / 100d;
-        var minHpLeft = MaxHp / 20; //5% of hp 
-        var maxDmgLeft = Hp - minHpLeft; // Max damage one can take 
+        if (fallVel <= 8600 || Hp <= 0 || MaxHp <= 0 ||
+            Buffs.HasEffectsMatchingCondition(static buff => buff.InUse && !buff.IsEnded() && buff.Template.FallDamageImmune))
+            return 0;
 
-        fallDmg = (int)(fallDmg + fallDmg * multiplier);
-
+        var maximumHp = MaxHp;
+        var hpBefore = Hp;
         if (fallVel >= 32000)
         {
-            ReduceCurrentHp(this, Hp); // This is instant death so should be first
-            // This will also kill anybody riding this if this is a mount
+            ReduceCurrentHp(this, hpBefore, KillReason.Fall);
         }
         else
         {
-            if (fallDmg < maxDmgLeft)
+            var multiplier = 1d + CalculateWithBonuses(0d, UnitAttribute.FallDamageMul) / 100d;
+            var damage = (int)Math.Clamp(maximumHp * ((fallVel - 8600) / 15000d) * multiplier, 0, maximumHp);
+            var minimumHp = Math.Max(1, maximumHp / 20);
+            var damageLimit = Math.Max(0, hpBefore - minimumHp);
+            if (damage >= damageLimit && damage > 0 &&
+                SkillManager.Instance.GetBuffTemplate((uint)BuffConstants.FallStun) is { } stun)
             {
-                ReduceCurrentHp(this, fallDmg); //If you can take the hit without reaching 5% hp left take it
+                var duration = 500 * Math.Max(1, damage / minimumHp);
+                Buffs.AddBuff(new Buff(this, this, new SkillCasterUnit(ObjId), stun, null, DateTime.UtcNow), 0, duration);
             }
-            else
-            {
-                var duration = 500 * (fallDmg / minHpLeft);
 
-                var buff = SkillManager.Instance.GetBuffTemplate((uint)BuffConstants.FallStun);
-                var casterObj = new SkillCasterUnit(ObjId);
-                Buffs.AddBuff(new Buff(this, this, casterObj, buff, null, DateTime.UtcNow), 0, duration);
-
-                if (Hp > minHpLeft)
-                    ReduceCurrentHp(this, maxDmgLeft); // Leaves you at 5% hp no matter what
-            }
+            var applied = Math.Min(damage, damageLimit);
+            if (applied > 0)
+                ReduceCurrentHp(this, applied, KillReason.Fall);
         }
 
-        BroadcastPacket(new SCEnvDamagePacket(EnvSource.Falling, ObjId, (uint)fallDmg), true);
-        //SendPacket(new SCEnvDamagePacket(EnvSource.Falling, ObjId, (uint)fallDmg));
-        // TODO: Maybe adjust formula & need to detect water landing?
-        return fallDmg;
+        var actual = Math.Max(0, hpBefore - Hp);
+        if (actual > 0)
+            BroadcastPacket(new SCEnvDamagePacket(EnvSource.Falling, ObjId, (uint)actual), true);
+        return actual;
     }
 
     /// <summary>
@@ -1089,10 +1188,17 @@ public class Unit : BaseUnit, IUnit
 
     private void ApplyEquipItemSetBonuses()
     {
+        HashSet<uint> procIds = [];
+        var itemManager = ItemManager.Instance;
         var setNumPieces = new Dictionary<uint, int>();
         var itemLevels = new Dictionary<uint, uint>();
         foreach (var item in Equipment.Items)
         {
+            foreach (var procId in itemManager.GetBoundItemProcs(item.TemplateId))
+                procIds.Add(procId);
+            if (item.Template is WeaponTemplate { HoldableTemplate.ItemProcId: > 0 } holdable)
+                procIds.Add((uint)holdable.HoldableTemplate.ItemProcId);
+
             if (item.Template is EquipItemTemplate template)
             {
                 var equipItemSetId = template.EquipItemSetId;
@@ -1116,11 +1222,13 @@ public class Unit : BaseUnit, IUnit
         var appliedBuffs = new HashSet<uint>();
         foreach (var setCount in setNumPieces)
         {
-            var equipItemSet = ItemManager.Instance.GetEquippedItemSet(setCount.Key);
+            var equipItemSet = itemManager.GetEquippedItemSet(setCount.Key);
             foreach (var bonus in equipItemSet.Bonuses)
             {
                 if (setCount.Value >= bonus.NumPieces)
                 {
+                    if (bonus.ItemProcId != 0)
+                        procIds.Add(bonus.ItemProcId);
                     if (bonus.BuffId != 0)
                     {
                         if (Buffs.CheckBuff(bonus.BuffId))
@@ -1138,20 +1246,15 @@ public class Unit : BaseUnit, IUnit
                         Buffs.AddBuff(newEffect);
                         appliedBuffs.Add(bonus.BuffId);
                     }
-                    if (bonus.ItemProcId != 0)
-                    {
-                        Procs.AddProc(bonus.ItemProcId);
-                    }
                 }
                 else //This needs to be revised? Will we ever remove more than 1 item at a time?
                 {
                     if (bonus.BuffId != 0 && Buffs.CheckBuff(bonus.BuffId) && !appliedBuffs.Contains(bonus.BuffId))
                         Buffs.RemoveBuff(bonus.BuffId);
-                    if (bonus.ItemProcId != 0)
-                        Procs.RemoveProc(bonus.ItemProcId);
                 }
             }
         }
+        Procs?.SetActiveProcs(procIds);
     }
 
     private void ApplyArmorGradeBuff(Item itemAdded, Item itemRemoved)
@@ -1623,12 +1726,48 @@ public class Unit : BaseUnit, IUnit
 
     public void OnAbuserHealed(object sender, OnHealedArgs args)
     {
+        if (args.IgnoreHealAggro)
+            return;
+
         AddUnitAggro(AggroKind.Heal, args.Healer, args.HealAmount);
     }
 
     public void OnAbuserDied(object sender, OnDeathArgs args)
     {
         ClearAggroOfUnit(args.Victim);
+    }
+
+    internal void CopyAggroFrom(Unit source)
+    {
+        if (ReferenceEquals(this, source))
+            return;
+
+        var entries = new List<(Unit Owner, int Damage, int Heal, int Other)>();
+        foreach (var entry in source.AggroTable)
+        {
+            var components = entry.Value.GetComponents();
+            entries.Add((entry.Value.Owner, components.Damage, components.Heal, components.Other));
+        }
+
+        foreach (var entry in AggroTable)
+            ClearAggroOfUnit(entry.Value.Owner);
+
+        foreach (var entry in entries)
+        {
+            if ((long)entry.Damage + entry.Heal + entry.Other <= 0)
+                continue;
+
+            var aggro = new Aggro(entry.Owner);
+            aggro.SetComponents(entry.Damage, entry.Heal, entry.Other);
+            if (!AggroTable.TryAdd(entry.Owner.ObjId, aggro))
+                continue;
+
+            entry.Owner.Events.OnHealed += OnAbuserHealed;
+            entry.Owner.Events.OnDeath += OnAbuserDied;
+            if (entry.Owner is Character player && !IsDead && Hp > 0 &&
+                !player.IsInAggroListOf.ContainsKey(ObjId))
+                player.IsInAggroListOf.Add(ObjId, this);
+        }
     }
 
     public virtual void ClearAllAggro()

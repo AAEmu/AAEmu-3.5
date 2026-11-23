@@ -7,6 +7,33 @@ namespace AAEmu.UnitTests.Game.Core.Packets.G2C;
 
 public class SkillPacketWireFormatTests
 {
+    [Test]
+    public async Task HeirSkillListSendsOneSelectedSuccessorWithItsBaseSkillAndRank()
+    {
+        var stream = new SCHeirSkillListPacket([new(1, 18132, 36401, 11, 1, 0, true)]).Write(new PacketStream());
+        stream.Rollback();
+
+        await Assert.That(stream.ReadUInt32()).IsEqualTo(1u);
+        await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)1);
+        await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)18132);
+        await Assert.That(stream.ReadUInt16()).IsEqualTo((ushort)36401);
+        await Assert.That(stream.ReadUInt32()).IsEqualTo(11u);
+        await Assert.That(stream.ReadByte()).IsEqualTo((byte)1);
+        await Assert.That(stream.ReadByte()).IsEqualTo((byte)0);
+        await Assert.That(stream.ReadBoolean()).IsTrue();
+        await Assert.That(stream.Pos).IsEqualTo(stream.Count);
+    }
+
+    [Test]
+    public async Task HeirLevelUpSendsOnlyACompressedObjectId()
+    {
+        var stream = new SCHeirLevelUpPacket(74387).Write(new PacketStream());
+        stream.Rollback();
+
+        await Assert.That(stream.ReadBc()).IsEqualTo(74387u);
+        await Assert.That(stream.Pos).IsEqualTo(stream.Count);
+    }
+
     // Expectations come from the x2game 3.5 readers and CryNetwork's byte-free Block().
     [Test]
     public async Task SkillStopped_ReadsUnitAndSkillWithoutTrailingBytes()

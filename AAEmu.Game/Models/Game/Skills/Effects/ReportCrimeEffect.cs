@@ -15,6 +15,8 @@ public class ReportCrimeEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Warn("ReportCrimeEffect");
+        // AAC 3.5 uses evidence skill 11672 to open the reporting interaction.
+        // The client submits the selected evidence and message in CSReportCrime.
+        // The self-targeted skills with this effect do not submit that report.
     }
 }

@@ -1,13 +1,11 @@
-﻿using AAEmu.Game.Core.Managers.World;
-using AAEmu.Game.Core.Packets.G2C;
-using AAEmu.Game.Models.Game.Char;
-using AAEmu.Game.Models.Game.DoodadObj;
-using AAEmu.Game.Models.Game.Units;
+﻿using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class RemoveDoodad : SpecialEffectAction
 {
+    protected override SpecialType SpecialEffectActionType => SpecialType.RemoveDoodad;
+
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
         BaseUnit target,
@@ -16,21 +14,31 @@ public class RemoveDoodad : SpecialEffectAction
         Skill skill,
         SkillObject skillObject,
         DateTime time,
-        int value1,
-        int value2,
+        int doodadTemplateId,
+        int radiusMillimeters,
         int value3,
         int value4)
     {
-        // TODO ...
-        if (caster is Character) { Logger.Debug("Special effects: RemoveDoodad value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4); }
+        if (caster?.ParentWorld is not { } world || doodadTemplateId <= 0)
+            return;
 
-        var doodads = WorldManager.GetAround<Doodad>(caster, 10f);
-        if (doodads != null)
-            foreach (var doodad in doodads)
-                if (doodad.TemplateId == value1)
-                {
-                    doodad.Delete();
-                    doodad.BroadcastPacket(new SCDoodadRemovedPacket(doodad.ObjId), false);
-                }
+        // SourceToPos can dispatch to individual units, while the cast keeps the original impact marker.
+        if (castObj is CastSkill && skill?.Template is { TargetSelection: SkillTargetSelection.Target,
+                TargetType: SkillTargetType.BallisticPos or SkillTargetType.ArtilleryPos })
+        {
+            if (skill.InitialTarget is { ObjId: uint.MaxValue } impact)
+                target = impact;
+            else if (target is not { ObjId: uint.MaxValue })
+                return;
+        }
+
+        // Buff ticks pass an effect owner independently of their original source and may have no Skill.
+        var candidates = castObj is CastBuff { Buff.Owner: BaseUnit owner }
+            ? DoodadRemovalResolver.FindInRange(owner, world, radiusMillimeters)
+            : DoodadRemovalResolver.FindInRange(caster, target, skill, radiusMillimeters);
+
+        foreach (var doodad in candidates)
+            if (doodad.TemplateId == (uint)doodadTemplateId && DoodadRemovalResolver.IsStandaloneInWorld(doodad, world))
+                doodad.Delete();
     }
 }

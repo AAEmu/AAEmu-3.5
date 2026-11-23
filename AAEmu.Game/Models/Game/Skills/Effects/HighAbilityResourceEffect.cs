@@ -15,6 +15,12 @@ public class HighAbilityResourceEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        Logger.Trace("HighAbilityResourceEffect {0}", Id);
+        if ((target as Unit ?? caster as Unit) is not { } unit)
+            return;
+
+        var minimum = Math.Min(MinHighAbilityResource, MaxHighAbilityResource);
+        var maximum = Math.Max(MinHighAbilityResource, MaxHighAbilityResource);
+        var amount = minimum == maximum ? minimum : (int)Random.Shared.NextInt64(minimum, (long)maximum + 1);
+        unit.ChangeHighAbilityResource(amount);
     }
 }

@@ -11,7 +11,7 @@ public interface IBuffs
     void AddBuff(Buff buff, uint index = 0, int forcedDuration = 0);
     void AddBuff(uint buffId, BaseUnit caster);
     bool CheckBuff(uint id);
-    bool CheckBuffImmune(uint buffId);
+    bool CheckBuffImmune(BuffTemplate candidate, BaseUnit caster, Skill castingSkill = null);
     bool CheckBuffs(List<uint> ids);
     bool CheckBuffsExcludingTags(List<uint> ids, uint[] excludedTagIds);
     bool CheckBuffTag(uint tagId);
@@ -30,9 +30,11 @@ public interface IBuffs
     void RemoveBuff(uint buffId);
     void RemoveBuffs(BuffKind kind, int count, uint buffTagId = 0);
     void RemoveBuffs(uint buffTagId, int count);
+    void RemoveTaggedApplications(uint buffTagId, int applications);
     void RemoveEffect(Buff buff);
     void RemoveEffect(uint index);
     void RemoveEffect(uint templateId, uint skillId);
+    void RemoveEffect(uint templateId, Skill skill, bool honorTimeout = false);
     void RemoveEffectsOnDeath();
     void RemoveStealth();
     void SetOwner(BaseUnit owner);

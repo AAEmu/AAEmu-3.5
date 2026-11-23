@@ -21,122 +21,97 @@ public class CSResurrectCharacterPacket() : GamePacket(CSOffsets.CSResurrectChar
     public override void Read(PacketStream stream)
     {
         var inPlace = stream.ReadBoolean();
+        var character = Connection?.ActiveChar;
+        if (character == null || !character.TryBeginResurrection(inPlace, out var recovery))
+            return;
 
-        Logger.Debug("ResurrectCharacter, InPlace: {0}", inPlace);
-
-        var portal = new Portal();
-
-        // поищем сначала "UnitId": 502, "Title": "Temple Priestess",
-        // Inside dungeons or other instances, just respawn at the nearest Priestess
-        if (Connection.ActiveChar.Transform.InstanceId != WorldManager.DefaultInstanceId)
+        var restoredVitals = false;
+        try
         {
-            var npcs = Connection.ActiveChar.ParentWorld.GetAllNpcs();
-            foreach (var npc in npcs.Where(npc => npc.TemplateId == 502))
+            var portal = inPlace ? null : FindReturnPortal(character);
+            var hp = Math.Max(1, (int)(character.MaxHp * (recovery.Hp / 100d)));
+            var mp = Math.Max(0, (int)(character.MaxMp * (recovery.Mp / 100d)));
+            character.Hp = hp;
+            character.Mp = mp;
+            restoredVitals = true;
+            character.PostUpdateCurrentHp(character, 0, hp, KillReason.Unknown);
+
+            if (portal is { X: not 0 })
             {
-                portal.WorldId = Connection.ActiveChar.Transform.WorldId;
-                portal.ZoneId = npc.Transform.ZoneId;
-                portal.X = npc.Transform.World.Position.X + Random.Shared.Next(1, 3);
-                portal.Y = npc.Transform.World.Position.Y + Random.Shared.Next(1, 3);
-                portal.Z = npc.Transform.World.Position.Z;
-                portal.ZRot = npc.Transform.World.Rotation.Z;
-                portal.Yaw = npc.Transform.World.Rotation.Z;
+                character.BroadcastPacket(new SCCharacterResurrectedPacket(character.ObjId, portal.X,
+                    portal.Y, portal.Z, portal.ZRot), true);
+            }
+            else
+            {
+                var position = character.Transform.World.Position;
+                character.BroadcastPacket(new SCCharacterResurrectedPacket(character.ObjId, position.X,
+                    position.Y, position.Z, 0), true);
+            }
+
+            character.BroadcastPacket(new SCUnitPointsPacket(character.ObjId, character.Hp,
+                character.Mp, character.HighAbilityRsc), true);
+            ApplyRevivalDebuffs(character, inPlace);
+
+            character.IsUnderWater = false;
+            character.Breath = character.LungCapacity;
+        }
+        finally
+        {
+            character.EndResurrection(restoredVitals);
+        }
+    }
+
+    private static Portal FindReturnPortal(Character character)
+    {
+        if (character.Transform.InstanceId != WorldManager.DefaultInstanceId)
+        {
+            foreach (var npc in character.ParentWorld.GetAllNpcs())
+            {
+                if (npc.TemplateId != 502)
+                    continue;
+
+                var location = npc.Transform.World;
+                return new Portal
+                {
+                    WorldId = character.Transform.WorldId,
+                    ZoneId = npc.Transform.ZoneId,
+                    X = location.Position.X + Random.Shared.Next(1, 3),
+                    Y = location.Position.Y + Random.Shared.Next(1, 3),
+                    Z = location.Position.Z,
+                    ZRot = location.Rotation.Z,
+                    Yaw = location.Rotation.Z
+                };
+            }
+
+            return null;
+        }
+
+        var usePortalId = 0u;
+        var currentZone = ZoneManager.Instance.GetZoneByKey(character.Transform.ZoneId);
+        if (currentZone != null)
+        {
+            foreach (var conflict in ZoneManager.Instance.GetConflicts())
+            {
+                if (conflict.ZoneGroupId != currentZone.GroupId)
+                    continue;
+
+                if (conflict.CurrentZoneState == ZoneConflictType.War)
+                {
+                    usePortalId = character.Faction.MotherId switch
+                    {
+                        FactionsEnum.NuiaAlliance => conflict.NuiaReturnPointId,
+                        FactionsEnum.HaranyaAlliance => conflict.HariharaReturnPointId,
+                        _ => 0u
+                    };
+                }
                 break;
             }
         }
-        else
-        {
-            // Check if the current zone is at War and if it has special respawn areas for factions
-            var usePortalId = 0u;
-            var currentZone = ZoneManager.Instance.GetZoneByKey(Connection.ActiveChar.Transform.ZoneId);
-            if (currentZone != null)
-            {
-                var conflictData = ZoneManager.Instance.GetConflicts().FirstOrDefault(c => c.ZoneGroupId == currentZone.GroupId);
-                if (conflictData?.CurrentZoneState == ZoneConflictType.War)
-                {
-                    switch (Connection.ActiveChar.Faction.MotherId)
-                    {
-                        case FactionsEnum.NuiaAlliance:
-                            usePortalId = conflictData.NuiaReturnPointId;
-                            break;
-                        case FactionsEnum.HaranyaAlliance:
-                            usePortalId = conflictData.HariharaReturnPointId;
-                            break;
-                    }
-                }
-            }
 
-            // Try to get a faction specific respawn
-            if (usePortalId > 0)
-            {
-                portal = PortalManager.Instance.GetRespawnById(usePortalId);
-            }
-
-            // Find the closest return portal (in the world) for the player if none has been found yet
-            if (usePortalId == 0 || portal == null)
-            {
-                portal = PortalManager.Instance.GetClosestReturnPortal(Connection.ActiveChar);
-            }
-        }
-
-        if (inPlace)
-        {
-            Connection.ActiveChar.Hp = (int)(Connection.ActiveChar.MaxHp * (Connection.ActiveChar.ResurrectHpPercent / 100.0f));
-            Connection.ActiveChar.Mp = (int)(Connection.ActiveChar.MaxMp * (Connection.ActiveChar.ResurrectMpPercent / 100.0f));
-            Connection.ActiveChar.ResurrectHpPercent = 1;
-            Connection.ActiveChar.ResurrectMpPercent = 1;
-            Connection.ActiveChar.PostUpdateCurrentHp(Connection.ActiveChar, 0, Connection.ActiveChar.Hp, KillReason.Unknown);
-        }
-        else
-        {
-            Connection.ActiveChar.Hp = (int)(Connection.ActiveChar.MaxHp * 0.1);
-            Connection.ActiveChar.Mp = (int)(Connection.ActiveChar.MaxMp * 0.1);
-            Connection.ActiveChar.PostUpdateCurrentHp(Connection.ActiveChar, 0, Connection.ActiveChar.Hp, KillReason.Unknown);
-        }
-
-        if (portal.X != 0)
-        {
-            Connection.ActiveChar.BroadcastPacket(
-                new SCCharacterResurrectedPacket(
-                    Connection.ActiveChar.ObjId,
-                    portal.X,
-                    portal.Y,
-                    portal.Z,
-                    portal.ZRot
-                ),
-                true
-            );
-        }
-        else
-        {
-            Connection.ActiveChar.BroadcastPacket(
-                new SCCharacterResurrectedPacket(
-                    Connection.ActiveChar.ObjId,
-                    Connection.ActiveChar.Transform.World.Position.X,
-                    Connection.ActiveChar.Transform.World.Position.Y,
-                    Connection.ActiveChar.Transform.World.Position.Z,
-                    0
-                ),
-                true
-            );
-        }
-
-        Connection.ActiveChar.BroadcastPacket(
-            new SCUnitPointsPacket(
-                Connection.ActiveChar.ObjId,
-                Connection.ActiveChar.Hp,
-                Connection.ActiveChar.Mp,
-                Connection.ActiveChar.HighAbilityRsc
-            ),
-            true
-        );
-
-        // Route death-debuffs based on death context (set by Character.DoDie).
-        ApplyRevivalDebuffs(Connection.ActiveChar, inPlace);
-
-        Connection.ActiveChar.IsUnderWater = false;
-        //Connection.ActiveChar.StartRegen();
-        Connection.ActiveChar.Breath = Connection.ActiveChar.LungCapacity;
+        var portal = usePortalId > 0 ? PortalManager.Instance.GetRespawnById(usePortalId) : null;
+        return portal ?? PortalManager.Instance.GetClosestReturnPortal(character);
     }
+
 
     /// <summary>
     /// Apply post-revive debuffs based on the death context:

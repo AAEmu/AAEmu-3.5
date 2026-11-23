@@ -274,6 +274,16 @@ public class Inventory
     public bool SplitOrMoveItem(ItemTaskType taskType, ulong fromItemId, SlotType fromType, byte fromSlot,
         ulong toItemId, SlotType toType, byte toSlot, int count = 0)
     {
+        if (Bag is not { } bag)
+            return SplitOrMoveItemCore(taskType, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+
+        lock (bag.InventoryMutationGate)
+            return SplitOrMoveItemCore(taskType, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+    }
+
+    private bool SplitOrMoveItemCore(ItemTaskType taskType, ulong fromItemId, SlotType fromType, byte fromSlot,
+        ulong toItemId, SlotType toType, byte toSlot, int count)
+    {
         var needsResync = false;
         var fromItem = ItemManager.Instance.GetItemByItemId(fromItemId);
         var sourceContainer = _itemContainers.GetValueOrDefault(fromType) ?? fromItem?.HoldingContainer;
@@ -371,6 +381,15 @@ public class Inventory
     }
 
     public bool SplitOrMoveItemEx(ItemTaskType taskType, ItemContainer sourceContainer, ItemContainer targetContainer, ulong fromItemId, SlotType fromType, byte fromSlot, ulong toItemId, SlotType toType, byte toSlot, int count = 0)
+    {
+        if (Bag is not { } bag)
+            return SplitOrMoveItemExCore(taskType, sourceContainer, targetContainer, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+
+        lock (bag.InventoryMutationGate)
+            return SplitOrMoveItemExCore(taskType, sourceContainer, targetContainer, fromItemId, fromType, fromSlot, toItemId, toType, toSlot, count);
+    }
+
+    private bool SplitOrMoveItemExCore(ItemTaskType taskType, ItemContainer sourceContainer, ItemContainer targetContainer, ulong fromItemId, SlotType fromType, byte fromSlot, ulong toItemId, SlotType toType, byte toSlot, int count)
     {
         Logger.Trace($"SplitOrMoveItem({fromItemId} {fromType}:{fromSlot} => {toItemId} {toType}:{toSlot} - {count})");
 

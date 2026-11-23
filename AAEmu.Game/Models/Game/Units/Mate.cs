@@ -21,6 +21,8 @@ public class MatePassengerInfo
 
 public sealed class Mate : Unit
 {
+    private int _deathHandled;
+
     public override UnitTypeFlag TypeFlag { get => UnitTypeFlag.Mate; }
     public override BaseUnitType BaseUnitType => BaseUnitType.Mate;
     public NpcTemplate Template { get; set; }
@@ -694,7 +696,24 @@ public sealed class Mate : Unit
 
     public override Character GetOwnerCharacter()
     {
-        var ownerObject = OwnerObjId > 0 ? ParentWorld.GetGameObject(OwnerObjId) as BaseUnit : null;
+        var ownerObject = OwnerObjId > 0 ? ParentWorld?.GetGameObject(OwnerObjId) as BaseUnit : null;
         return ownerObject?.GetOwnerCharacter();
+    }
+
+    public override void DoDie(BaseUnit killer, KillReason killReason)
+    {
+        if (Interlocked.Exchange(ref _deathHandled, 1) != 0)
+            return;
+
+        var owner = GetOwnerCharacter();
+        var now = DateTime.UtcNow;
+        try
+        {
+            base.DoDie(killer is Unit ? killer : this, killReason);
+        }
+        finally
+        {
+            owner?.Mates?.RecordDeathAndDespawn(this, now);
+        }
     }
 }

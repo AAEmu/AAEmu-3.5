@@ -14,6 +14,7 @@ public class PlotNextEvent
     public int Position { get; set; }
     public bool PerTarget { get; set; }
     public bool Casting { get; set; }
+    public bool CastingUseable { get; set; }
     public int Delay { get; set; }
     public int Speed { get; set; }
     public bool Channeling { get; set; }

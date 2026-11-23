@@ -8,6 +8,7 @@ using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models;
+using AAEmu.Game.Models.Account;
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Housing;
 
@@ -26,9 +27,15 @@ public class GameConnection
     private Character _pendingUnitTeleport;
     private int _receiveChunkCount;
     private int _receivedPacketCount;
+    private volatile AuctionPostingAccess _auctionPostingAccess;
 
     public uint Id => _session.SessionId;
     public ulong AccountId { get; set; }
+    internal AuctionPostingAccess AuctionPostingAccess
+    {
+        get => _auctionPostingAccess;
+        set => _auctionPostingAccess = value;
+    }
     public IPAddress Ip => _session.Ip;
     public PacketStream LastPacket { get; set; }
     public AccountPayment Payment { get; set; }

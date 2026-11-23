@@ -25,6 +25,7 @@ public class CSSpawnCharacterPacket() : GamePacket(CSOffsets.CSSpawnCharacterPac
         Connection.ActiveChar.VisualOptions.Read(stream);
 
         Connection.SendPacket(new SCUnitStatePacket(Connection.ActiveChar));
+        Connection.SendPacket(Connection.ActiveChar.Skills.BuildHeirSkillListPacket());
 
         Connection.ActiveChar.PushSubscriber(TimeManager.Instance.Subscribe(Connection, new TimeOfDayObserver(Connection.ActiveChar)));
 

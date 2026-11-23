@@ -1,12 +1,13 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using MySql.Data.MySqlClient;
 
 namespace AAEmu.Game.Models.Game.Char;
 
-public class CharacterSkills(Character owner)
+public partial class CharacterSkills
 {
     private enum SkillType : byte
     {
@@ -15,9 +16,22 @@ public class CharacterSkills(Character owner)
     }
 
     private readonly List<uint> _removed = [];
+    private readonly Lock _skillsLock = new();
+    private Dictionary<uint, long> _comboFollowUps;
     public Dictionary<uint, Skill> Skills { get; } = [];
     public Dictionary<uint, PassiveBuff> PassiveBuffs { get; } = [];
-    private Character Owner { get; } = owner;
+    private Character Owner { get; }
+
+    public CharacterSkills(Character owner) : this(owner, SkillAuthorityGameData.Instance, ExperienceManager.Instance)
+    {
+    }
+
+    internal CharacterSkills(Character owner, SkillAuthorityGameData skillData, ExperienceManager experience)
+    {
+        Owner = owner;
+        _skillData = skillData;
+        _experience = experience;
+    }
 
     /// <summary>
     /// Try to learn a new Skill
@@ -25,12 +39,12 @@ public class CharacterSkills(Character owner)
     /// <param name="skillId"></param>
     public void AddSkill(uint skillId)
     {
+        if (_skillData.TryGetHeirSkill(skillId, out _))
+            return;
+
         // Check if what we want to learn is part of an active skill tree (or not part of one)
         var template = SkillManager.Instance.GetSkillTemplate(skillId);
-        if (template.AbilityId > 0 &&
-            template.AbilityId != Owner.Ability1 &&
-            template.AbilityId != Owner.Ability2 &&
-            template.AbilityId != Owner.Ability3)
+        if (template == null || !CanLearnInTree(template.AbilityId))
             return;
 
         // Get total skill points for the player's level
@@ -58,13 +72,17 @@ public class CharacterSkills(Character owner)
     /// <param name="packet"></param>
     public void AddSkill(SkillTemplate template, byte level, bool packet)
     {
+        if (template == null || CharacterAbilities.IsSpecialAbility(template.AbilityId))
+            return;
+
         var skill = new Skill
         {
             Id = template.Id,
             Template = template,
             Level = template.LevelStep > 0 ? (byte)((Owner.GetAbLevel(template.AbilityId) - template.AbilityLevel) / template.LevelStep + 1) : (byte)1
         };
-        Skills.Add(skill.Id, skill);
+        lock (_skillsLock)
+            Skills.Add(skill.Id, skill);
 
         if (packet)
             Owner.SendPacket(new SCSkillLearnedPacket(skill));
@@ -78,10 +96,7 @@ public class CharacterSkills(Character owner)
     {
         // Check if what we want to learn is part of an active skill tree (or not part of one)
         var template = SkillManager.Instance.GetPassiveBuffTemplate(buffId);
-        if (template.AbilityId > 0 &&
-           template.AbilityId != Owner.Ability1 &&
-           template.AbilityId != Owner.Ability2 &&
-           template.AbilityId != Owner.Ability3)
+        if (template == null || !CanLearnInTree(template.AbilityId))
             return;
 
         // Get total skill points for the player's level
@@ -109,6 +124,10 @@ public class CharacterSkills(Character owner)
         buff.Apply(Owner);
     }
 
+    private bool CanLearnInTree(AbilityType ability) =>
+        !CharacterAbilities.IsSpecialAbility(ability) &&
+        (ability == AbilityType.General || ability == Owner.Ability1 || ability == Owner.Ability2 || ability == Owner.Ability3);
+
     /// <summary>
     /// Resets all skills from a specific ability Skill Tree
     /// </summary>
@@ -116,12 +135,18 @@ public class CharacterSkills(Character owner)
     public void Reset(AbilityType abilityId)
     {
         // TODO: with price...
-        foreach (var skill in new List<Skill>(Skills.Values))
+        lock (_skillsLock)
         {
-            if (skill.Template.AbilityId != abilityId)
-                continue;
-            Skills.Remove(skill.Id);
-            _removed.Add(skill.Id);
+            if (RemoveHeirSkills(HeirSkillResetKind.Ability, abilityId, 0))
+                Owner.SendPacket(new SCResetHeirSkillPacket((uint)HeirSkillResetKind.Ability, 0, (byte)abilityId));
+
+            foreach (var skill in new List<Skill>(Skills.Values))
+            {
+                if (skill.Template.AbilityId != abilityId)
+                    continue;
+                Skills.Remove(skill.Id);
+                _removed.Add(skill.Id);
+            }
         }
 
         foreach (var buff in new List<PassiveBuff>(PassiveBuffs.Values))
@@ -158,18 +183,55 @@ public class CharacterSkills(Character owner)
         return points;
     }
 
-    // TODO : Optimize this by storing a map of derivative skills and their matches
-    public bool IsVariantOfSkill(uint skillId)
+    internal bool IsLearned(uint skillId)
     {
-        var skillTemplate = SkillManager.Instance.GetSkillTemplate(skillId);
+        lock (_skillsLock)
+            return Skills.ContainsKey(skillId);
+    }
 
-        if (skillTemplate == null)
+    internal void OpenComboFollowUp(uint skillId, int durationMilliseconds)
+    {
+        if (skillId == 0 || durationMilliseconds <= 0)
+            return;
+
+        lock (_skillsLock)
+        {
+            _comboFollowUps ??= [];
+            var expires = Environment.TickCount64 + durationMilliseconds;
+            _comboFollowUps[skillId] = Math.Max(expires, _comboFollowUps.GetValueOrDefault(skillId));
+        }
+    }
+
+    internal bool HasComboFollowUp(uint skillId)
+    {
+        lock (_skillsLock)
+        {
+            if (_comboFollowUps?.TryGetValue(skillId, out var expires) != true)
+                return false;
+            if (expires > Environment.TickCount64)
+                return true;
+
+            _comboFollowUps.Remove(skillId);
+            return false;
+        }
+    }
+
+    internal bool HasNamedVariant(SkillTemplate template)
+    {
+        if (template.AbilityId is AbilityType.General or AbilityType.None || template.Show || string.IsNullOrEmpty(template.Name))
             return false;
 
-        return Skills.Values.Any(skill =>
-            skill?.Template != null &&
-            skill.Template.AbilityId == skillTemplate.AbilityId &&
-            skill.Template.AbilityLevel == skillTemplate.AbilityLevel);
+        lock (_skillsLock)
+        {
+            foreach (var skill in Skills.Values)
+            {
+                if (skill.Template is { } learned && learned.AbilityId == template.AbilityId &&
+                    learned.AbilityLevel == template.AbilityLevel && learned.Name == template.Name)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     #region database
@@ -196,7 +258,10 @@ public class CharacterSkills(Character owner)
                             break;
                         case SkillType.Buff:
                             var buffId = reader.GetUInt32("id");
-                            var buff = new PassiveBuff { Id = buffId, Template = SkillManager.Instance.GetPassiveBuffTemplate(buffId) };
+                            var template = SkillManager.Instance.GetPassiveBuffTemplate(buffId);
+                            if (template == null || CharacterAbilities.IsSpecialAbility(template.AbilityId))
+                                break;
+                            var buff = new PassiveBuff { Id = buffId, Template = template };
                             PassiveBuffs.Add(buff.Id, buff);
                             buff.Apply(Owner);
                             break;
@@ -208,9 +273,12 @@ public class CharacterSkills(Character owner)
         foreach (var skill in Skills.Values)
             if (skill != null)
                 skill.Template = SkillManager.Instance.GetSkillTemplate(skill.Id);
+
+        LoadHeirSkills(connection);
+        CharacterSkillCooldownPersistence.Load(connection, Owner.Id, Owner.Cooldowns, DateTime.UtcNow);
     }
 
-    public void Save(MySqlConnection connection, MySqlTransaction transaction)
+    internal void Save(MySqlConnection connection, MySqlTransaction transaction, SkillAuthorityGameData.HeirSkill[] heirSelections)
     {
         if (_removed.Count > 0)
         {
@@ -252,6 +320,11 @@ public class CharacterSkills(Character owner)
             command.Parameters.AddWithValue("@owner", Owner.Id);
             command.ExecuteNonQuery();
         }
+
+        if (heirSelections != null)
+            SaveHeirSkills(connection, transaction, heirSelections);
+
+        CharacterSkillCooldownPersistence.Save(connection, transaction, Owner.Id, Owner.Cooldowns, DateTime.UtcNow);
     }
 
     #endregion

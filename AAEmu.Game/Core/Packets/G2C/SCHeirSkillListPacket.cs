@@ -6,9 +6,9 @@ namespace AAEmu.Game.Core.Packets.G2C;
 public class SCHeirSkillListPacket : GamePacket
 {
     public readonly record struct HeirSkillEntry(
-        ushort Type1,
-        ushort Type2,
-        ushort Type3,
+        ushort GroupId,
+        ushort OriginId,
+        ushort SuccessorId,
         uint SkillLevel,
         byte Ability,
         byte HighAbility,
@@ -31,9 +31,9 @@ public class SCHeirSkillListPacket : GamePacket
         stream.Write((uint)_entries.Length);
         foreach (var entry in _entries)
         {
-            stream.Write(entry.Type1);
-            stream.Write(entry.Type2);
-            stream.Write(entry.Type3);
+            stream.Write(entry.GroupId);
+            stream.Write(entry.OriginId);
+            stream.Write(entry.SuccessorId);
             stream.Write(entry.SkillLevel);
             stream.Write(entry.Ability);
             stream.Write(entry.HighAbility);

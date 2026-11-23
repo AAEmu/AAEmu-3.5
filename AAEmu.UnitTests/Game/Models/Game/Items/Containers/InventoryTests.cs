@@ -52,6 +52,36 @@ public class InventoryTests
     }
 
     [Test]
+    public async Task ExactConsumptionDoesNotPartiallyConsumeAnInsufficientStack()
+    {
+        var container = new ItemContainer(0, SlotType.Inventory, false, null);
+        var item = InventoryTestUtils.MockItem(1, 15659);
+        item.Count = 49;
+        PutItemInContainer(container, item, SlotType.Inventory, 0);
+
+        var success = container.TryConsumeExact(ItemTaskType.Invalid, item.TemplateId, 50);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(item.Count).IsEqualTo(49);
+    }
+
+    [Test]
+    public async Task ConcurrentExactConsumptionOnlyChargesOneCallerWhenTheStackCoversOneRequest()
+    {
+        var container = new ItemContainer(0, SlotType.Inventory, false, null);
+        var item = InventoryTestUtils.MockItem(1, 15659);
+        item.Count = 51;
+        PutItemInContainer(container, item, SlotType.Inventory, 0);
+
+        var outcomes = await Task.WhenAll(
+            Task.Run(() => container.TryConsumeExact(ItemTaskType.Invalid, item.TemplateId, 50)),
+            Task.Run(() => container.TryConsumeExact(ItemTaskType.Invalid, item.TemplateId, 50)));
+
+        await Assert.That(outcomes[0] ^ outcomes[1]).IsTrue();
+        await Assert.That(item.Count).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task SplitOrMoveItemEx_SplitAcrossContainers_AssignsTargetOwner()
     {
         var sourceContainer = new ItemContainer(111, SlotType.Bank, false, null);

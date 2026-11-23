@@ -27,10 +27,10 @@ public class PlotTree(uint plotId)
             var stopWatch = new Stopwatch();
             stopWatch.Start();
 
-            var queue = new Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo)>();
+            var queue = new Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo, int? castingUsePercent)>();
             var executeQueue = new Queue<(PlotNode node, PlotTargetInfo targetInfo)>();
 
-            queue.Enqueue((RootNode, DateTime.UtcNow, new PlotTargetInfo(state)));
+            queue.Enqueue((RootNode, DateTime.UtcNow, new PlotTargetInfo(state), null));
             byte lastEvent = 1;
             while (queue.Count > 0)
             {
@@ -38,9 +38,11 @@ public class PlotTree(uint plotId)
                 nodeWatch.Start();
                 var item = queue.Dequeue();
                 var now = DateTime.UtcNow;
+                var nowMs = Environment.TickCount64;
                 var node = item.node;
                 if (state.IsChanneling && state.ChannelingFinishRequested())
                 {
+                    state.CastingUsePercent = item.castingUsePercent;
                     HandleChannelingFinish(node, state, queue, item);
                     lastEvent = 0;
                     continue;
@@ -63,7 +65,16 @@ public class PlotTree(uint plotId)
                     return;
                 }
 
-                if (now >= item.timestamp)
+                var due = now >= item.timestamp;
+                var castingUsePercent = item.castingUsePercent;
+                if (node.ParentNextEvent is { Casting: true })
+                {
+                    due = state.TryCompleteCasting(node, due, out var completedCastPercent);
+                    if (due)
+                        castingUsePercent = completedCastPercent;
+                }
+
+                if (due)
                 {
                     if (state.Tickets.TryGetValue(node.Event.Id, out var value))
                         state.Tickets[node.Event.Id] = ++value;
@@ -76,6 +87,7 @@ public class PlotTree(uint plotId)
                         continue;
                     }
 
+                    state.CastingUsePercent = castingUsePercent;
                     item.targetInfo.UpdateTargetInfo(node.Event, state);
 
                     if (item.targetInfo.Target == null)
@@ -97,32 +109,20 @@ public class PlotTree(uint plotId)
                                 foreach (var target in item.targetInfo.EffectedTargets)
                                 {
                                     var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target);
-                                    queue.Enqueue(
-                                        (
-                                        child,
-                                        now.AddMilliseconds(child.ComputeDelayMs(state, targetInfo)),
-                                        targetInfo
-                                        )
-                                    );
+                                    ScheduleChild(child, state, targetInfo, castingUsePercent, now, nowMs, queue);
                                 }
                             }
                             else
                             {
                                 var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target);
-                                queue.Enqueue(
-                                    (
-                                    child,
-                                    now.AddMilliseconds(child.ComputeDelayMs(state, targetInfo)),
-                                    targetInfo
-                                    )
-                                );
+                                ScheduleChild(child, state, targetInfo, castingUsePercent, now, nowMs, queue);
                             }
                         }
                     }
                 }
                 else
                 {
-                    queue.Enqueue((node, item.timestamp, item.targetInfo));
+                    queue.Enqueue(item);
                     FlushExecutionQueue(executeQueue, state);
                 }
 
@@ -150,7 +150,17 @@ public class PlotTree(uint plotId)
         DoPlotEnd(state);
         Logger.Trace($"Tree with ID {PlotId} has finished executing took {treeWatch.ElapsedMilliseconds}ms");
     }
-    private void HandleChannelingFinish(PlotNode node, PlotState state, Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo)> queue, (PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo) item)
+    private static void ScheduleChild(PlotNode child, PlotState state, PlotTargetInfo targetInfo, int? castingUsePercent,
+        DateTime now, long nowMs, Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo, int? castingUsePercent)> queue)
+    {
+        var delay = child.ComputeDelayMs(state, targetInfo);
+        state.ArmCastingUse(child, delay, nowMs);
+        queue.Enqueue((child, now.AddMilliseconds(delay), targetInfo, castingUsePercent));
+    }
+
+    private void HandleChannelingFinish(PlotNode node, PlotState state,
+        Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo, int? castingUsePercent)> queue,
+        (PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo, int? castingUsePercent) item)
     {
         if (node == null || state == null || queue == null || item.targetInfo == null)
         {
@@ -198,14 +208,14 @@ public class PlotTree(uint plotId)
                         {
 
                             var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target);
-                            queue.Enqueue((child, DateTime.UtcNow, targetInfo));
+                            queue.Enqueue((child, DateTime.UtcNow, targetInfo, item.castingUsePercent));
                             queuedNodeIds.Add(child.Event.Id); // Mark this node as queued
                         }
                     }
                     else
                     {
                         var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target);
-                        queue.Enqueue((child, DateTime.UtcNow, targetInfo));
+                        queue.Enqueue((child, DateTime.UtcNow, targetInfo, item.castingUsePercent));
                         queuedNodeIds.Add(child.Event.Id); // Mark this node as queued
                     }
 
@@ -245,10 +255,12 @@ public class PlotTree(uint plotId)
 
     private static void DoPlotEnd(PlotState state)
     {
+        state.ClearCastingUse();
         state.Caster?.BroadcastPacket(new SCPlotEndedPacket(state.ActiveSkill.TlId), true);
         EndPlotChannel(state);
 
-        state.Caster?.Cooldowns.AddCooldown(state.ActiveSkill.Template.Id, (uint)state.ActiveSkill.Template.CooldownTime);
+        if (state.Caster != null)
+            state.ActiveSkill.RecordCooldown(state.Caster, state.CasterCaster);
 
         if (state.Caster is Character { IgnoreSkillCooldowns: true } character)
             character.ResetSkillCooldown(state.ActiveSkill.Template.Id, false);

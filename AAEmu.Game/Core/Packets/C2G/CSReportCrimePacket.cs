@@ -17,14 +17,14 @@ public class CSReportCrimePacket() : GamePacket(CSOffsets.CSReportCrimePacket, 5
 
         var reporter = Connection.ActiveChar;
 
-        var bloodStainDoodad = reporter.ParentWorld?.GetDoodad(objId);
+        var bloodStainDoodad = reporter?.ParentWorld?.GetDoodad(objId);
         if (bloodStainDoodad != null)
         {
-            var criminalName = NameManager.Instance.GetCharacterName(bloodStainDoodad.OwnerId) ?? string.Empty;
             var crimeEvent = CrimeManager.Instance.ReportCrime(reporter, bloodStainDoodad, unkId, unk2Id, unk3Id, msg);
             if (crimeEvent != null)
             {
-                Logger.Debug($"ReportCrime, ObjId: {objId}, Msg: {msg}, Id: {unkId} (0x{unkId:x8}), {unk2Id} (0x{unk2Id:X8}), {unk3Id} (0x{unk3Id:X8}). Owner {criminalName} ({bloodStainDoodad.OwnerId}), OwnerDbId {bloodStainDoodad.OwnerDbId}");
+                var criminalName = NameManager.Instance.GetCharacterName(crimeEvent.Criminal) ?? string.Empty;
+                Logger.Debug($"ReportCrime, ObjId: {objId}, Msg: {msg}, Id: {unkId} (0x{unkId:x8}), {unk2Id} (0x{unk2Id:X8}), {unk3Id} (0x{unk3Id:X8}). Owner {criminalName} ({crimeEvent.Criminal}), OwnerDbId {bloodStainDoodad.OwnerDbId}");
             }
             else
             {

@@ -142,11 +142,11 @@ public enum UnitAttribute : byte
     SpellDamageCriticalBonus = 152,
     RangedParry = 153,
     RangedParryMul = 154,
+    PenaltyExpMul = 156,
+    RecoverableExpMul = 157,
     //Fill in when we need?
     /*
     DEATH_DURABILITY_LOSS_RATIO_MUL = 0x9B,
-    PENALTY_EXP_MUL = 0x9C,
-    RECOVERABLE_EXP_MUL = 0x9D,
     ACTABILITY_LANG_NUIAN = 0x9E,
     ACTABILITY_LANG_ELF = 0x9F,
     ACTABILITY_LANG_HARIHARAN = 0xA0,
@@ -178,4 +178,7 @@ public enum UnitAttribute : byte
     ReverseVelocityMul = 193,
     PhysicsCollisionArmorMul = 194,
     ImpactMass = 203,
+    MaxHighAbilityResource = 215,
+    HighAbilityResourceRegen = 216,
+    PersistentHighAbilityResourceRegen = 217,
 }

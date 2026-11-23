@@ -19,7 +19,9 @@ using NLog;
 
 namespace AAEmu.Game.Core.Managers;
 
-public class AuctionManager(IItemManager itemManager, INameManager nameManager, IAuctionIdManager auctionIdManager, ILocalizationManager localizationManager, ITaskManager taskManager) : Singleton<AuctionManager>, IAuctionManager
+public class AuctionManager(IItemManager itemManager, INameManager nameManager, IAuctionIdManager auctionIdManager,
+    ILocalizationManager localizationManager, ITaskManager taskManager, IAccountManager accountManager)
+    : Singleton<AuctionManager>, IAuctionManager
 {
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
 
@@ -683,6 +685,18 @@ public class AuctionManager(IItemManager itemManager, INameManager nameManager, 
 
     public void PostLotOnAuction(Character player, uint npcId, uint npcId2, ulong itemId, int startPrice, int buyoutPrice, AuctionDuration duration)
     {
+        if (player == null)
+            return;
+
+        var postingAccess = accountManager.GetAuctionPostingAccess(player.AccountId);
+        if (postingAccess is not { CanPost: true })
+        {
+            player.SendErrorMessage(postingAccess == null
+                ? ErrorMessageType.AucServiceUnavailable
+                : ErrorMessageType.AucPostNonAuthority);
+            return;
+        }
+
         var item = itemManager.GetItemByItemId(itemId);
         if (item == null)
         {

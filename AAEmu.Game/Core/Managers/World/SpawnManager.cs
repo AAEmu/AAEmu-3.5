@@ -10,6 +10,8 @@ using AAEmu.Game.Models.Game.CommonFarm.Static;
 using AAEmu.Game.Models.Game.DoodadObj;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Gimmicks;
+using AAEmu.Game.Models.Game.Housing;
+using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Containers;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Slaves;
@@ -41,6 +43,7 @@ public class SpawnManager(WorldInstance parentWorld)
     private readonly object _lockSpawner = new();
     private HashSet<GameObject> Respawns { get; } = [];
     private HashSet<GameObject> Despawns { get; } = [];
+    private readonly HashSet<Npc> _effectDespawns = [];
 
     private Dictionary<uint, List<NpcSpawner>> NpcSpawners { get; } = []; // (idx, List<NpcSpawner>)
     private Dictionary<uint, List<NpcSpawner>> NpcEventSpawners { get; } = []; // (idx, List<NpcSpawner>)
@@ -320,9 +323,16 @@ public class SpawnManager(WorldInstance parentWorld)
             return;
 
         lock (Respawns) Respawns.Clear();
-        lock (Despawns) Despawns.Clear();
-        NpcSpawners.Clear();
-        NpcEventSpawners.Clear();
+        lock (Despawns)
+        {
+            Despawns.Clear();
+            _effectDespawns.Clear();
+        }
+        lock (NpcSpawners)
+        {
+            NpcSpawners.Clear();
+            NpcEventSpawners.Clear();
+        }
         DoodadSpawners.Clear();
         TransferSpawners.Clear();
         GimmickSpawners.Clear();
@@ -895,6 +905,15 @@ public class SpawnManager(WorldInstance parentWorld)
 
                     doodad.Transform.Local.SetPosition(x, y, z);
                     doodad.Transform.Local.SetRotation(roll, pitch, yaw);
+                    if (doodad.ParentObj is House boundHouse &&
+                        TerritoryMemoryEmber.FindAttachment(boundHouse.Template, templateId, attachPoint)?.Position is { } position)
+                    {
+                        doodad.Transform.Local.ApplyWorldSpawnPositionWithDeg(position);
+                        var worldPosition = doodad.Transform.World.Position;
+                        doodad.Transform.ZoneId = WorldManager.Instance.GetZoneId(World.Template, worldPosition.X, worldPosition.Y);
+                        if (boundHouse.TemplateId == TerritoryMemoryEmber.Marketplace)
+                            doodad.FuncGroupId = doodad.GetFuncGroupId();
+                    }
 
                     // Attach ItemContainer to coffer if needed
                     if (doodad is DoodadCoffer coffer)
@@ -1082,11 +1101,44 @@ public class SpawnManager(WorldInstance parentWorld)
         }
     }
 
+    internal bool TryQueueEffectDespawn(Npc npc, bool scheduleRespawn)
+    {
+        // Corpse-free kills can be followed by other effects from the same timeout.
+        var despawnAt = DateTime.UtcNow.AddMilliseconds(scheduleRespawn ? 100 : 0);
+        lock (Despawns)
+        {
+            if (!ReferenceEquals(npc.ParentWorld, World) || !ReferenceEquals(World.GetNpc(npc.ObjId), npc) ||
+                !_effectDespawns.Add(npc))
+                return false;
+        }
+
+        if (scheduleRespawn && npc.Spawner is { } spawner)
+            spawner.DoDespawn(npc, despawnAt);
+
+        lock (Despawns)
+        {
+            if (_effectDespawns.Contains(npc) && ReferenceEquals(World.GetNpc(npc.ObjId), npc))
+            {
+                npc.Despawn = despawnAt;
+                Despawns.Add(npc);
+            }
+        }
+        return true;
+    }
+
+    private bool IsEffectDespawn(Npc npc)
+    {
+        lock (Despawns)
+            return _effectDespawns.Contains(npc);
+    }
+
     private void RemoveDespawn(GameObject obj)
     {
         lock (Despawns)
         {
             Despawns.Remove(obj);
+            if (obj is Npc npc)
+                _effectDespawns.Remove(npc);
         }
     }
 
@@ -1169,6 +1221,18 @@ public class SpawnManager(WorldInstance parentWorld)
                 {
                     if (obj.Despawn >= DateTime.UtcNow)
                         continue;
+                    if (obj is Npc effectNpc && IsEffectDespawn(effectNpc))
+                    {
+                        if (!ReferenceEquals(World.GetNpc(effectNpc.ObjId), effectNpc))
+                        {
+                            RemoveDespawn(effectNpc);
+                            continue;
+                        }
+
+                        effectNpc.Buffs.CancelAllEffectTasks();
+                        if (effectNpc.Spawner == null)
+                            effectNpc.UnregisterNpcEvents();
+                    }
                     if (obj is Npc { Spawner: not null } npc)
                         npc.Spawner.Despawn(npc);
                     else if (obj is Doodad { Spawner: not null } doodadWithSpawner)
@@ -1222,21 +1286,42 @@ public class SpawnManager(WorldInstance parentWorld)
 
     public List<NpcSpawner> GetNpcSpawner(uint spawnerId)
     {
-        var ret = new List<NpcSpawner>();
-
-        foreach (var (_, spawners) in NpcEventSpawners)
+        var matches = FindNpcEventSpawners(spawnerId);
+        foreach (var spawner in matches)
         {
-            foreach (var spawner in spawners)
+            spawner.Template.Npcs[^1].MemberId = spawner.UnitId;
+            spawner.Template.Npcs[^1].UnitId = spawner.UnitId;
+            spawner.Template.Npcs[^1].MemberType = "Npc";
+        }
+        return matches;
+    }
+
+    internal void DespawnNpcEventSpawners(uint spawnerId)
+    {
+        foreach (var spawner in FindNpcEventSpawners(spawnerId))
+        {
+            if (ReferenceEquals(spawner.ParentWorld, World))
+                spawner.QueueEffectDespawns(this);
+        }
+    }
+
+    private List<NpcSpawner> FindNpcEventSpawners(uint spawnerId)
+    {
+        var matches = new List<NpcSpawner>();
+        lock (NpcSpawners)
+        {
+            foreach (var spawners in NpcEventSpawners.Values)
             {
-                if (spawner.Id != spawnerId) { continue; }
-                spawner.Template.Npcs[^1].MemberId = spawner.UnitId;
-                spawner.Template.Npcs[^1].UnitId = spawner.UnitId;
-                spawner.Template.Npcs[^1].MemberType = "Npc";
-                ret.Add(spawner);
+                if (spawners == null)
+                    continue;
+                foreach (var spawner in spawners)
+                {
+                    if (spawner.Id == spawnerId)
+                        matches.Add(spawner);
+                }
             }
         }
-
-        return ret;
+        return matches;
     }
     
     /// <summary>
@@ -1302,13 +1387,17 @@ public class SpawnManager(WorldInstance parentWorld)
 
     public bool CloneNpcEventSpawners(byte from, byte to)
     {
-        NpcEventSpawners.TryGetValue(from, out var value);
-        return NpcEventSpawners.TryAdd(to, value);
+        lock (NpcSpawners)
+        {
+            NpcEventSpawners.TryGetValue(from, out var value);
+            return NpcEventSpawners.TryAdd(to, value);
+        }
     }
 
     public bool RemoveNpcEventSpawners(byte from)
     {
-        return NpcEventSpawners.Remove(from, out _);
+        lock (NpcSpawners)
+            return NpcEventSpawners.Remove(from, out _);
     }
 
     /// <summary>

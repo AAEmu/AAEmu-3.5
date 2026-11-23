@@ -16,7 +16,15 @@ public static class MySQL
 
     public static MySqlConnection CreateConnection()
     {
-        var connection = new MySqlConnection(s_connectionString);
+        return CreateConnection(allowUserVariables: false);
+    }
+
+    public static MySqlConnection CreateConnection(bool allowUserVariables)
+    {
+        var connectionString = s_connectionString;
+        if (allowUserVariables)
+            connectionString = new MySqlConnectionStringBuilder(connectionString) { AllowUserVariables = true }.ConnectionString;
+        var connection = new MySqlConnection(connectionString);
         try
         {
             connection.Open();

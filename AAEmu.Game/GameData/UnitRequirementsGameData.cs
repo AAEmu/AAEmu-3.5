@@ -5,6 +5,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Quests;
 using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Skills.Plots;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
@@ -13,7 +14,6 @@ using AAEmu.Game.Models.Spheres;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Utils.DB;
 using Microsoft.Data.Sqlite;
-using NLog;
 
 namespace AAEmu.Game.GameData;
 
@@ -23,22 +23,11 @@ namespace AAEmu.Game.GameData;
 [GameData]
 public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGameDataLoader
 {
-    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
-
-    /// <summary>
-    /// (owner_type, owner_id), unit_reqs
-    /// </summary>
-    private Dictionary<(string OwnerType, uint OwnerId), UnitReqs> _unitReqs { get; set; }
-
-    /// <summary>
-    /// owner_type, owner_id, unit_reqs
-    /// </summary>
-    private Dictionary<string, List<UnitReqs>> _unitReqsByOwnerType { get; set; }
+    private volatile Dictionary<(string OwnerType, uint OwnerId), List<UnitReqs>> _unitReqs = [];
 
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
-        _unitReqs = [];
-        _unitReqsByOwnerType = [];
+        var requirements = new Dictionary<(string OwnerType, uint OwnerId), List<UnitReqs>>();
 
         #region Tables
 
@@ -61,12 +50,14 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
             };
 
             var key = (t.OwnerType, t.OwnerId);
-            if (!_unitReqs.TryAdd(key, t))
-                Logger.Warn($"Duplicate entry for unit_reqs with owner_type={t.OwnerType}, owner_id={t.OwnerId}");
-            if (!_unitReqsByOwnerType.ContainsKey(t.OwnerType))
-                _unitReqsByOwnerType.TryAdd(t.OwnerType, []);
-            _unitReqsByOwnerType[t.OwnerType].Add(t);
+            if (!requirements.TryGetValue(key, out var rows))
+            {
+                rows = [];
+                requirements.Add(key, rows);
+            }
+            rows.Add(t);
         }
+        _unitReqs = requirements;
         #endregion
     }
 
@@ -75,46 +66,73 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
         // Maybe bind requirement system directly into target templates for optimization?
     }
 
-    private IEnumerable<UnitReqs> GetRequirement(string ownerType, uint ownerId)
+    private List<UnitReqs> GetRequirementsCopy(string ownerType, uint ownerId)
     {
-        if (!_unitReqsByOwnerType.TryGetValue(ownerType, out var unitReqsMap))
-            return null;
-        return unitReqsMap.Where(x => x.OwnerId == ownerId);
+        return _unitReqs.TryGetValue((ownerType, ownerId), out var rows) ? [.. rows] : [];
     }
 
     public List<UnitReqs> GetSkillRequirements(uint skillId)
     {
-        return GetRequirement("Skill", skillId).ToList();
+        return GetRequirementsCopy("Skill", skillId);
+    }
+
+    public bool CanPassPlotCondition(PlotCondition condition, BaseUnit owner, BaseUnit target)
+    {
+        return condition != null && MeetsRequirements("PlotCondition", condition.Id, condition.OrUnitReqs, owner, target);
+    }
+
+    internal bool CanActivateHighAbility(uint id, bool orRequirements, Character owner)
+    {
+        return MeetsRequirements("HighAbility", id, orRequirements, owner, owner);
+    }
+
+    private bool MeetsRequirements(string ownerType, uint ownerId, bool orRequirements, BaseUnit owner, BaseUnit target)
+    {
+        if (owner == null)
+            return false;
+        if (!_unitReqs.TryGetValue((ownerType, ownerId), out var requirements) || requirements.Count == 0)
+            return true;
+
+        foreach (var requirement in requirements)
+        {
+            var passed = requirement.Validate(owner, target ?? owner).ResultKey == SkillResultKeys.ok;
+            if (orRequirements && passed)
+                return true;
+            if (!orRequirements && !passed)
+                return false;
+        }
+
+        return !orRequirements;
     }
 
     public List<UnitReqs> GetAchievementObjectiveRequirements(uint achievementObjectiveId)
     {
-        return GetRequirement("AchievementObjective", achievementObjectiveId).ToList();
+        return GetRequirementsCopy("AchievementObjective", achievementObjectiveId);
     }
 
     public List<UnitReqs> GetAiEventRequirements(uint aiEvent)
     {
-        return GetRequirement("AiEvent", aiEvent).ToList();
+        return GetRequirementsCopy("AiEvent", aiEvent);
     }
 
     public List<UnitReqs> GetItemArmorRequirements(uint armorId)
     {
-        return GetRequirement("ItemArmor", armorId).ToList();
+        return GetRequirementsCopy("ItemArmor", armorId);
     }
 
     public List<UnitReqs> GetItemWeaponRequirements(uint weaponId)
     {
-        return GetRequirement("ItemWeapon", weaponId).ToList();
+        return GetRequirementsCopy("ItemWeapon", weaponId);
     }
 
     public List<UnitReqs> GetQuestComponentRequirements(uint componentId)
     {
-        return GetRequirement("QuestComponent", componentId).ToList();
+        return GetRequirementsCopy("QuestComponent", componentId);
     }
 
     public List<UnitReqs> GetSphereRequirements(uint sphereId)
     {
-        return GetRequirement("Sphere", sphereId).ToList();
+        return GetRequirementsCopy("Sphere", sphereId);
     }
 
     public TreasureMap GetTreasureMapWithCoordinatesNearbyItem(Character character, double maxRange)
@@ -142,7 +160,7 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
     /// <param name="ownerUnit"></param>
     /// <param name="skillCaster"></param>
     /// <returns></returns>
-    public UnitReqsValidationResult CanUseSkill(SkillTemplate skillTemplate, BaseUnit ownerUnit, SkillCaster skillCaster)
+    public UnitReqsValidationResult CanUseSkill(SkillTemplate skillTemplate, BaseUnit ownerUnit, SkillCaster skillCaster, SkillCastTarget castTarget = null)
     {
         // Buried Treasure check, I can't seem to find any table that adds this requirement
         // Note by ZeromusXYZ:
@@ -159,8 +177,7 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
 
         // if (skillTemplate == null)
         //     return new UnitReqsValidationResult(SkillResultKeys.skill_invalid_skill, 0, 0);
-        var reqs = GetSkillRequirements(skillTemplate.Id);
-        if (reqs.Count == 0)
+        if (!_unitReqs.TryGetValue(("Skill", skillTemplate.Id), out var reqs))
             return new UnitReqsValidationResult(SkillResultKeys.ok, 0, 0); // SkillResult.Success; // No requirements, we're good
 
         // Used for special handling hack for AreaSphere requirement
@@ -179,11 +196,15 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
         }
         // TODO: check if there are any other skill types that required to be used in a specific area of multiple quest spheres
 
-        // Needed to fix skills that can only target self (i.e. that don't apply to the target, for example glider skills),
-        // even though they use UnitReqsKindType.TargetBuffTag
-        var target = skillTemplate.TargetType == SkillTargetType.Self
-            ? ownerUnit
-            : (ownerUnit as Unit)?.CurrentTarget ?? ownerUnit;
+        // The selected unit can differ from the target sent with this cast.
+        var target = ownerUnit;
+        if (skillTemplate.TargetType != SkillTargetType.Self)
+        {
+            if (castTarget == null)
+                target = (ownerUnit as Unit)?.CurrentTarget ?? ownerUnit;
+            else if (castTarget is SkillCastUnitTarget or SkillCastDoodadTarget && castTarget.ObjId > 0)
+                target = ownerUnit.ParentWorld?.GetBaseUnit(castTarget.ObjId);
+        }
         
         var res = !skillTemplate.OrUnitReqs;
         var lastFailedCheckResult = new UnitReqsValidationResult(SkillResultKeys.skill_failure, 0, 0);
@@ -212,17 +233,17 @@ public class UnitRequirementsGameData : Singleton<UnitRequirementsGameData>, IGa
                     lastFailedCheckResult = lastCheckResult;
             }
 
-            if (skillTemplate.OrUnitReqs)
-            {
-                // If OrUnitReqs is set, stop checking at the first hit
-                res = true;
+            res = skillTemplate.OrUnitReqs ? res || reqRes : res && reqRes;
+            if (skillTemplate.OrUnitReqs && res)
                 break;
-            }
-
-            res &= reqRes;
         }
 
-        return res ? new UnitReqsValidationResult(SkillResultKeys.ok, 0, 0) : lastFailedCheckResult;
+        if (res)
+            return new UnitReqsValidationResult(SkillResultKeys.ok, 0, 0);
+
+        return skillTemplate.OrUnitReqs
+            ? new UnitReqsValidationResult(SkillResultKeys.skill_unit_reqs_or_fail, 0, 0)
+            : lastFailedCheckResult;
     }
 
     public bool CanTriggerSphere(Spheres sphere, BaseUnit ownerUnit)

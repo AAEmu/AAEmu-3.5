@@ -1,5 +1,13 @@
 
+using System.Reflection;
+using AAEmu.Commons.Network;
+using AAEmu.Commons.Utils;
+using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Models.Game.Skills.Templates;
 
 namespace AAEmu.UnitTests.Game.Models.Game.Units;
 
@@ -35,6 +43,109 @@ public class UnitCooldownsTests
 
         // Assert
         await Assert.That(cooldowns.Cooldowns).HasSingleItem();
+    }
+
+    [Test]
+    public async Task AddCooldown_ReplacesExpiredEntryEvenIfItWasNotChecked()
+    {
+        var cooldowns = new UnitCooldowns();
+        cooldowns.Cooldowns.TryAdd(100, DateTime.UtcNow.AddMinutes(-1));
+
+        cooldowns.AddCooldown(100, 60_000);
+
+        await Assert.That(cooldowns.CheckCooldown(100)).IsTrue();
+    }
+
+    [Test]
+    public async Task SharedCooldownBlocksAnotherSkillWithTheSameTag()
+    {
+        var cooldowns = new UnitCooldowns();
+        var first = new SkillTemplate { Id = 100, CooldownTagId = 30 };
+        var sibling = new SkillTemplate { Id = 101, SecondCooldownTagId = 30 };
+        var unrelated = new SkillTemplate { Id = 102, CooldownTagId = 31 };
+
+        cooldowns.AddSkillCooldown(first, 60_000);
+
+        await Assert.That(cooldowns.CheckSkillCooldown(first)).IsTrue();
+        await Assert.That(cooldowns.CheckSkillCooldown(sibling)).IsTrue();
+        await Assert.That(cooldowns.CheckSkillCooldown(unrelated)).IsFalse();
+    }
+
+    [Test]
+    public async Task ResetTagClearsOnlyTheSharedCooldown()
+    {
+        var cooldowns = new UnitCooldowns();
+        var first = new SkillTemplate { Id = 100, CooldownTagId = 30 };
+        var sibling = new SkillTemplate { Id = 101, CooldownTagId = 30 };
+        cooldowns.AddSkillCooldown(first, 60_000);
+
+        cooldowns.RemoveTagCooldown(30);
+
+        await Assert.That(cooldowns.CheckSkillCooldown(first)).IsTrue();
+        await Assert.That(cooldowns.CheckSkillCooldown(sibling)).IsFalse();
+    }
+
+    [Test]
+    public async Task ResetSkillClearsTheServerTimerAndRequestedGlobalTimer()
+    {
+        var character = new Character(new UnitCustomModelParams());
+        character.Cooldowns.AddCooldown(100, 60_000);
+        character.GlobalCooldown = DateTime.UtcNow.AddMinutes(1);
+
+        character.ResetSkillCooldown(100, gcd: true);
+
+        await Assert.That(character.Cooldowns.CheckCooldown(100)).IsFalse();
+        await Assert.That(character.GlobalCooldown).IsEqualTo(DateTime.MinValue);
+    }
+
+    [Test]
+    public async Task ResetCooldownEffectClearsAnAuthoredGroupTimer()
+    {
+        var character = new Character(new UnitCustomModelParams());
+        var first = new SkillTemplate { Id = 100, CooldownTagId = 30 };
+        var sibling = new SkillTemplate { Id = 101, CooldownTagId = 30 };
+        character.Cooldowns.AddSkillCooldown(first, 60_000);
+
+        new ResetCooldown().Execute(character, null, null, null, null, null, null, DateTime.UtcNow, 0, 30, 0, 0);
+
+        await Assert.That(character.Cooldowns.CheckSkillCooldown(sibling)).IsFalse();
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task ResetCooldownEffectWithSkillTagsFlagClearsTheSkillAndItsVariants()
+    {
+        var character = new Character(new UnitCustomModelParams());
+        var first = new SkillTemplate { Id = 11934, CooldownTagId = 3314 };
+        var sibling = new SkillTemplate { Id = 36597, CooldownTagId = 3314 };
+        var skills = new SkillManager(null, null);
+        typeof(SkillManager).GetField("_skills", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(skills,
+            new Dictionary<uint, SkillTemplate> { [first.Id] = first, [sibling.Id] = sibling });
+        var singleton = typeof(Singleton<SkillManager>).GetField("s_instance", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var previous = singleton.GetValue(null);
+        singleton.SetValue(null, skills);
+        try
+        {
+            character.Cooldowns.AddSkillCooldown(first, 24000);
+
+            new ResetCooldown().Execute(character, null, null, null, null, null, null, DateTime.UtcNow, 11934, 0, 0, 1);
+
+            await Assert.That(character.Cooldowns.CheckSkillCooldown(first)).IsFalse();
+            await Assert.That(character.Cooldowns.CheckSkillCooldown(sibling)).IsFalse();
+
+            var packet = new SCSkillCooldownResetPacket(character, first.Id, 0, false, resetSkillTags: true);
+            var payload = packet.Write(new PacketStream());
+            payload.Pos = 0;
+            _ = payload.ReadBc();
+            _ = payload.ReadUInt16();
+            _ = payload.ReadUInt16();
+            _ = payload.ReadBoolean();
+            await Assert.That(payload.ReadBoolean()).IsTrue();
+        }
+        finally
+        {
+            singleton.SetValue(null, previous);
+        }
     }
 
     [Test]

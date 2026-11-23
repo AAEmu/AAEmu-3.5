@@ -1,7 +1,6 @@
 ﻿using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Core.Packets.G2C;
-using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
@@ -27,10 +26,10 @@ public class AggroEffect : EffectTemplate
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
         CompressedGamePackets packetBuilder = null)
     {
-        if (caster is not Character character)
+        if (caster is not Unit { ObjId: > 0 } casterUnit)
             return;
 
-        if (target is not Npc npc)
+        if (target is not Npc { ObjId: > 0 } npc)
             return;
 
         Logger.Info($"AggroEffect: UseFixedAggro={UseFixedAggro}, UseLevelAggro={UseLevelAggro}, UseChargedBuff={UseChargedBuff}");
@@ -40,8 +39,8 @@ public class AggroEffect : EffectTemplate
 
         if (UseLevelAggro)
         {
-            var lvlMd = character.LevelDps * LevelMd;
-            var levelModifier = (((source.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
+            var lvlMd = casterUnit.LevelDps * LevelMd;
+            var levelModifier = (((source?.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
 
             min += lvlMd - levelModifier * lvlMd + 0.5f;
             max += (levelModifier + 1) * lvlMd + 0.5f;
@@ -66,6 +65,6 @@ public class AggroEffect : EffectTemplate
 
         var value = (int)Random.Shared.Next(min, max);
         npc.SendPacketToPlayers([caster, npc], new SCAiAggroPacket(npc.ObjId, 1, caster.ObjId, value, 0, 0));
-        npc.AddUnitAggro(AggroKind.Damage, character, value);
+        npc.AddUnitAggro(AggroKind.Etc, casterUnit, value);
     }
 }

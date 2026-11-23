@@ -79,6 +79,7 @@ public enum Feature
     flag_10_5 = 85,
     flag_10_6 = 86,
     flag_10_7 = 87,
+    itemLookConvertInBag = 150,
 
     /* 3503 Enum Only
     hudAuctionButton = 89,
@@ -114,7 +115,6 @@ public enum Feature
     expeditionRecruit = 147,
     uiAvi = 148,
     shopOnUI = 149,
-    itemLookConvertInBag = 150,
     newReportBaduser = 151,
     expeditionSummon = 153,
     heroBonus = 154,

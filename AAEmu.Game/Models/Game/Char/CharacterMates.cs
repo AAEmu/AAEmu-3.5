@@ -1,8 +1,10 @@
 ﻿using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.UnitManagers;
+using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Items;
+using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
@@ -15,6 +17,11 @@ namespace AAEmu.Game.Models.Game.Char;
 
 public class CharacterMates(Character owner)
 {
+    internal const uint RecoveryPotionSkillId = 15220;
+    private const uint GoldenWyvernNpcId = 16861;
+    private static readonly TimeSpan s_defaultRecovery = TimeSpan.FromMinutes(5);
+    private readonly Lock _stateLock = new();
+
     /*
      * TODO:
      * EQUIPMENT CHANGE
@@ -29,7 +36,8 @@ public class CharacterMates(Character owner)
 
     public MateDb GetMateInfo(ulong itemId)
     {
-        return _mates.GetValueOrDefault(itemId);
+        lock (_stateLock)
+            return _mates.GetValueOrDefault(itemId);
     }
 
     private MateDb CreateNewMate(ulong itemId, NpcTemplate npcTemplate)
@@ -56,9 +64,25 @@ public class CharacterMates(Character owner)
 
     public void SpawnMount(SkillItem skillData)
     {
+        lock (_stateLock)
+            SpawnMountCore(skillData);
+    }
+
+    private void SpawnMountCore(SkillItem skillData)
+    {
+        if (FindOwnedBagItem(skillData.ItemId) is not SummonMate { Template: SummonMateTemplate itemTemplate } item)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (item.RepairStartTime > now)
+        {
+            Owner.SendErrorMessage(ErrorMessageType.MateDead);
+            return;
+        }
+
         var despawnedOldPets = false;
         // Check if we had already spawned something
-        foreach(var oldMate in Owner.ParentWorld.MateManager.GetActiveMates(Owner.Id).ToList())
+        foreach (var oldMate in Owner.ParentWorld.MateManager.GetActiveMates(Owner.Id))
         {
             DespawnMate(oldMate.TlId);
             despawnedOldPets = true;
@@ -66,15 +90,15 @@ public class CharacterMates(Character owner)
         if (despawnedOldPets)
             return;
 
-        var item = Owner.Inventory.GetItemById(skillData.ItemId);
-        if (item == null) return;
-
-        var itemTemplate = (SummonMateTemplate)ItemManager.Instance.GetTemplate(item.TemplateId);
         var npcId = itemTemplate.NpcId;
         var template = NpcManager.Instance.GetTemplate(npcId);
+        if (template == null)
+            return;
         var tlId = (ushort)TlIdManager.Instance.GetNextId();
         var objId = ObjectIdManager.Instance.GetNextId();
         var mateDbInfo = GetMateInfo(skillData.ItemId) ?? CreateNewMate(skillData.ItemId, template);
+        if (item.RepairStartTime != DateTime.MinValue)
+            CompleteRecovery(item, mateDbInfo, now);
 
         var mount = new Units.Mate
         {
@@ -130,24 +154,124 @@ public class CharacterMates(Character owner)
 
     public void DespawnMate(uint tlId)
     {
-        var mateInfo = Owner.ParentWorld.MateManager.GetActiveMateByTlId(tlId);
-        if (mateInfo != null)
+        if (Owner.ParentWorld?.MateManager is { } manager)
+            DespawnMate(manager, tlId);
+    }
+
+    internal void DespawnMate(MateManager manager, uint tlId)
+    {
+        lock (_stateLock)
+            DespawnMateCore(manager, tlId);
+    }
+
+    private void DespawnMateCore(MateManager manager, uint tlId, DateTime? deathTime = null)
+    {
+        var mateInfo = manager.GetActiveOwnedMateByTlId(Owner.Id, tlId);
+        if (mateInfo == null)
+            return;
+
+        var mateDbInfo = GetMateInfo(mateInfo.ItemId);
+        var now = deathTime ?? DateTime.UtcNow;
+        if (mateDbInfo != null)
         {
-            var mateDbInfo = GetMateInfo(mateInfo.ItemId);
-            if (mateDbInfo != null)
-            {
-                mateDbInfo.Hp = mateInfo.Hp;
-                mateDbInfo.Mp = mateInfo.Mp;
-                mateDbInfo.Level = mateInfo.Level;
-                mateDbInfo.Xp = mateInfo.Experience;
-                mateDbInfo.Mileage = mateInfo.Mileage;
-                mateDbInfo.Name = mateInfo.Name;
-                mateDbInfo.UpdatedAt = DateTime.UtcNow;
-            }
+            mateDbInfo.Hp = mateInfo.Hp;
+            mateDbInfo.Mp = mateInfo.Mp;
+            mateDbInfo.Level = mateInfo.Level;
+            mateDbInfo.Xp = mateInfo.Experience;
+            mateDbInfo.Mileage = mateInfo.Mileage;
+            mateDbInfo.Name = mateInfo.Name;
+            mateDbInfo.UpdatedAt = now;
         }
 
-        Owner.ParentWorld.MateManager.RemoveActiveMateAndDespawn(Owner, tlId);
+        // The standard recovery introduced for other pets expressly excluded the Golden Wyvern.
+        var injured = mateInfo.IsDead && mateInfo.TemplateId != GoldenWyvernNpcId
+            ? Owner.Inventory?.GetItemById(mateInfo.ItemId) as SummonMate
+            : null;
+        if (injured?.OwnerId != Owner.Id)
+            injured = null;
+        if (injured != null && injured.RepairStartTime == DateTime.MinValue)
+            injured.RepairStartTime = now.Add(s_defaultRecovery);
+
+        manager.RemoveActiveMateAndDespawn(Owner, tlId);
+        if (injured != null)
+            NotifyMateItemUpdate(injured);
     }
+
+    private Item FindOwnedBagItem(ulong itemId)
+    {
+        var bag = Owner.Inventory?.Bag;
+        var item = bag?.GetItemByItemId(itemId);
+        return item?.OwnerId == Owner.Id && item.SlotType == SlotType.Inventory &&
+               ReferenceEquals(item.HoldingContainer, bag) && item.Count > 0 ? item : null;
+    }
+
+    private Units.Mate FindActiveMate(ulong itemId)
+    {
+        if (Owner.ParentWorld?.MateManager is not { } manager)
+            return null;
+
+        foreach (var mate in manager.GetActiveMates(Owner.Id))
+            if (mate.ItemId == itemId)
+                return mate;
+
+        return null;
+    }
+
+    internal bool CanUseRecoveryPotion(ulong potionId, SkillCastTarget target, DateTime now)
+    {
+        lock (_stateLock)
+            return CanUseRecoveryPotionCore(potionId, target, now, out _, out _, out _);
+    }
+
+    private bool CanUseRecoveryPotionCore(ulong potionId, SkillCastTarget target, DateTime now,
+        out Item potion, out SummonMate summon, out MateDb mate)
+    {
+        potion = FindOwnedBagItem(potionId);
+        summon = target is SkillCastItemTarget itemTarget ? FindOwnedBagItem(itemTarget.Id) as SummonMate : null;
+        mate = summon != null ? _mates.GetValueOrDefault(summon.Id) : null;
+        return potion?.Template is { UseSkillId: RecoveryPotionSkillId, UseSkillAsReagent: true } &&
+               summon != null && summon.RepairStartTime > now && mate?.Owner == Owner.Id &&
+               FindActiveMate(summon.Id) == null;
+    }
+
+    internal bool TryUseRecoveryPotion(ulong potionId, SkillCastTarget target, DateTime now)
+    {
+        lock (_stateLock)
+        {
+            if (!CanUseRecoveryPotionCore(potionId, target, now, out var potion, out var summon, out var mate) ||
+                !potion.HoldingContainer.TryConsumeExact(ItemTaskType.SkillReagents, potion.TemplateId, 1, potion))
+                return false;
+
+            CompleteRecovery(summon, mate, now);
+            NotifyMateItemUpdate(summon);
+            Owner.SendErrorMessage(ErrorMessageType.MateResurrected);
+            return true;
+        }
+    }
+
+    private static void CompleteRecovery(SummonMate item, MateDb mate, DateTime now)
+    {
+        item.RepairStartTime = DateTime.MinValue;
+        // The summoned unit caps these values to its computed, equipment-adjusted maxima.
+        mate.Hp = int.MaxValue;
+        mate.Mp = int.MaxValue;
+        mate.UpdatedAt = now;
+    }
+
+    internal void RecordDeathAndDespawn(Units.Mate mate, DateTime now)
+    {
+        lock (_stateLock)
+        {
+            if (mate.ParentWorld?.MateManager is not { } manager ||
+                !ReferenceEquals(manager.GetActiveOwnedMateByTlId(Owner.Id, mate.TlId), mate))
+                return;
+
+            DespawnMateCore(manager, mate.TlId, now);
+        }
+    }
+
+    private void NotifyMateItemUpdate(SummonMate item) =>
+        Owner.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.UpdateSummonMateItem, [new ItemUpdate(item)], []));
 
     /// <summary>
     /// Load pet data of the player
@@ -181,6 +305,12 @@ public class CharacterMates(Character owner)
     }
 
     public void Save(MySqlConnection connection, MySqlTransaction transaction)
+    {
+        lock (_stateLock)
+            SaveCore(connection, transaction);
+    }
+
+    private void SaveCore(MySqlConnection connection, MySqlTransaction transaction)
     {
         if (_removedMates.Count > 0)
         {

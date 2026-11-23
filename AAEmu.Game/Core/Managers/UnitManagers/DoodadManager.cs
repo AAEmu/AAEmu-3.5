@@ -154,7 +154,11 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
             // doodad_phase_funcs
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM doodad_phase_funcs ORDER BY doodad_func_group_id, actual_func_id";
+                command.CommandText = """
+                    SELECT * FROM doodad_phase_funcs
+                    ORDER BY doodad_func_group_id, actual_func_type = 'DoodadFuncItemChanger',
+                        CASE WHEN actual_func_type = 'DoodadFuncItemChanger' THEN id ELSE actual_func_id END
+                    """;
                 command.Prepare();
                 using (var sqliteDataReader = command.ExecuteReader())
                 using (var reader = new SQLiteWrapperReader(sqliteDataReader))
@@ -180,6 +184,26 @@ public class DoodadManager(IObjectIdManager objectIdManager, IDoodadIdManager do
 
                         list.Add(func);
                     }
+                }
+            }
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT id, item_id, item_count, next_phase, skill_id FROM doodad_func_item_changers";
+                command.Prepare();
+                using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+                var options = _phaseFuncTemplates[nameof(DoodadFuncItemChanger)];
+                while (reader.Read())
+                {
+                    var option = new DoodadFuncItemChanger
+                    {
+                        Id = reader.GetUInt32("id"),
+                        ItemId = reader.GetUInt32("item_id"),
+                        ItemCount = reader.GetInt32("item_count"),
+                        NextPhase = reader.GetInt32("next_phase"),
+                        SkillId = reader.GetUInt32("skill_id")
+                    };
+                    options.Add(option.Id, option);
                 }
             }
 

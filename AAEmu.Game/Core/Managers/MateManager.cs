@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.World;
@@ -22,7 +23,7 @@ public class MateManager(WorldInstance parentWorldInstance)
     private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
     private Regex _nameRegex;
 
-    private Dictionary<uint, List<Mate>> _activeMates = []; // ownerId, Mount
+    private readonly ConcurrentDictionary<uint, List<Mate>> _activeMates = []; // ownerId, mount snapshot
 
     private WorldInstance World { get; init; } = parentWorldInstance;
 
@@ -44,6 +45,18 @@ public class MateManager(WorldInstance parentWorldInstance)
     public Mate GetActiveMateByTlId(uint tlId)
     {
         return _activeMates.Values.SelectMany(mateList => mateList).FirstOrDefault(mate => mate.TlId == tlId);
+    }
+
+    internal Mate GetActiveOwnedMateByTlId(uint ownerId, uint tlId) =>
+        _activeMates.TryGetValue(ownerId, out var mates) ? FindMateByTlId(mates, tlId) : null;
+
+    private static Mate FindMateByTlId(List<Mate> mates, uint tlId)
+    {
+        foreach (var mate in mates)
+            if (mate.TlId == tlId)
+                return mate;
+
+        return null;
     }
 
     /// <summary>
@@ -186,8 +199,12 @@ public class MateManager(WorldInstance parentWorldInstance)
     public void UnMountMate(Character character, uint tlId, AttachPointKind attachPoint, AttachUnitReason reason)
     {
         var mateInfo = GetActiveMateByTlId(tlId);
-        if (mateInfo == null) return;
+        if (mateInfo != null)
+            UnMountMate(character, mateInfo, attachPoint, reason);
+    }
 
+    private void UnMountMate(Character character, Mate mateInfo, AttachPointKind attachPoint, AttachUnitReason reason)
+    {
         mateInfo.StopUpdateXp();
 
         // Request seat position
@@ -235,21 +252,13 @@ public class MateManager(WorldInstance parentWorldInstance)
     /// <param name="item"></param>
     public void AddActiveMateAndSpawn(Character owner, Mate mate, Item item)
     {
-        // Get or set entry for player objId
-        if (!_activeMates.TryGetValue(owner.Id, out var activeMateList))
-        {
-            activeMateList = [];
-            _activeMates.Add(owner.Id, activeMateList);
-        }
-
         // TODO: For later versions, allow multiple pets if they are different types (mount, battle, skill)
-        foreach (var mateInfo in activeMateList)
+        if (!_activeMates.TryAdd(owner.Id, [mate]))
         {
-            owner.Mates.DespawnMate(mateInfo.TlId);
+            foreach (var mateInfo in GetActiveMates(owner.Id))
+                owner.Mates.DespawnMate(mateInfo.TlId);
             return;
         }
-
-        activeMateList.Add(mate);
 
         owner.SendPacket(new SCItemTaskSuccessPacket(ItemTaskType.UpdateSummonMateItem, [new ItemUpdate(item)], [])); // TODO - maybe update details
         owner.SendPacket(new SCMateSpawnedPacket(mate));
@@ -266,20 +275,19 @@ public class MateManager(WorldInstance parentWorldInstance)
     /// <param name="tlId"></param>
     public void RemoveActiveMateAndDespawn(Character owner, uint tlId)
     {
-        var mateInfo = GetActiveMateByTlId(tlId);
-        if (mateInfo == null)
+        if (!_activeMates.TryGetValue(owner.Id, out var activeMateList))
             return; // skip if invalid tlId
 
+        var mateInfo = FindMateByTlId(activeMateList, tlId);
+        if (mateInfo == null || !_activeMates.TryRemove(new KeyValuePair<uint, List<Mate>>(owner.Id, activeMateList)))
+            return;
+
+        mateInfo.StopUpdateXp();
         foreach (var ati in mateInfo.Passengers)
         {
-            UnMountMate(WorldManager.Instance.GetCharacterByObjId(ati.Value._objId), mateInfo.TlId, ati.Key, AttachUnitReason.SlaveBinding);
-        }
-
-        if (_activeMates.TryGetValue(owner.Id, out var activeMateList))
-        {
-            activeMateList.Remove(mateInfo);
-            if (activeMateList.Count == 0)
-                _activeMates.Remove(owner.Id);
+            if (ati.Value._objId == 0)
+                continue;
+            UnMountMate(WorldManager.Instance.GetCharacterByObjId(ati.Value._objId), mateInfo, ati.Key, AttachUnitReason.SlaveBinding);
         }
         
         mateInfo.Delete();
@@ -296,24 +304,10 @@ public class MateManager(WorldInstance parentWorldInstance)
     /// <param name="character"></param>
     public void RemoveAndDespawnAllActiveOwnedMates(Character character)
     {
-        if (character == null) return;
-        var markForDeleteObj = new List<uint>();
+        if (character?.Mates == null)
+            return;
         foreach (var mate in GetActiveMates(character.Id))
-        {
-            foreach (var ati in mate.Passengers)
-                UnMountMate(WorldManager.Instance.GetCharacterByObjId(ati.Value._objId), mate.TlId, ati.Key,
-                    AttachUnitReason.SlaveBinding);
-
-            if (mate.OwnerObjId > 0)
-                markForDeleteObj.Add(mate.OwnerObjId);
-            mate.Delete();
-            ObjectIdManager.Instance.ReleaseId(mate.ObjId);
-            if (mate.TlId > 0)
-                TlIdManager.Instance.ReleaseId(mate.TlId);
-        }
-
-        foreach (var u in markForDeleteObj)
-            _activeMates.Remove(u);
+            character.Mates.DespawnMate(this, mate.TlId);
     }
 
     /// <summary>
@@ -322,6 +316,6 @@ public class MateManager(WorldInstance parentWorldInstance)
     public void Load()
     {
         _nameRegex = new Regex(AppConfiguration.Instance.CharacterNameRegex, RegexOptions.Compiled);
-        _activeMates = [];
+        _activeMates.Clear();
     }
 }

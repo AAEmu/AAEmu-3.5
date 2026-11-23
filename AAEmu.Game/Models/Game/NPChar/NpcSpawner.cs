@@ -190,6 +190,22 @@ public class NpcSpawner : Spawner<Npc>
             DoDespawnsNow(npcs);
     }
 
+    internal void QueueEffectDespawns(SpawnManager spawnManager)
+    {
+        if (!SpawnedNpcs.TryGetValue(SpawnerId, out var npcs))
+            return;
+
+        Npc[] snapshot;
+        lock (npcs)
+            snapshot = npcs.ToArray();
+
+        foreach (var npc in snapshot)
+        {
+            if (ReferenceEquals(npc?.Spawner, this))
+                spawnManager.TryQueueEffectDespawn(npc, scheduleRespawn: false);
+        }
+    }
+
     /// <summary>
     /// Determines whether the NPCs can be spawned based on schedule and current presence.
     /// </summary>
@@ -796,14 +812,18 @@ public class NpcSpawner : Spawner<Npc>
     /// <summary>
     /// Decreases the spawn count and handles respawn logic for the specified NPC.
     /// </summary>
-    internal void DoDespawn(Npc npc)
+    internal void DoDespawn(Npc npc, DateTime? effectDespawnAt = null)
     {
         try
         {
             lock (_spawnLock)
             {
+                var world = npc?.ParentWorld;
+                if (world == null || !ReferenceEquals(world.GetNpc(npc.ObjId), npc))
+                    return;
+
                 var zoneManaged = ZonePopulationManaged
-                    && npc.ParentWorld?.ZoneNpcSpawn?.OwnsPlacement(SpawnerId) == true;
+                    && world.ZoneNpcSpawn?.OwnsPlacement(SpawnerId) == true;
                 var scheduleFromDeath = !zoneManaged || ZoneNpcSpawnRules.RespawnFromDeathEnabled;
 
                 // Если условия позволяют, планируем респаун
@@ -813,7 +833,7 @@ public class NpcSpawner : Spawner<Npc>
                     IncrementCount(true);
                     //Logger.Info($"Scheduled respawn for NPC {UnitId}:{SpawnerId}:{npc.ObjId} in {RespawnTime} seconds.");
                     npc.Respawn = DateTime.UtcNow.AddSeconds(RespawnTime);
-                    npc.ParentWorld.SpawnManager.AddRespawn(npc);
+                    world.SpawnManager.AddRespawn(npc);
                 }
                 else
                 {
@@ -822,18 +842,18 @@ public class NpcSpawner : Spawner<Npc>
                 }
 
                 // Sets the despawn time
-                npc.Despawn = DateTime.UtcNow.AddSeconds(DespawnTime);
+                npc.Despawn = effectDespawnAt ?? DateTime.UtcNow.AddSeconds(DespawnTime);
                 //Logger.Info($"Scheduled despawn for NPC {UnitId}:{SpawnerId}:{npc.ObjId} in {DespawnTime} seconds.");
 
                 // Extends the despawn time if there are items in the container
-                if (npc.LootingContainer != null && npc.LootingContainer.Items.Count > 0)
+                if (effectDespawnAt == null && npc.LootingContainer != null && npc.LootingContainer.Items.Count > 0)
                 {
                     npc.Despawn += TimeSpan.FromSeconds(LootingContainer.LootDespawnExtensionTime);
                     //Logger.Info($"Extended despawn time in {LootingContainer.LootDespawnExtensionTime} seconds for NPC {UnitId}:{SpawnerId}:{npc.ObjId} due to items in looting container.");
                 }
 
                 // Adds the NPC to the despawn list
-                npc.ParentWorld.SpawnManager.AddDespawn(npc);
+                world.SpawnManager.AddDespawn(npc);
                 //Logger.Info($"Added NPC {UnitId}:{SpawnerId}:{npc.ObjId} to despawn list, scheduledCount={_scheduledCount}");
                 TryZoneMinPopulationTopUp(npc);
             }

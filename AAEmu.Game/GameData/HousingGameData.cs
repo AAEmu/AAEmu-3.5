@@ -27,7 +27,6 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _housingTemplates = [];
-        _housingItemHousings = [];
         _housingDecorations = [];
         _housingItemHousingDecorations = [];
 
@@ -36,22 +35,7 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
 
         Logger.Info("Loading Housing Information ...");
 
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "SELECT * FROM item_housings";
-            command.Prepare();
-            using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
-            {
-                while (reader.Read())
-                {
-                    var template = new HousingItemHousings();
-                    //template.Id = reader.GetUInt32("id"); // there is no such field in the database for version 3.0.3.0
-                    template.Item_Id = reader.GetUInt32("item_id");
-                    template.Design_Id = reader.GetUInt32("design_id");
-                    _housingItemHousings.Add(template);
-                }
-            }
-        }
+        LoadDesignItems(connection);
 
         Logger.Info("Loading Housing Templates...");
         // Define the folder path where your housing binding files reside.
@@ -233,6 +217,35 @@ public class HousingGameData : Singleton<HousingGameData>, IGameDataLoader
         }
     }
     
+    internal void LoadDesignItems(SqliteConnection connection)
+    {
+        var designs = new List<HousingItemHousings>();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT item_id, design_id FROM item_housings";
+        using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+        while (reader.Read())
+        {
+            designs.Add(new HousingItemHousings
+            {
+                Item_Id = reader.GetUInt32("item_id"),
+                Design_Id = reader.GetUInt32("design_id")
+            });
+        }
+
+        _housingItemHousings = designs;
+    }
+
+    internal bool IsDesignItem(uint designId, uint itemTemplateId)
+    {
+        foreach (var design in _housingItemHousings)
+        {
+            if (design.Design_Id == designId && design.Item_Id == itemTemplateId)
+                return true;
+        }
+
+        return false;
+    }
+
     private List<HousingBindingTemplate> LoadHousingBindings(string dataFolder)
     {
         Logger.Info("Loading Housing Templates...");

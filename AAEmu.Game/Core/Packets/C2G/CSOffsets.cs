@@ -26,8 +26,8 @@ public static class CSOffsets
     public const ushort CSStartDuelPacket = 0x00E;
     //public const ushort CSResturnAddrsPacket = 0x010;
     public const ushort off_39CFB1AC = 0xfff;
-    public const ushort off_39CFB25C = 0x08A;
-    public const ushort off_39CFB268 = 0x0F3;
+    public const ushort CSActivateHeirSkillPacket = 0x08A;
+    public const ushort CSResetHeirSkillPacket = 0x0F3;
     public const ushort CSHeroRankingListPacket = 0x0F1;
     public const ushort CSHeroCandidateListPacket = 0x084;
     public const ushort CSHeroAbstainPacket = 0x0B2;
@@ -275,7 +275,7 @@ public static class CSOffsets
     public const ushort CSResetSkillsPacket = 0x04B;
     public const ushort CSSwapAbilityPacket = 0x10A;
     public const ushort CSSelectHighAbilityPacket = 0x11B;
-    public const ushort off_39D37CC8 = 0x123;
+    public const ushort CSHeirLevelUpPacket = 0x123;
     public const ushort off_39D37D88 = 0x0B4;
     public const ushort CSRemoveBuffPacket = 0x0DA;
     public const ushort CSStopCastingPacket = 0x112;
@@ -283,7 +283,7 @@ public static class CSOffsets
     public const ushort CSIndunDirectTelPacket = 0x10F;
     public const ushort CSSetForceAttackPacket = 0xfff;
     public const ushort CSStartSkillPacket = 0x1A4;
-    public const ushort off_39D38344 = 0x119;
+    public const ushort CSFireCastingSkillPacket = 0x119;
     public const ushort CSStopLootingPacket = 0x0A9;
     public const ushort CSCreateDoodadPacket = 0x10B;
     public const ushort CSNaviTeleportPacket = 0x03F;
@@ -296,7 +296,7 @@ public static class CSOffsets
     public const ushort CSBuyItemsPacket = 0x082;
     public const ushort off_39D39A80 = 0x1B1;
     public const ushort off_39D39A8C = 0x190;
-    public const ushort off_39D39A98 = 0x00F;
+    public const ushort CSItemChangerPacket = 0x00F;
     public const ushort CSUnitAttachedPacket = 0x131; // off_39D39AA8
     public const ushort CSInteractNPCPacket = 0x0A7; // CSInteractNpcPacket
     public const ushort CSInteractNPCEndPacket = 0x0E0; // CSInteractNpcEndPacket

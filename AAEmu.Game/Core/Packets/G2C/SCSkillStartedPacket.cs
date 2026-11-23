@@ -104,6 +104,6 @@ public class SCSkillStartedPacket(
 
     public override string Verbose()
     {
-        return $" - Id {id}, TlId {tl}, Caster {caster.ObjId}, Target {target.ObjId}, Skill {skill.Template.Id}";
+        return $" - Id {id}, TlId {tl}, Caster {caster.ObjId}, Target {target.ObjId}, Skill {skill?.Template?.Id ?? id}";
     }
 }
