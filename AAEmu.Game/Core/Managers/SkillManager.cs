@@ -723,11 +723,15 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
             {
                 command.CommandText = "SELECT * FROM buffs";
                 command.Prepare();
-                using (var reader = new SQLiteWrapperReader(command.ExecuteReader()))
+                // Buff data can use NULL for optional fields; the primary key remains required.
+                using (var reader = new SQLiteWrapperReader(command.ExecuteReader(), nullsAsDefaults: true))
                 {
                     while (reader.Read())
                     {
                         // updated to 3.0.3.0
+                        if (reader.IsDBNull("id"))
+                            throw new InvalidOperationException("Buff template has a NULL id.");
+
                         var template = new BuffTemplate();
                         template.Id = reader.GetUInt32("id");
                         template.ActiveWeaponId = reader.GetUInt32("active_weapon_id");

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using AAEmu.Commons.IO;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Models.Game.Char;
@@ -16,6 +18,80 @@ public class SkillManagerLoadTests
     private static readonly object s_sync = new();
     private static SkillManager? s_manager;
     private static string? s_repoDataDir;
+
+    [Test]
+    public async Task Load_UsesDefaultsForNullOptionalBuffColumns()
+    {
+        var sourceDataDir = FindRepositoryDataDir();
+        var temporaryGamePath = Path.Combine(Path.GetTempPath(), $"AAEmu.SkillManagerLoadTests.{Guid.NewGuid():N}");
+        var temporaryDataDir = Path.Combine(temporaryGamePath, "Data");
+        var appPathField = typeof(FileManager).GetField("_appPath", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("Could not locate FileManager.AppPath backing field.");
+        var originalAppPath = appPathField.GetValue(null);
+
+        try
+        {
+            Directory.CreateDirectory(temporaryDataDir);
+            File.Copy(Path.Combine(sourceDataDir, "compact.sqlite3"), Path.Combine(temporaryDataDir, "compact.sqlite3"));
+            File.Copy(Path.Combine(sourceDataDir, "compact.server.table.sqlite3"),
+                Path.Combine(temporaryDataDir, "compact.server.table.sqlite3"));
+
+            uint buffId;
+            var databasePath = Path.Combine(temporaryDataDir, "compact.sqlite3");
+            using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT id FROM buffs ORDER BY id LIMIT 1";
+                buffId = Convert.ToUInt32(command.ExecuteScalar());
+
+                var nullAssignments = new List<string>();
+                using (var schemaCommand = connection.CreateCommand())
+                {
+                    schemaCommand.CommandText = "PRAGMA table_info(buffs)";
+                    using var schemaReader = schemaCommand.ExecuteReader();
+                    while (schemaReader.Read())
+                    {
+                        var columnName = schemaReader.GetString(1);
+                        if (columnName == "id" || columnName == "active_weapon_id")
+                            continue;
+
+                        nullAssignments.Add($"\"{columnName}\" = NULL");
+                    }
+                }
+
+                command.CommandText = $"UPDATE buffs SET {string.Join(", ", nullAssignments)} WHERE id = $id";
+                command.Parameters.AddWithValue("$id", buffId);
+                command.ExecuteNonQuery();
+            }
+
+            appPathField.SetValue(null, temporaryGamePath);
+            var manager = new SkillManager(Mock.Of<IAnimationManager>().Object, Mock.Of<IPlotManager>().Object);
+
+            manager.Load();
+
+            var buff = manager.GetBuffTemplate(buffId);
+            await Assert.That(buff).IsNotNull();
+            await Assert.That(buff!.AddDurationBuffMul).IsEqualTo(0u);
+            await Assert.That(buff.AddDurationBuffId).IsEqualTo(0u);
+            await Assert.That(buff.AnimActionId).IsEqualTo(0u);
+            await Assert.That(buff.AntiStealth).IsFalse();
+            await Assert.That(buff.AgStance).IsEqualTo(string.Empty);
+            await Assert.That(buff.BossTelescopeRange).IsEqualTo(0f);
+            await Assert.That(buff.Desc).IsEqualTo(string.Empty);
+            await Assert.That(buff.ExtraEffects).IsEqualTo(string.Empty);
+            await Assert.That(buff.IdleAnim).IsEqualTo(string.Empty);
+            await Assert.That(buff.Name).IsEqualTo(string.Empty);
+            await Assert.That(buff.Tick).IsEqualTo(0d);
+        }
+        finally
+        {
+            appPathField.SetValue(null, originalAppPath);
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(temporaryGamePath))
+                Directory.Delete(temporaryGamePath, recursive: true);
+        }
+    }
 
     [Test]
     public async Task Load_MapsSkillAndControllerColumns_FromRealSqliteData()
