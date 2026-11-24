@@ -58,7 +58,9 @@ public class HealPetTests
         var updateWriter = new PacketStream();
         new ItemUpdate(pet).Write(updateWriter);
         var update = new PacketStream(updateWriter.GetBytes());
-        update.ReadBytes(11);
+        await Assert.That(update.ReadByte()).IsEqualTo((byte)ItemAction.UpdateDetail);
+        await Assert.That(update.ReadByte()).IsEqualTo((byte)ItemTaskLogType.UpdateOnly);
+        update.ReadBytes(10); // slot type, slot index, item ID
         await Assert.That(update.ReadInt16()).IsEqualTo((short)128);
         await Assert.That(update.ReadByte()).IsEqualTo((byte)ItemDetailType.Mate);
         update.ReadBytes(6);

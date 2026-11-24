@@ -20,6 +20,7 @@ public class SCTradeMadePacket(ItemTaskType action, List<ItemTask> tasks, List<u
             stream.Write(remove);
 
         stream.Write(0u); // type(id)
+        stream.Write(0); // lockItemSlotKey
         return stream;
     }
 }

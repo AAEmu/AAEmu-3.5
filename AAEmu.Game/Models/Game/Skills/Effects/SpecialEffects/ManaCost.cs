@@ -33,7 +33,17 @@ public class ManaCost : SpecialEffectAction
 
             character.LastCast = DateTime.UtcNow;
             character.IsInPostCast = true;
-            // TODO / 10
+
+            // Plot-only skills skip their regular effects. Open the authored combo window at release.
+            if (castObj is not CastPlot || skill is not { Template.PlotOnly: true, Cancelled: false } ||
+                skill.ActivePlotState?.CancellationRequested() == true || character.Skills is not { } skills)
+                return;
+
+            foreach (var effect in skill.Template.Effects)
+            {
+                if (effect.Template is SpecialEffect { SpecialEffectTypeId: SpecialType.Combo, Value1: > 0 } combo)
+                    skills.OpenComboFollowUp((uint)combo.Value1, combo.Value2);
+            }
         }
     }
 }

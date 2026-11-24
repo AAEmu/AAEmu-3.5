@@ -10,6 +10,7 @@ public abstract class ItemTask : PacketMarshaler
     public override PacketStream Write(PacketStream stream)
     {
         stream.Write((byte)_type);
+        stream.Write((byte)_tLogt);
         return stream;
     }
 

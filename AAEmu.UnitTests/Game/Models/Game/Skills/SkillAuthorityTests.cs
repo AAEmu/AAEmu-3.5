@@ -10,7 +10,9 @@ using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
+using AAEmu.Game.Models.Game.Skills.Plots.Tree;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
@@ -109,6 +111,83 @@ public class SkillAuthorityTests
             DateTime.UtcNow, 502, 1000, 0, 0);
 
         await Assert.That(authority.Check(sender, caster, null, followUp)).IsEqualTo(SkillResult.Success);
+    }
+
+    [Test]
+    public async Task FlameboltPlotManaCostAuthorizesEachSuccessiveAttack()
+    {
+        var sender = CreateCharacter();
+        var caster = new SkillCasterUnit(sender.ObjId);
+        var authority = CreateAuthority(FlameboltComboRows);
+        var first = FlameboltStage(10752, 24894);
+        var second = FlameboltStage(24894, 24895);
+        var third = new SkillTemplate { Id = 24895, AbilityId = AbilityType.Magic, PlotOnly = true };
+        sender.Skills.AddSkill(first, 1, false);
+
+        await Assert.That(authority.Check(sender, caster, null, second)).IsEqualTo(SkillResult.InvalidSkill);
+        var firstCast = new Skill(first);
+        ApplyFlameboltManaCost(sender, caster, firstCast, 280, 2346, 16);
+        var secondAfterFirst = authority.Check(sender, caster, null, second);
+        var thirdAfterFirst = authority.Check(sender, caster, null, third);
+
+        var secondCast = new Skill(second);
+        ApplyFlameboltManaCost(sender, caster, secondCast, 1454, 11559, 10);
+        var thirdAfterSecond = authority.Check(sender, caster, null, third);
+
+        await Assert.That(secondAfterFirst).IsEqualTo(SkillResult.Success);
+        await Assert.That(thirdAfterFirst).IsEqualTo(SkillResult.InvalidSkill);
+        await Assert.That(thirdAfterSecond).IsEqualTo(SkillResult.Success);
+    }
+
+    [Test]
+    [Arguments(true, true)]
+    [Arguments(false, false)]
+    public async Task PlotManaCostGrantsNoComboForCancelledOrNonPlotOnlySkills(bool plotOnly, bool cancelled)
+    {
+        var sender = CreateCharacter();
+        var caster = new SkillCasterUnit(sender.ObjId);
+        var target = new SkillCastUnitTarget(sender.ObjId);
+        var authority = CreateAuthority(FlameboltComboRows);
+        var first = FlameboltStage(10752, 24894);
+        first.PlotOnly = plotOnly;
+        var followUp = FlameboltStage(24894, 24895);
+        var cast = new Skill(first);
+        cast.ActivePlotState = new PlotState(sender, caster, sender, target, null, cast);
+        if (cancelled)
+            cast.ActivePlotState.RequestCancellation();
+
+        ApplyFlameboltManaCost(sender, caster, cast, 280, 2346, 16);
+
+        await Assert.That(authority.Check(sender, caster, null, followUp)).IsEqualTo(SkillResult.InvalidSkill);
+    }
+
+    private const string FlameboltComboRows = """
+        INSERT INTO special_effects VALUES (23309, 48, 24894), (15763, 48, 24895);
+        INSERT INTO effects VALUES (55077, 'SpecialEffect', 23309), (36559, 'SpecialEffect', 15763);
+        INSERT INTO skill_effects VALUES (10752, 55077), (24894, 36559);
+        """;
+
+    private static SkillTemplate FlameboltStage(uint id, int followUp) => new()
+    {
+        Id = id,
+        Name = "Flamebolt",
+        AbilityId = AbilityType.Magic,
+        AbilityLevel = 1,
+        PlotOnly = true,
+        Effects =
+        [
+            new SkillEffect
+            {
+                Template = new SpecialEffect { SpecialEffectTypeId = SpecialType.Combo, Value1 = followUp, Value2 = 1000 }
+            }
+        ]
+    };
+
+    private static void ApplyFlameboltManaCost(Character sender, SkillCasterUnit caster, Skill cast, uint plotId, uint eventId, int mana)
+    {
+        var effect = new SpecialEffect { SpecialEffectTypeId = SpecialType.ManaCost, Value1 = mana };
+        effect.Apply(sender, caster, sender, new SkillCastUnitTarget(sender.ObjId),
+            new CastPlot(plotId, 1, eventId, cast.Id), new EffectSource(cast), null, DateTime.UtcNow);
     }
 
     [Test]
