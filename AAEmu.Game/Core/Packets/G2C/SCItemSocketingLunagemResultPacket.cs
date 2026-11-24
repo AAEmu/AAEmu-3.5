@@ -11,7 +11,8 @@ public class SCItemSocketingLunagemResultPacket(byte result, ulong itemId, uint 
         stream.Write(result);
         stream.Write(itemId);
         stream.Write(type);
-        stream.Write(install);
+        stream.Write(install ? (byte)1 : (byte)0);
+        stream.Write(result == 1);
         return stream;
     }
 }

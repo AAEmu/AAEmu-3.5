@@ -16,6 +16,9 @@ public class SCGradeEnchantResultPacket(byte result, Item item, byte type1, byte
         stream.Write(item);
         stream.Write(type1);
         stream.Write(type2);
+        stream.Write(0u); // break reward item template
+        stream.Write(0); // break reward item count
+        stream.Write(false); // break reward by mail
 
         return stream;
     }

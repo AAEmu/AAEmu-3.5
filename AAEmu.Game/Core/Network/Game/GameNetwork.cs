@@ -277,7 +277,7 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSCharDetailPacket, 5, typeof(CSCharDetailPacket));
         RegisterPacket(CSOffsets.CSAddBlockedUserPacket, 5, typeof(CSAddBlockedUserPacket));
         RegisterPacket(CSOffsets.CSDeleteBlockedUserPacket, 5, typeof(CSDeleteBlockedUserPacket));
-        RegisterPacket(CSOffsets.CSRequestCommonFarmList, 1, typeof(CSRequestCommonFarmList));
+        RegisterPacket(CSOffsets.CSRequestCommonFarmList, 5, typeof(CSRequestCommonFarmList));
         RegisterPacket(CSOffsets.CSNotifySubZonePacket, 5, typeof(CSNotifySubZonePacket));
         //RegisterPacket(CSOffsets.CSResturnAddrsPacket, 1, typeof(CSResturnAddrsPacket));
         RegisterPacket(CSOffsets.CSRequestUIDataPacket, 5, typeof(CSRequestUIDataPacket));
@@ -368,6 +368,10 @@ public class GameNetwork : Singleton<GameNetwork>
 
     private void RegisterPacket(uint type, byte level, Type classType)
     {
+        // 0xFFF is the placeholder for packets without an assigned client opcode.
+        if (type == 0xFFF)
+            return;
+
         _handler.RegisterPacket(type, level, classType);
     }
 }
