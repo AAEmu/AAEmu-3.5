@@ -12,6 +12,7 @@ using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Models.Game.Units.Static;
 using AAEmu.Game.Models.Game.World;
 
 using NLog;
@@ -252,6 +253,9 @@ public class MateManager(WorldInstance parentWorldInstance)
     /// <param name="item"></param>
     public void AddActiveMateAndSpawn(Character owner, Mate mate, Item item)
     {
+        // The 3.5 client only sends a mount request at distances strictly below 3 m.
+        mate.Transform.Local.AddDistanceToFront(mate.MateType == MateType.Ride ? 2.5f : 3f);
+
         // TODO: For later versions, allow multiple pets if they are different types (mount, battle, skill)
         if (!_activeMates.TryAdd(owner.Id, [mate]))
         {

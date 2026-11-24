@@ -94,6 +94,7 @@ public class CharacterMates(Character owner)
         var template = NpcManager.Instance.GetTemplate(npcId);
         if (template == null)
             return;
+        var mateData = MateGameData.Instance;
         var tlId = (ushort)TlIdManager.Instance.GetNextId();
         var objId = ObjectIdManager.Instance.GetNextId();
         var mateDbInfo = GetMateInfo(skillData.ItemId) ?? CreateNewMate(skillData.ItemId, template);
@@ -108,6 +109,7 @@ public class CharacterMates(Character owner)
             Name = mateDbInfo.Name,
             TemplateId = template.Id,
             Template = template,
+            MateType = mateData.GetMateType(template.MateEquipSlotPackId),
             ModelId = template.ModelId,
             Faction = Owner.Faction,
             Level = (byte)mateDbInfo.Level,
@@ -126,7 +128,7 @@ public class CharacterMates(Character owner)
         mount.Transform = Owner.Transform.CloneDetached(mount);
         SusManager.Instance.ResetAnalyzeMountDeltaMovement(mount.Id);
 
-        foreach (var skill in MateGameData.Instance.GetMateSkills(npcId))
+        foreach (var skill in mateData.GetMateSkills(npcId))
             mount.Skills.Add(skill);
 
         foreach (var buffId in template.Buffs)
@@ -146,8 +148,6 @@ public class CharacterMates(Character owner)
         mount.Hp = Math.Min(mount.Hp, mount.MaxHp);
         mount.Mp = Math.Min(mount.Mp, mount.MaxMp);
 
-        mount.Transform.Local.AddDistanceToFront(3f);
-        //Logger.Warn($"Spawn the pet:{mount.ObjId} X={mount.Transform.World.Position.X} Y={mount.Transform.World.Position.Y}");
         Owner.ParentWorld.MateManager.AddActiveMateAndSpawn(Owner, mount, item);
         mount.PostUpdateCurrentHp(mount, 0, mount.Hp, KillReason.Unknown);
     }

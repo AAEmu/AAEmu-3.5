@@ -33,6 +33,7 @@ public sealed class Mate : Unit
     /// The item that this summon is from
     /// </summary>
     public ulong ItemId { get; set; }
+    public MateType MateType { get; init; }
     public byte UserState { get; set; }
     public int Experience { get; set; }
     public int Mileage { get; set; }

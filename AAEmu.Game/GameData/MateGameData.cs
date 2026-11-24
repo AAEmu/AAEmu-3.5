@@ -2,6 +2,7 @@
 using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Mate;
+using AAEmu.Game.Models.Game.Units.Static;
 using AAEmu.Game.Utils.DB;
 
 using Microsoft.Data.Sqlite;
@@ -16,14 +17,17 @@ public class MateGameData : Singleton<MateGameData>, IGameDataLoader
     private Dictionary<uint, List<uint>> _npcMountSkills = [];
     private Dictionary<uint, MountSkills> _mountSkills = [];
     private Dictionary<uint, MountAttachedSkills> _mountAttachedSkills = [];
+    private Dictionary<int, MateType> _mateTypesByEquipSlotPack = [];
+
+    public MateType GetMateType(int equipSlotPackId) => _mateTypesByEquipSlotPack.GetValueOrDefault(equipSlotPackId);
 
     /// <summary>
     /// Gets a list of pet skill Ids
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
-    public List<uint> GetMateSkills(uint id)
-        => (from skills in _npcMountSkills where skills.Key == id select skills.Value).FirstOrDefault();
+    public IReadOnlyList<uint> GetMateSkills(uint id) =>
+        _npcMountSkills.TryGetValue(id, out var skills) ? skills : [];
 
     /// <summary>
     /// Get the associated rider skill for a given mountSkill
@@ -92,8 +96,17 @@ public class MateGameData : Singleton<MateGameData>, IGameDataLoader
         _npcMountSkills = [];
         _mountSkills = [];
         _mountAttachedSkills = [];
+        _mateTypesByEquipSlotPack = [];
 
         #region MateTables
+
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT id, mate_type_id FROM mate_equip_slot_packs";
+            using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+            while (reader.Read())
+                _mateTypesByEquipSlotPack.Add(reader.GetInt32("id"), (MateType)reader.GetByte("mate_type_id"));
+        }
 
         // Npc Mount skills
         using (var command = connection.CreateCommand())
