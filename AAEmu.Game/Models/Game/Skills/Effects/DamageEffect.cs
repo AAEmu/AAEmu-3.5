@@ -81,9 +81,11 @@ public class DamageEffect : EffectTemplate
     {
         Logger.Trace("DamageEffect");
 
+        var plot = (castObj as CastPlot)?.TargetInfo;
         var trg = target as Unit;
         if (trg == null || trg.Hp <= 0)
         {
+            plot?.SetCombatHit(caster, target, SkillHitType.Invalid);
             return;
         }
 
@@ -99,6 +101,7 @@ public class DamageEffect : EffectTemplate
 
         if (target.Buffs.CheckDamageImmune(DamageType))
         {
+            plot?.SetCombatHit(caster, trg, SkillHitType.Immune);
             target.BroadcastPacket(new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 1, 0)
             {
                 HitType = SkillHitType.Immune
@@ -109,10 +112,14 @@ public class DamageEffect : EffectTemplate
         var weapon = ((Unit)caster).Equipment.GetItemBySlot(WeaponSlotId);
         var holdable = (WeaponTemplate)weapon?.Template;
 
-        var hitType = SkillHitType.Invalid;
-        if ((source?.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
-            && (source?.Skill.SkillMissed(trg.ObjId) ?? false))
+        var preparedHit = SkillHitType.Invalid;
+        plot?.TryGetCombatHit(caster, trg, out preparedHit, preparedOnly: true);
+        var hitType = preparedHit;
+        if (plot == null && source?.Skill is { } ordinarySkill)
+            ordinarySkill.HitTypes.TryGetValue(trg.ObjId, out hitType);
+        if (CombatDiceResults.PreventsHit(hitType))
         {
+            plot?.SetCombatHit(caster, trg, hitType);
             var missPacket = new SCUnitDamagedPacket(castObj, casterObj, caster.ObjId, target.ObjId, 0, 0)
             {
                 HoldableId = (byte)(holdable?.HoldableTemplate?.Id ?? 0),
@@ -127,7 +134,10 @@ public class DamageEffect : EffectTemplate
 
         // Test-drive restriction damage is authored on a friendly vehicle.
         if (castObj is not CastBuff { Buff.Template.Id: 6151 } && !caster.CanAttack(trg))
+        {
+            plot?.SetCombatHit(caster, trg, SkillHitType.Invalid);
             return;
+        }
 
         if (Bonuses != null)
         {
@@ -135,34 +145,10 @@ public class DamageEffect : EffectTemplate
                 caster.AddBonus(uint.MaxValue, new Bonus { Template = bonus, Value = bonus.Value });
         }
 
-        float flexibilityRateMod = trg.Flexibility / 1000 * 3;
-        switch (DamageType)
-        {
-            case DamageType.Melee:
-                if (Random.Shared.Next(0f, 100f) < ((Unit)caster).MeleeCritical - flexibilityRateMod)
-                    hitType = SkillHitType.MeleeCritical;
-                else
-                    hitType = SkillHitType.MeleeHit;
-                break;
-            case DamageType.Magic:
-                if (Random.Shared.Next(0f, 100f) < ((Unit)caster).SpellCritical - flexibilityRateMod)
-                    hitType = SkillHitType.SpellCritical;
-                else
-                    hitType = SkillHitType.SpellHit;
-                break;
-            case DamageType.Ranged:
-                if (Random.Shared.Next(0f, 100f) < ((Unit)caster).RangedCritical - flexibilityRateMod)
-                    hitType = SkillHitType.RangedCritical;
-                else
-                    hitType = SkillHitType.RangedHit;
-                break;
-            case DamageType.Siege:
-                hitType = SkillHitType.RangedHit;//No siege type?
-                break;
-            default:
-                hitType = SkillHitType.Invalid;
-                break;
-        }
+        hitType = CombatDiceResults.MatchesDamageType(preparedHit, DamageType)
+            ? preparedHit
+            : CombatDiceResults.RollCritical((Unit)caster, trg, DamageType);
+        plot?.SetCombatHit(caster, trg, hitType);
 
         var min = 0.0f;
         var max = 0.0f;

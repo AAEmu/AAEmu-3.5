@@ -88,7 +88,7 @@ public class PlotEventEffect
                 state.CasterCaster,
                 target,
                 state.TargetCaster,
-                new CastPlot(evt.PlotId, state.ActiveSkill.TlId, evt.Id, state.ActiveSkill.Template.Id),
+                new CastPlot(evt.PlotId, state.ActiveSkill.TlId, evt.Id, state.ActiveSkill.Template.Id) { TargetInfo = targetInfo },
                 new EffectSource(state.ActiveSkill) { AoeDiminishing = evt.AoeDiminishing },
                 state.SkillObject,
                 DateTime.UtcNow,

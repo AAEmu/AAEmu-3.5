@@ -5,6 +5,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Faction;
 using AAEmu.Game.Models.Game.Items;
 using AAEmu.Game.Models.Game.Items.Templates;
+using AAEmu.Game.Models.Game.Skills.Plots.Tree;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Utils;
@@ -34,8 +35,10 @@ public class PlotCondition
     /// <param name="targetCaster"></param>
     /// <param name="skillObject"></param>
     /// <param name="skill"></param>
+    /// <param name="targetInfo"></param>
     /// <returns></returns>
-    public bool Check(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, Skill skill)
+    public bool Check(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster,
+        SkillObject skillObject, Skill skill, PlotTargetInfo targetInfo = null)
     {
         var res = Kind switch
         {
@@ -46,7 +49,7 @@ public class PlotCondition
             PlotConditionType.WeaponEquipStatus => ConditionWeaponEquipStatus(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Chance => ConditionChance(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Dead => ConditionDead(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
-            PlotConditionType.CombatDiceResult => ConditionCombatDiceResult(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3, skill), // Every CombatDiceResult is a NotCondition -> false makes it true.
+            PlotConditionType.CombatDiceResult => ConditionCombatDiceResult(caster, target, skill, targetInfo),
             PlotConditionType.InstrumentType => ConditionInstrumentType(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Range => ConditionRange(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3),
             PlotConditionType.Variable => ConditionVariable(caster, casterCaster, target, targetCaster, skillObject, Param1, Param2, Param3, skill),
@@ -165,29 +168,18 @@ public class PlotCondition
         return false;
     }
 
-    // 9
-    private static bool ConditionCombatDiceResult(BaseUnit caster, SkillCaster casterCaster, BaseUnit target,
-        SkillCastTarget targetCaster, SkillObject skillObject, int unknown1, int unused2, int unused3, Skill skill)
+    private bool ConditionCombatDiceResult(BaseUnit caster, BaseUnit target, Skill skill, PlotTargetInfo targetInfo)
     {
-        // NOTE: unknown1 kind of looks like it could be a bit mask of some sorts, but no idea what it actually is
-        if (target is Unit targetUnit)
-        {
-            // Super hacky way to do combat dice....
-            var hitType = skill.RollCombatDice(caster, targetUnit);
-            if (!skill.HitTypes.TryAdd(targetUnit.ObjId, hitType))
-                skill.HitTypes[targetUnit.ObjId] = hitType;
+        if (targetInfo == null || caster is not Unit || target is not Unit)
+            return false;
 
-            return hitType == SkillHitType.MeleeDodge
-                || hitType == SkillHitType.MeleeParry
-                || hitType == SkillHitType.MeleeBlock
-                || hitType == SkillHitType.MeleeMiss
-                || hitType == SkillHitType.RangedDodge
-                || hitType == SkillHitType.RangedParry
-                || hitType == SkillHitType.RangedBlock
-                || hitType == SkillHitType.RangedMiss
-                || hitType == SkillHitType.Immune;
+        if (!targetInfo.TryGetCombatHit(caster, target, out var hit) && skill != null)
+        {
+            // Some plots start with a result condition without an authored roll or damage event.
+            hit = skill.RollCombatDice(caster, target);
+            targetInfo.SetCombatHit(caster, target, hit, prepared: CombatDiceResults.PreventsHit(hit));
         }
-        return true; // Almost Every CombatDiceResult is a NotCondition -> false makes it true.
+        return CombatDiceResults.MatchesMask(hit, Param1);
     }
 
     // 10

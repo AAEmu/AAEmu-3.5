@@ -1,5 +1,7 @@
 ﻿using AAEmu.Commons.Network;
 
+using AAEmu.Game.Models.Game.Skills.Plots.Tree;
+
 namespace AAEmu.Game.Models.Game.Skills;
 
 public enum CastType : byte
@@ -48,6 +50,8 @@ public class CastSkill : CastAction
 
 public class CastPlot : CastAction
 {
+    internal PlotTargetInfo TargetInfo { get; init; }
+
     private readonly uint _plotId;
     private readonly ushort _tlId;
     private readonly uint _eventId;

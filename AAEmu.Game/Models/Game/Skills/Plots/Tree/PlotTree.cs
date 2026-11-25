@@ -28,7 +28,7 @@ public class PlotTree(uint plotId)
             stopWatch.Start();
 
             var queue = new Queue<(PlotNode node, DateTime timestamp, PlotTargetInfo targetInfo, int? castingUsePercent)>();
-            var executeQueue = new Queue<(PlotNode node, PlotTargetInfo targetInfo)>();
+            var executeQueue = new Queue<(PlotNode node, PlotTargetInfo targetInfo, int? castingUsePercent)>();
 
             queue.Enqueue((RootNode, DateTime.UtcNow, new PlotTargetInfo(state), null));
             byte lastEvent = 1;
@@ -87,6 +87,8 @@ public class PlotTree(uint plotId)
                         continue;
                     }
 
+                    if (ReadsCombatResult(node.Event))
+                        FlushExecutionQueue(executeQueue, state);
                     state.CastingUsePercent = castingUsePercent;
                     item.targetInfo.UpdateTargetInfo(node.Event, state);
 
@@ -97,7 +99,7 @@ public class PlotTree(uint plotId)
 
                     if (condition)
                     {
-                        executeQueue.Enqueue((node, item.targetInfo));
+                        executeQueue.Enqueue((node, item.targetInfo, castingUsePercent));
                     }
 
                     foreach (var child in node.Children)
@@ -108,13 +110,13 @@ public class PlotTree(uint plotId)
                             {
                                 foreach (var target in item.targetInfo.EffectedTargets)
                                 {
-                                    var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target);
+                                    var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target, item.targetInfo);
                                     ScheduleChild(child, state, targetInfo, castingUsePercent, now, nowMs, queue);
                                 }
                             }
                             else
                             {
-                                var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target);
+                                var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target, item.targetInfo);
                                 ScheduleChild(child, state, targetInfo, castingUsePercent, now, nowMs, queue);
                             }
                         }
@@ -207,14 +209,14 @@ public class PlotTree(uint plotId)
                         foreach (var target in item.targetInfo.EffectedTargets)
                         {
 
-                            var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target);
+                            var targetInfo = new PlotTargetInfo(item.targetInfo.Source, target, item.targetInfo);
                             queue.Enqueue((child, DateTime.UtcNow, targetInfo, item.castingUsePercent));
                             queuedNodeIds.Add(child.Event.Id); // Mark this node as queued
                         }
                     }
                     else
                     {
-                        var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target);
+                        var targetInfo = new PlotTargetInfo(item.targetInfo.Source, item.targetInfo.Target, item.targetInfo);
                         queue.Enqueue((child, DateTime.UtcNow, targetInfo, item.castingUsePercent));
                         queuedNodeIds.Add(child.Event.Id); // Mark this node as queued
                     }
@@ -231,13 +233,24 @@ public class PlotTree(uint plotId)
             //Logger.Debug($"Plot {PlotId}: No channeling node to transition to.");
         }
     }
-    private static void FlushExecutionQueue(Queue<(PlotNode node, PlotTargetInfo targetInfo)> executeQueue, PlotState state)
+    private static bool ReadsCombatResult(PlotEventTemplate plotEvent)
+    {
+        foreach (var condition in plotEvent.Conditions)
+        {
+            if (condition.Condition?.Kind == PlotConditionType.CombatDiceResult)
+                return true;
+        }
+        return false;
+    }
+
+    private static void FlushExecutionQueue(Queue<(PlotNode node, PlotTargetInfo targetInfo, int? castingUsePercent)> executeQueue, PlotState state)
     {
 
         var packets = new CompressedGamePackets();
         while (executeQueue.Count > 0)
         {
             var item = executeQueue.Dequeue();
+            state.CastingUsePercent = item.castingUsePercent;
             item.node.Execute(state, item.targetInfo, packets);
         }
 

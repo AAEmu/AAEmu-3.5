@@ -71,7 +71,7 @@ public class PlotEventCondition
                 _ => throw new InvalidOperationException("Invalid plot effect target")
             };
             return condition.Condition.Check(source, state.CasterCaster, fallbackTarget,
-                state.TargetCaster, state.SkillObject, state.ActiveSkill);
+                state.TargetCaster, state.SkillObject, state.ActiveSkill, targetInfo);
         }
 
         var result = true;
@@ -100,7 +100,7 @@ public class PlotEventCondition
             }
 
             if (condition.Condition.Check(source, state.CasterCaster, target,
-                state.TargetCaster, state.SkillObject, state.ActiveSkill))
+                state.TargetCaster, state.SkillObject, state.ActiveSkill, targetInfo))
             {
                 continue;
             }

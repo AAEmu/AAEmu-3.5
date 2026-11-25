@@ -31,7 +31,8 @@ public class SCUnitDamagedPacket(
         stream.Write((ushort)(288 | (ushort)HitType)); // de
         // stream.Write((ushort)623);
         stream.Write((byte)1); // flag
-        stream.Write((byte)1); // result -> to debug info
+        var result = CombatDiceResults.FromHitType(HitType);
+        stream.Write((byte)(result == CombatDiceResult.Invalid ? CombatDiceResult.Hit : result));
         // TODO debug info
         return stream;
     }

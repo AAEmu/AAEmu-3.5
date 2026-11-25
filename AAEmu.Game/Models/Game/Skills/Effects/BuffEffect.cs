@@ -25,12 +25,14 @@ public class BuffEffect : EffectTemplate
 
         if (target is Unit trg)
         {
-            var hitType = SkillHitType.Invalid;
-            if ((source?.Skill?.HitTypes.TryGetValue(trg.ObjId, out hitType) ?? false)
-                && (source.Skill?.SkillMissed(trg.ObjId) ?? false))
+            if (castObj is CastPlot { TargetInfo: { } plot })
             {
-                return;
+                if (plot.TryGetCombatHit(caster, trg, out var plotHit) && CombatDiceResults.PreventsHit(plotHit))
+                    return;
             }
+            else if (source?.Skill is { } skill && skill.HitTypes.TryGetValue(trg.ObjId, out var hitType) &&
+                     CombatDiceResults.PreventsHit(hitType))
+                return;
         }
 
         if (caster != null)

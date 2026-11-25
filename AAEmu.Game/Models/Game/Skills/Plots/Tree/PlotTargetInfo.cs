@@ -10,6 +10,9 @@ namespace AAEmu.Game.Models.Game.Skills.Plots.Tree;
 
 public class PlotTargetInfo
 {
+    private readonly PlotTargetInfo _previousEvent;
+    private Dictionary<(BaseUnit Source, BaseUnit Target), (SkillHitType Hit, bool Prepared)> _combatHits;
+
     public BaseUnit Source { get; set; }
     private BaseUnit PreviousSource { get; set; }
     public BaseUnit Target { get; set; }
@@ -23,14 +26,38 @@ public class PlotTargetInfo
         PreviousTarget = state.Target;
     }
 
-    public PlotTargetInfo(BaseUnit source, BaseUnit target)
+    public PlotTargetInfo(BaseUnit source, BaseUnit target) : this(source, target, null)
     {
+    }
+
+    internal PlotTargetInfo(BaseUnit source, BaseUnit target, PlotTargetInfo previousEvent)
+    {
+        _previousEvent = previousEvent;
         EffectedTargets = [];
         PreviousSource = source;
         PreviousTarget = target;
         Source = source;
         Target = target;
     }
+
+    internal bool TryGetCombatHit(BaseUnit source, BaseUnit target, out SkillHitType hit, bool preparedOnly = false)
+    {
+        // Child events inherit the result of their own predecessors. Siblings write to separate events.
+        for (var current = this; current != null; current = current._previousEvent)
+        {
+            if (current._combatHits?.TryGetValue((source, target), out var result) != true)
+                continue;
+            if (preparedOnly && !result.Prepared)
+                break;
+            hit = result.Hit;
+            return true;
+        }
+        hit = SkillHitType.Invalid;
+        return false;
+    }
+
+    internal void SetCombatHit(BaseUnit source, BaseUnit target, SkillHitType hit, bool prepared = false) =>
+        (_combatHits ??= [])[(source, target)] = (hit, prepared);
 
     public void UpdateTargetInfo(PlotEventTemplate template, PlotState state)
     {
