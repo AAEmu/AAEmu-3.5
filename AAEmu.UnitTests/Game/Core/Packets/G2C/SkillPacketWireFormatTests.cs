@@ -8,6 +8,29 @@ namespace AAEmu.UnitTests.Game.Core.Packets.G2C;
 public class SkillPacketWireFormatTests
 {
     [Test]
+    public async Task PositionTarget_ReadsAllThreeObjectIdsBeforeSkillObjectFlag()
+    {
+        byte[] payload =
+        [
+            0, 0, 0, 0, 0, 0, 0, 0, // X
+            0, 0, 0, 0, 0, 0, 0, 0, // Y
+            0, 0, 0, 0, 0, 0, 0, 0, // Z and rotation
+            0x03, 0x02, 0x01, 0x06, 0x05, 0x04, 0x09, 0x08, 0x07,
+            0x80
+        ];
+        var stream = new PacketStream(payload);
+        var target = SkillCastTarget.GetByType(SkillCastTargetType.Position);
+
+        target.Read(stream);
+
+        await Assert.That(stream.ReadByte()).IsEqualTo((byte)0x80);
+        await Assert.That(stream.Pos).IsEqualTo(stream.Count);
+        var written = target.Write(new PacketStream()).GetBytes();
+        byte[] expected = [1, .. payload.AsSpan(0, payload.Length - 1)];
+        await Assert.That(written.AsSpan().SequenceEqual(expected)).IsTrue();
+    }
+
+    [Test]
     public async Task HeirSkillListSendsOneSelectedSuccessorWithItsBaseSkillAndRank()
     {
         var stream = new SCHeirSkillListPacket([new(1, 18132, 36401, 11, 1, 0, true)]).Write(new PacketStream());

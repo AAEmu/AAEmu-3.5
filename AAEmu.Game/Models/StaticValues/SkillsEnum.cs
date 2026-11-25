@@ -18,4 +18,5 @@ public static class SkillsEnum
     public const uint CloseTheScore = 22217; // End of song/stop
     public const uint ItemFusion = 23478;
     public const uint ViewFishFinder = 21902;
+    public const uint SlaveDismount = 35837;
 }

@@ -4,11 +4,13 @@ using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.DoodadObj.Static;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Skills.SkillControllers;
 using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Units;
+using AAEmu.Game.Models.StaticValues;
 using AAEmu.Game.Physics.Debug;
 
 namespace AAEmu.Game.Core.Packets.C2G;
@@ -86,6 +88,9 @@ public class CSStartSkillPacket() : GamePacket(CSOffsets.CSStartSkillPacket, 5)
             Refuse(player, skillId, skillCaster, skillCastTarget, skillObject, result, errorValue);
             return;
         }
+
+        if (skillId == SkillsEnum.SlaveDismount && skill.InitialTarget is Slave targetSlave)
+            player.ParentWorld.SlaveManager.UnbindSlave(player, targetSlave.TlId, AttachUnitReason.SlaveBinding);
 
         if (mount is Slave slave)
         {

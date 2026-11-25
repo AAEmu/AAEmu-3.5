@@ -13,28 +13,20 @@ public class CSUnhangPacket() : GamePacket(CSOffsets.CSUnhangPacket, 5)
     public override void Read(PacketStream stream)
     {
         var unitObjId = stream.ReadBc();
-        // var targetObjId = stream.ReadBc(); // Not used in 1.2
-        var targetObjId = 0u;
         var reason = stream.ReadUInt32();
         // 0 climbed off from bottom
         // 2 climbed off on top
         // 7 jumped off
 
-        Logger.Trace($"Unhang, unitObjId: {unitObjId}, targetObjId: {targetObjId}, Reason: {reason}");
-        // For 1.2 the targetObjId is not sent, so we will need to grab our saved value from Transform
-        // Later this can also be used to verify if it's the correct object
-        Slave? stickySlave = null;
-        var character = Connection.ActiveChar.ParentWorld.GetBaseUnit(unitObjId);
-        if (character != null)
-        {
-            stickySlave = character.Transform.StickyParent?.GameObject as Slave;
-            targetObjId = character.Transform.StickyParent?.GameObject?.ObjId ?? 0;
-            character.Transform.StickyParent = null;
-        }
+        var character = Connection.ActiveChar;
+        if (character == null || character.ObjId != unitObjId)
+            return;
 
-        Connection.ActiveChar.BroadcastPacket(new SCUnhungPacket(unitObjId, targetObjId, reason), false);
+        var target = character.Transform.StickyParent?.GameObject;
+        character.Transform.StickyParent = null;
+        character.BroadcastPacket(new SCUnhungPacket(unitObjId, target?.ObjId ?? 0, reason), false);
 
-        if (stickySlave != null)
+        if (target is Slave stickySlave)
             ShipHarpoonRopeController.BreakRopeForClients(stickySlave, cutouted: false);
     }
 }

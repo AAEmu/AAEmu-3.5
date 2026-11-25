@@ -21,5 +21,6 @@ public enum SkillTargetType : byte
     Others = 16,
     FriendlyOthers = 17,
     CursorPos = 18,
-    Building = 19
+    Building = 19,
+    Slave = 20
 }

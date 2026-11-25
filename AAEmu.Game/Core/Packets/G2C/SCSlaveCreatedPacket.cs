@@ -7,8 +7,7 @@ public class SCSlaveCreatedPacket(
     uint ownerObjId,
     ushort tlId,
     uint slaveObjId,
-    bool hideSpawnEffect,
-    long unkId,
+    ulong slaveType,
     string creatorName)
     : GamePacket(SCOffsets.SCSlaveCreatedPacket, 5)
 {
@@ -17,8 +16,7 @@ public class SCSlaveCreatedPacket(
         stream.WriteBc(ownerObjId);
         stream.Write(tlId);
         stream.WriteBc(slaveObjId);
-        stream.Write(hideSpawnEffect);
-        stream.Write(unkId);
+        stream.Write(slaveType);
         stream.Write(creatorName);
         return stream;
     }

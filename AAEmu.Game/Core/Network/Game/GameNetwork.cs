@@ -218,7 +218,7 @@ public class GameNetwork : Singleton<GameNetwork>
         //0xbf CSRequestNpcSpawnerList
         //0xc8 CSRemoveAllFieldSlaves
         //0xc9 CSAddFieldSlave
-        RegisterPacket(CSOffsets.CSHangPacket, 5, typeof(CSHangPacket));
+        RegisterPacket(CSOffsets.CSUnitAttachedPacket, 5, typeof(CSUnitAttachedPacket));
         RegisterPacket(CSOffsets.CSUnhangPacket, 5, typeof(CSUnhangPacket));
         RegisterPacket(CSOffsets.CSUnbondDoodadPacket, 5, typeof(CSUnbondDoodadPacket));
         RegisterPacket(CSOffsets.CSCompletedCinemaPacket, 5, typeof(CSCompletedCinemaPacket));
@@ -285,6 +285,7 @@ public class GameNetwork : Singleton<GameNetwork>
         RegisterPacket(CSOffsets.CSBroadcastVisualOptionPacket, 5, typeof(CSBroadcastVisualOptionPacket));
         RegisterPacket(CSOffsets.CSBroadcastOpenEquipInfoPacket, 5, typeof(CSBroadcastOpenEquipInfoPacket));
         RegisterPacket(CSOffsets.CSRestrictCheckPacket, 5, typeof(CSRestrictCheckPacket));
+        RegisterPacket(CSOffsets.CSCharacterConnectionRestrictPacket, 5, typeof(CSCharacterConnectionRestrictPacket));
         RegisterPacket(CSOffsets.CSICSMenuListPacket, 5, typeof(CSICSMenuListPacket));
         RegisterPacket(CSOffsets.CSICSGoodsListPacket, 5, typeof(CSICSGoodsListPacket));
         RegisterPacket(CSOffsets.CSICSBuyGoodPacket, 5, typeof(CSICSBuyGoodPacket));

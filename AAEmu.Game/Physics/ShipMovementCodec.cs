@@ -15,7 +15,7 @@ public static class ShipMovementCodec
 
     public static ShipMoveType Movement(Slave slave, HullPose pose)
     {
-        var movement = new ShipMoveType();
+        var movement = new ShipMoveType { Type = MoveTypeEnum.Ship };
         movement.UseSlaveBase(slave);
         (movement.RotationX, movement.RotationY, movement.RotationZ) = HullBody.ShortsFromQuaternion(pose.Rotation);
         movement.X = (float)pose.X;

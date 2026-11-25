@@ -227,10 +227,6 @@ public class SlaveManager(WorldInstance parentWorldInstance)
     {
         var slaveInfo = GetSlaveByObjId(objId);
         if (slaveInfo == null) return;
-        slaveInfo.Save();
-        // Remove passengers
-        foreach (var character in slaveInfo.AttachedCharacters.Values.ToList())
-            UnbindSlave(character, slaveInfo.TlId, AttachUnitReason.SlaveBinding);
 
         // Check if one of the slave doodads is holding an item
         if (ignoreAttachedItemWarning == false)
@@ -240,10 +236,15 @@ public class SlaveManager(WorldInstance parentWorldInstance)
                 if (doodad.ItemId != 0 || doodad.ItemTemplateId != 0)
                 {
                     owner?.SendErrorMessage(ErrorMessageType.SlaveEquipmentLoadedItem); // TODO: Do we need this error? Client already mentions it.
+                    owner?.SendPacket(new SCSlaveDespawnPacket(objId, false));
                     return; // don't allow un-summon if some it's holding an item (should be a trade-pack)
                 }
             }
         }
+
+        slaveInfo.Save();
+        foreach (var character in slaveInfo.AttachedCharacters.Values)
+            UnbindSlave(character, slaveInfo.TlId, AttachUnitReason.SlaveBinding);
 
         var despawnDelayedTime = DateTime.UtcNow.AddSeconds(slaveInfo.Template.PortalTime - 0.5f);
 
@@ -497,12 +498,13 @@ public class SlaveManager(WorldInstance parentWorldInstance)
 
         // Create the Slave (packet)
         #region spawn_base_slave
-        owner?.BroadcastPacket(new SCSlaveCreatedPacket(owner.ObjId, tlId, objId, hideSpawnEffect, 0, owner.Name), true);
+        owner?.BroadcastPacket(new SCSlaveCreatedPacket(owner.ObjId, tlId, objId, 0, owner.Name), true);
         var summonedSlave = new Slave
         {
             ParentWorld = World,
             TlId = tlId,
             ObjId = objId,
+            HideSpawnEffect = hideSpawnEffect,
             TemplateId = slaveTemplate.Id,
             Name = string.IsNullOrWhiteSpace(slaveName) ? slaveTemplate.Name : slaveName,
             Level = (byte)slaveTemplate.Level,

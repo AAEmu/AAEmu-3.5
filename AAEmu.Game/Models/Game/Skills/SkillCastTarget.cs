@@ -89,6 +89,7 @@ public class SkillCastPositionTarget : SkillCastTarget
     public float PosRot { get; set; }
     public uint ObjId1 { get; set; }
     public uint ObjId2 { get; set; }
+    public uint ObjId3 { get; set; }
 
     public override void Read(PacketStream stream)
     {
@@ -98,6 +99,7 @@ public class SkillCastPositionTarget : SkillCastTarget
         PosRot = stream.ReadSingle();
         ObjId1 = stream.ReadBc();
         ObjId2 = stream.ReadBc();
+        ObjId3 = stream.ReadBc();
     }
 
     public override PacketStream Write(PacketStream stream)
@@ -110,6 +112,7 @@ public class SkillCastPositionTarget : SkillCastTarget
         stream.Write(PosRot);
         stream.WriteBc(ObjId1);
         stream.WriteBc(ObjId2);
+        stream.WriteBc(ObjId3);
         return stream;
     }
 }

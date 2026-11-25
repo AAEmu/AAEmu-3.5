@@ -94,6 +94,10 @@ public sealed class SkillAuthority(SkillAuthorityGameData data)
             _ => null
         };
 
+        if (skillId == SkillsEnum.SlaveDismount)
+            return targetUnit is Slave slave && slave.AttachedCharacters.TryGetValue(sender.AttachedPoint, out var rider) &&
+                   ReferenceEquals(rider, sender) ? SkillResult.Success : SkillResult.InvalidTarget;
+
         if (skillId == TerritoryMemoryEmber.AcquireSkillId)
         {
             if (TerritoryMemoryEmber.IsCoolingDown(sender, skillId))
@@ -117,7 +121,7 @@ public sealed class SkillAuthority(SkillAuthorityGameData data)
 
         var activatedGeneralSkill = template.AbilityId == AbilityType.General && hasActiveType && activeType == 1;
         var held = isHeirSkill || isDefaultSkill || activatedGeneralSkill || skillId is 2 or 3 or 4 || HasSkill(sender, template) ||
-                   data.IsSlashSkill(skillId) || IsClientCommand(sender, target, targetUnit, skillId);
+                   data.IsSlashSkill(skillId) || IsClientCommand(sender, target, skillId);
         if (held && targetUnit is not Doodad)
             return SkillResult.Success;
 
@@ -159,11 +163,10 @@ public sealed class SkillAuthority(SkillAuthorityGameData data)
         return learned?.HasNamedVariant(skill) == true;
     }
 
-    private static bool IsClientCommand(Character sender, SkillCastTarget target, BaseUnit targetUnit, uint skillId) => skillId switch
+    private static bool IsClientCommand(Character sender, SkillCastTarget target, uint skillId) => skillId switch
     {
         30666 => target is SkillCastItemTarget, // Item synthesis
         17063 or 26152 or 31602 or 31603 or 32189 or 33995 => target is SkillCastUnitTarget && target.ObjId == sender.ObjId,
-        35837 => targetUnit is Slave slave && ReferenceEquals(slave.Summoner, sender),
         _ => false
     };
 

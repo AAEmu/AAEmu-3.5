@@ -548,6 +548,8 @@ public class Skill
 
                     break;
                 }
+            case SkillTargetType.Slave:
+                return targetCaster is SkillCastUnitTarget ? caster.ParentWorld?.GetSlaveByObjId(targetCaster.ObjId) : null;
             case SkillTargetType.Pos:
                 {
                     target = SetInitialTarget(caster, targetCaster);

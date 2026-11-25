@@ -416,7 +416,6 @@ public static class CSOffsets
     public const ushort CSDiscardSlavePacket = 0xfff;
     public const ushort CSDismissExpeditionPacket = 0x00C;
     public const ushort CSFactionDeclareHostilePacket = 0xfff;
-    public const ushort CSHangPacket = 0xfff;
     public const ushort CSInviteToExpeditionPacket = 0x0AC;
     public const ushort CSJuryVerdictPacket = 0x0D3;
     public const ushort CSKickFromExpeditionPacket = 0x023;

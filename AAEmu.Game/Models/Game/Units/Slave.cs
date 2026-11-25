@@ -40,6 +40,7 @@ public class Slave : Unit
     public BaseUnitType OwnerType { get; init; }
 
     public Item SummoningItem { get; init; }
+    internal bool HideSpawnEffect { get; init; }
     private ImmutableList<Doodad> _attachedDoodads = [];
     public ImmutableList<Doodad> AttachedDoodads => Volatile.Read(ref _attachedDoodads);
     public List<Slave> AttachedSlaves { get; set; }
@@ -647,7 +648,7 @@ public class Slave : Unit
 
     public override void AddVisibleObject(Character character)
     {
-        character.SendPacket(new SCUnitStatePacket(this));
+        character.SendPacket(new SCUnitStatePacket(this, HideSpawnEffect));
         character.SendPacket(new SCUnitPointsPacket(ObjId, Hp, Mp, HighAbilityRsc));
         character.SendPacket(new SCSlaveStatePacket(ObjId, TlId, Summoner?.Name ?? string.Empty, Summoner?.ObjId ?? 0, Id));
 

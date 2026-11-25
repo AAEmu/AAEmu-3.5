@@ -145,6 +145,8 @@ public class ClientOpcodeTests
     [Arguments(5, 0x01D, typeof(CSAllowHousingRecoverPacket))]
     [Arguments(5, 0x0D3, typeof(CSJuryVerdictPacket))]
     [Arguments(5, 0x0E4, typeof(CSThisTimeUnpackItemPacket))]
+    [Arguments(5, 0x131, typeof(CSUnitAttachedPacket))]
+    [Arguments(5, 0x170, typeof(CSCharacterConnectionRestrictPacket))]
     public async Task ClientOpcode_DispatchesToExpectedHandler(int level, int opcode, Type packet)
     {
         GetLevelHandlers((byte)level).TryGetValue((uint)opcode, out var actual);
