@@ -192,24 +192,43 @@ public sealed class HullBody
         var targetRate = Math.Clamp(m.SteerGain * (HelmSteering - Steering), -m.SteerRate, m.SteerRate);
         SteeringRate += Math.Clamp(targetRate - SteeringRate, -m.SteerAccel * dt, m.SteerAccel * dt);
         Steering = Math.Clamp(Steering + SteeringRate * dt, -1f, 1f);
+        var previousThrottle = Throttle;
         Throttle += (HelmThrottle - Throttle) * (1f - MathF.Exp(-dt / m.ThrottleLag));
         var step = ThrottleStep;
         if (!dead)
-            Rpm = step > 0 ? MathF.Min(1f, Rpm + m.RpmUp * dt) : MathF.Max(0f, Rpm - m.RpmDown * dt);
+        {
+            if (Throttle * previousThrottle < 0f)
+                Rpm = 0f;
+            else
+                Rpm = step == 0 ? MathF.Max(0f, Rpm - m.RpmDown * dt) : MathF.Min(1f, Rpm + m.RpmUp * dt);
+        }
 
         var u = Surge;
         var v = Sway;
         var w = YawRate;
         var speed = MathF.Sqrt(u * u + v * v);
         var powered = afloat && !dead;
-        var thrust = powered ? (step > 0 ? Rpm * (m.ThrustAtRest - m.ThrustFade * u) : step < 0 ? m.ReverseThrust * (step / 127f) : 0f) * MoveSpeedMultiplier : 0f;
+        var reverseLimit = m.ReverseSpeedLimit * MoveSpeedMultiplier;
+        var thrust = 0f;
+        if (powered && step > 0)
+            thrust = Rpm * (m.ThrustAtRest - m.ThrustFade * u) * MoveSpeedMultiplier;
+        else if (powered && step < 0 && reverseLimit > 0f)
+        {
+            // Counter-thrust can brake forward motion while reverse RPM is still building.
+            var braking = Math.Clamp(u / reverseLimit, 0f, 1f);
+            var reversePower = Rpm + (1f - Rpm) * braking;
+            var remainingSpeed = Math.Clamp(1f + u / reverseLimit, 0f, 1f);
+            thrust = m.ReverseThrust * (step / 127f) * reversePower * remainingSpeed * MoveSpeedMultiplier;
+        }
         if (ExtraMass > 0f)
             thrust *= m.Mass / (m.Mass + ExtraMass);
         var du = thrust + m.SurgeYawSway * w * v - m.SurgeDrag * u - m.SurgeDrag2 * u * speed;
         var dv = m.SwayYawSurge * w * u + (dead ? 0f : m.SwaySteerSurge * Steering * u) - m.SwayDrag * v - m.SwayDrag2 * v * speed;
-        var rudder = MathF.Max(0f, m.YawSteer + m.YawSteerRpm * Rpm + m.YawSteerSurge * u + m.YawSteerSurge2 * u * u);
-        var dw = -(powered ? rudder * Steering * TurnSpeedMultiplier : 0f)
-                 - (m.YawDrag + m.YawDragSurge * MathF.Abs(u)) * w - m.YawDrag2 * w * MathF.Abs(w);
+        var surgeSpeed = MathF.Abs(u);
+        var rudder = MathF.Max(0f, m.YawSteer + m.YawSteerRpm * Rpm + m.YawSteerSurge * surgeSpeed + m.YawSteerSurge2 * u * u);
+        var turnDirection = step < 0 || (step == 0 && u < 0f) ? 1f : -1f;
+        var dw = (powered ? turnDirection * rudder * Steering * TurnSpeedMultiplier : 0f)
+                 - (m.YawDrag + m.YawDragSurge * surgeSpeed) * w - m.YawDrag2 * w * MathF.Abs(w);
         Surge = Math.Clamp(u + du * dt, -MaxSpeed, MaxSpeed);
         Sway = Math.Clamp(v + dv * dt, -MaxSpeed, MaxSpeed);
         YawRate = Math.Clamp(w + dw * dt, -MaxYawRate, MaxYawRate);

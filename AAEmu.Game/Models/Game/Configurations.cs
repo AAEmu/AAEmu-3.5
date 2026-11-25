@@ -141,7 +141,7 @@ public class WorldConfig
     public float TargetPhysicsTps { get; set; } = 25f;
 
     /// <summary>Enable the authored ship drive and coupled resistance for hulls with enough model data.</summary>
-    public bool AuthoredShipDriveEnabled { get; set; }
+    public bool AuthoredShipDriveEnabled { get; set; } = true;
 
     /// <summary>
     /// Ship wind model used for open-sea wind when there is no river flow (<see cref="Slave.CachedWaterFlow"/> is zero).

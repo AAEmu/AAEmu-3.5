@@ -7,10 +7,12 @@ namespace AAEmu.Game.Physics;
 /// <summary>Adapts internal hull poses to the existing 3.5 client movement format.</summary>
 public static class ShipMovementCodec
 {
-    public const float VelocityScale = 2048f;
+    // AAC 3503 decodes the signed ship velocity components as value / 32767 * 30 m/s.
+    private const float MaxVelocity = 30f;
+    public const float VelocityScale = short.MaxValue / MaxVelocity;
 
     public static short Velocity(float value) => float.IsFinite(value)
-        ? (short)Math.Clamp(MathF.Round(value * VelocityScale), short.MinValue, short.MaxValue)
+        ? (short)MathF.Floor(Math.Clamp(value, -MaxVelocity, MaxVelocity) * VelocityScale + 0.5f)
         : (short)0;
 
     public static ShipMoveType Movement(Slave slave, HullPose pose)

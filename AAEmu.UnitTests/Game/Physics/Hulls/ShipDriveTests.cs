@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 
+using AAEmu.Game.Models.Game;
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units.Movements;
 using AAEmu.Game.Models.Game.World;
@@ -11,6 +12,54 @@ namespace AAEmu.UnitTests.Game.Physics.Hulls;
 
 public class ShipDriveTests
 {
+    [Test]
+    public async Task DefaultWorldUsesTheShipModelsDrive()
+    {
+        await Assert.That(new WorldConfig().AuthoredShipDriveEnabled).IsTrue();
+    }
+
+    [Test]
+    [Arguments(false, 1f)]
+    [Arguments(false, -1f)]
+    [Arguments(true, 1f)]
+    [Arguments(true, -1f)]
+    public async Task HelmRollsOffInNeutralAndCanPropelAndSteerInReverse(bool authoredDrive, float steering)
+    {
+        using var hulls = new FittedHullPhysics(_ => null, useAuthoredDrive: authoredDrive);
+        AddShip(hulls, 1f);
+        uint[] active = [1];
+        var now = 0;
+
+        var ahead = HoldHelm(4000, 1f, steering);
+        await Assert.That(Surge(ahead)).IsGreaterThan(1f);
+        await Assert.That(ahead.AngularVelocity.Z * steering).IsLessThan(-0.01f);
+
+        var neutral = HoldHelm(2600, 0f, 0f);
+        await Assert.That(neutral.ThrottleStep).IsEqualTo(0);
+        await Assert.That(neutral.Rpm).IsEqualTo(0f).Within(0.001f);
+        await Assert.That(MathF.Abs(Surge(neutral))).IsLessThan(Surge(ahead));
+
+        var astern = HoldHelm(6000, -1f, steering);
+        await Assert.That(astern.ThrottleStep).IsLessThan(-100);
+        await Assert.That(Surge(astern)).IsLessThan(-0.4f);
+        await Assert.That(Surge(astern)).IsGreaterThan(-2f);
+        await Assert.That(astern.Rpm).IsGreaterThan(0.15f);
+        await Assert.That(astern.AngularVelocity.Z * steering).IsGreaterThan(0.01f);
+
+        HullPose HoldHelm(int duration, float throttle, float helm)
+        {
+            var end = now + duration;
+            for (; now < end; now += 20)
+            {
+                hulls.SetHelm(1, throttle, helm, now);
+                hulls.Advance(active, now, _ => 4000f);
+            }
+            return hulls.Pose(1);
+        }
+
+        static float Surge(HullPose pose) => Vector3.Dot(pose.Velocity, Vector3.Transform(Vector3.UnitY, pose.Rotation));
+    }
+
     [Test]
     [Arguments(1f, 1f, 0f, 4f)]
     [Arguments(-1f, 1f, 0f, 2f)]

@@ -2,6 +2,7 @@ using System.Numerics;
 
 using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Units.Movements;
+using AAEmu.Game.Physics;
 using AAEmu.Game.Physics.Hulls;
 using AAEmu.Geometry;
 
@@ -174,14 +175,14 @@ public class FittedHullPhysicsTests
     }
 
     [Test]
-    public async Task Seed_DecodesThreePointFiveVelocityWith2048Scale()
+    public async Task Seed_DecodesAac3503ShipVelocity()
     {
         using var physics = NewPhysics();
         physics.Add(7, 191, null, 15000f);
-        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 2000f, Z = 99.6f, VelX = 4096, VelY = 6144 }, 100f, 0);
+        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 2000f, Z = 99.6f, VelX = 2184, VelY = 3277 }, 100f, 0);
         var pose = physics.Pose(7);
-        await Assert.That(pose.Velocity.X).IsEqualTo(2f).Within(0.00001f);
-        await Assert.That(pose.Velocity.Y).IsEqualTo(3f).Within(0.00001f);
+        await Assert.That(pose.Velocity.X).IsEqualTo(2f).Within(0.0005f);
+        await Assert.That(pose.Velocity.Y).IsEqualTo(3f).Within(0.0005f);
     }
 
     [Test]
@@ -274,9 +275,9 @@ public class FittedHullPhysicsTests
     public async Task Seed_RestoresVerticalVelocityInShipMovementUnits()
     {
         using var physics = Seeded(speed: 0f);
-        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 1000f, Z = 101f, VelZ = -3072 }, 100f, 100);
+        physics.Seed(7, new ShipMoveType { X = 1000f, Y = 1000f, Z = 101f, VelZ = -1638 }, 100f, 100);
 
-        await Assert.That(physics.Pose(7).Velocity.Z).IsEqualTo(-1.5f);
+        await Assert.That(physics.Pose(7).Velocity.Z).IsEqualTo(-1.5f).Within(0.0005f);
     }
 
     [Test]
@@ -492,7 +493,7 @@ public class FittedHullPhysicsTests
         physics.Seed(id, new ShipMoveType
         {
             X = x, Y = y, Z = 99.6f, RotationX = qx, RotationY = qy, RotationZ = qz,
-            VelX = (short)(-MathF.Sin(yaw) * speed * 2048f), VelY = (short)(MathF.Cos(yaw) * speed * 2048f)
+            VelX = ShipMovementCodec.Velocity(-MathF.Sin(yaw) * speed), VelY = ShipMovementCodec.Velocity(MathF.Cos(yaw) * speed)
         }, 100f, 0);
         physics.Activate(id, 0);
     }

@@ -22,7 +22,7 @@
         "AiStopCasting": true,
         "MaxInstances": 32,
         "TargetPhysicsTps": 25.0,
-        "AuthoredShipDriveEnabled": false,
+        "AuthoredShipDriveEnabled": true,
         "WindModel": "Official",
         "ActabilityRate": 1.0,
         "UsePersistentHouseDoodads": false,

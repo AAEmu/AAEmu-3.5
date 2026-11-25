@@ -15,11 +15,11 @@ namespace AAEmu.Game.Physics.Hulls;
 /// <para>What native does, read off its type-4 reports (plan slice 7, "Hulls"): the hull's own steering slews to
 /// the helm's like a servo (gain <see cref="SteerGain"/>, rate cap <see cref="SteerRate"/>, acceleration cap
 /// <see cref="SteerAccel"/>); its throttle follows the helm's with a <see cref="ThrottleLag"/> s lag; the engine
-/// rpm spins up at <see cref="RpmUp"/> per second while the throttle is ahead and drops at <see cref="RpmDown"/>
-/// once it is not. Thrust is rpm × (<see cref="ThrustAtRest"/> − <see cref="ThrustFade"/> · u) ahead, a flat
-/// <see cref="ReverseThrust"/> × throttle astern, nothing at zero throttle (even at full rpm). The rudder turns
-/// the hull at any speed, also at rest. Positions advance by only <see cref="PhysicsTimeScale"/> of the reported
-/// velocity per wall second (yaw the same): the native physics clock runs 3.6 % slow, and the reported velocities
+/// rpm spins up at <see cref="RpmUp"/> per second with power and drops at <see cref="RpmDown"/> in neutral.
+/// Thrust is rpm × (<see cref="ThrustAtRest"/> − <see cref="ThrustFade"/> · u) ahead. Astern thrust drops toward the
+/// model's reverse speed limit. The rudder reverses its effect when backing. Positions advance by only
+/// <see cref="PhysicsTimeScale"/> of the reported velocity per wall second (yaw the same): the native physics clock
+/// runs 3.6 % slow, and the reported velocities
 /// are per physics second.</para>
 /// <para>Fitted: ship model 3 (Harpoon Clipper, 15 t) and ship model 6 (Eznan Cutter, 45 t). The two differ more
 /// than any <c>ship_models</c> column predicts: model 6 tops out at 9.1 m/s against its <c>velocity</c> of 12.6
@@ -36,6 +36,7 @@ public sealed record HullModel
     public float ThrustAtRest { get; init; }
     public float ThrustFade { get; init; }
     public float ReverseThrust { get; init; }
+    public float ReverseSpeedLimit { get; private init; } = 5f;
     public float SurgeDrag { get; init; }
     public float SurgeDrag2 { get; init; }
     public float SurgeYawSway { get; init; }
@@ -149,6 +150,7 @@ public sealed record HullModel
         return fitted with
         {
             Mass = mass,
+            ReverseSpeedLimit = float.IsFinite(ship.ReverseVelocity) && ship.ReverseVelocity >= 0f ? ship.ReverseVelocity : fitted.ReverseSpeedLimit,
             YawInertiaPerMass = inertiaPerMass,
             PitchInertiaPerMass = BoxInertia(ship.MassBoxSizeY, ship.MassBoxSizeZ, Default.PitchInertiaPerMass),
             RollInertiaPerMass = BoxInertia(ship.MassBoxSizeX, ship.MassBoxSizeZ, Default.RollInertiaPerMass),

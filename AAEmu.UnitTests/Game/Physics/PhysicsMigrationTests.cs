@@ -195,7 +195,7 @@ public class PhysicsMigrationTests
         using var loadedDriver = AttachCharacter(loaded.AttachedCharacters[AttachPointKind.Driver], loaded.Transform);
         using var firstPassenger = AttachCharacter(loaded.AttachedCharacters[AttachPointKind.Passenger0], loaded.Transform);
         using var secondPassenger = AttachCharacter(loaded.AttachedCharacters[AttachPointKind.Passenger1], loaded.Transform);
-        var model = new ShipModelV1 { Id = 3, Mass = 15000f };
+        var model = new ShipModelV1 { Id = 3, Mass = 15000f, ReverseVelocity = 5f };
         var now = Environment.TickCount64;
         physics.AddShip(light, model);
         physics.AddShip(loaded, model);

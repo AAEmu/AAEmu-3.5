@@ -28,7 +28,10 @@ public class ShipMovementCodecTests
         await Assert.That(x).IsEqualTo(15655f);
         await Assert.That(y).IsEqualTo(15480f);
         await Assert.That(z).IsEqualTo(100f).Within(0.002f);
-        stream.ReadBytes(24); // velocity, rotation and angular velocity
+        await Assert.That(stream.ReadInt16()).IsEqualTo((short)0);
+        await Assert.That(stream.ReadInt16()).IsEqualTo((short)1092);
+        await Assert.That(stream.ReadInt16()).IsEqualTo((short)0);
+        stream.ReadBytes(18); // rotation and angular velocity
         await Assert.That(stream.ReadSByte()).IsEqualTo((sbyte)-64);
         await Assert.That(stream.ReadSByte()).IsEqualTo((sbyte)127);
         await Assert.That(stream.ReadSByte()).IsEqualTo((sbyte)64);
@@ -38,11 +41,13 @@ public class ShipMovementCodecTests
     }
 
     [Test]
-    public async Task Velocity_Uses35ScaleAndSaturatesInsteadOfWrapping()
+    public async Task Velocity_UsesTheAac3503SignedThirtyMetresPerSecondRange()
     {
-        await Assert.That(ShipMovementCodec.Velocity(1f)).IsEqualTo((short)2048);
+        await Assert.That(ShipMovementCodec.Velocity(1f)).IsEqualTo((short)1092);
+        await Assert.That(ShipMovementCodec.Velocity(20f)).IsEqualTo((short)21845);
+        await Assert.That(ShipMovementCodec.Velocity(-15f)).IsEqualTo((short)-16383);
         await Assert.That(ShipMovementCodec.Velocity(60f)).IsEqualTo(short.MaxValue);
-        await Assert.That(ShipMovementCodec.Velocity(-60f)).IsEqualTo(short.MinValue);
+        await Assert.That(ShipMovementCodec.Velocity(-60f)).IsEqualTo((short)-32767);
         await Assert.That(ShipMovementCodec.Velocity(float.NaN)).IsEqualTo((short)0);
     }
 
