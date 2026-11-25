@@ -2,6 +2,7 @@
 using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Faction;
 using AAEmu.Game.Models.Game.NPChar;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 
@@ -30,51 +31,22 @@ public class BuffEffect : EffectTemplate
                 if (plot.TryGetCombatHit(caster, trg, out var plotHit) && CombatDiceResults.PreventsHit(plotHit))
                     return;
             }
-            else if (source?.Skill is { } skill && skill.HitTypes.TryGetValue(trg.ObjId, out var hitType) &&
-                     CombatDiceResults.PreventsHit(hitType))
+            else if (source != null && CombatDiceResults.PreventsHit(source.GetCombatHit(trg.ObjId)))
                 return;
         }
 
         if (caster != null)
         {
-            if (Random.Shared.Next(0, 101) > Chance)
-            {
-                caster.ConditionChance = false;
+            var chance = caster.ApplyBuffModifers(Buff, BuffAttribute.Chance, Chance);
+            caster.ConditionChance = Random.Shared.NextSingle() * 100f < chance;
+            if (!caster.ConditionChance)
                 return;
-            }
-            else
-            {
-                caster.ConditionChance = true;
-            }
         }
 
         if (!Buff.CanApplyTo(target, caster, source?.Skill))
             return;
 
-        ushort abLevel = 1;
-        if (caster is Character character)
-        {
-            Logger.Warn($"BuffEffect {Buff.Id}");
-            if (source?.Skill != null)
-            {
-                var template = source.Skill.Template;
-                var abilityLevel = character.GetAbLevel(source.Skill.Template.AbilityId);
-                if (template.LevelStep != 0)
-                    abLevel = (ushort)(abilityLevel / template.LevelStep * template.LevelStep);
-                else
-                    abLevel = (ushort)template.AbilityLevel;
-
-                //Dont allow lower than minimum ablevel for skill or infinite debuffs can happen
-                abLevel = (ushort)Math.Max(template.AbilityLevel, (ushort)abLevel);
-            }
-        }
-        else
-        {
-            if (source?.Skill != null)
-            {
-                abLevel = (ushort)source.Skill.Template.AbilityLevel;
-            }
-        }
+        var abLevel = GetApplicationLevel(caster, source?.Skill);
 
         // TODO Doesn't let the quest work Id=2488 "A Mother's Tale", 13, "Lilyut Hills", "Nuian Main"
         // Safeguard to prevent accidental flagging
@@ -95,5 +67,21 @@ public class BuffEffect : EffectTemplate
         {
             (caster as Unit)?.SetCriminalState(true, target);
         }
+    }
+
+    private ushort GetApplicationLevel(BaseUnit caster, Skill skill)
+    {
+        if (AbLevel > 0)
+            return (ushort)Math.Min(AbLevel, ushort.MaxValue);
+        if (skill?.Template is not { } template)
+            return 1;
+
+        var abilityLevel = template.AbilityLevel;
+        var step = template.LevelStep;
+        if (step > 0 && (caster is Character || caster is Npc && Buff.LevelDuration != 0))
+            abilityLevel = Math.Max(abilityLevel, ((Unit)caster).GetAbLevel(template.AbilityId) / step * step);
+
+        var addedRanks = skill.GetEffectLevel(caster) - Math.Max(1, (int)skill.Level);
+        return (ushort)Math.Clamp(abilityLevel + (long)addedRanks * step, 0, ushort.MaxValue);
     }
 }

@@ -818,6 +818,106 @@ public partial class Npc : Unit
         }
     }
 
+    [UnitAttribute(UnitAttribute.Facets)]
+    public override int Facets => TryGetCombatFormula(UnitFormulaKind.Facet, UnitAttribute.Facets, out var facets)
+        ? (int)facets : base.Facets;
+
+    [UnitAttribute(UnitAttribute.MeleeCritical)]
+    public override float MeleeCritical => GetCombatRate(UnitFormulaKind.MeleeCritical, UnitAttribute.MeleeCritical,
+        UnitAttribute.MeleeCriticalMul, base.MeleeCritical);
+
+    [UnitAttribute(UnitAttribute.RangedCritical)]
+    public override float RangedCritical => GetCombatRate(UnitFormulaKind.RangedCritical, UnitAttribute.RangedCritical,
+        UnitAttribute.RangedCriticalMul, base.RangedCritical);
+
+    [UnitAttribute(UnitAttribute.SpellCritical)]
+    public override float SpellCritical => GetCombatRate(UnitFormulaKind.SpellCritical, UnitAttribute.SpellCritical,
+        UnitAttribute.SpellCriticalMul, base.SpellCritical);
+
+    [UnitAttribute(UnitAttribute.HealCritical)]
+    public override float HealCritical => GetCombatRate(UnitFormulaKind.HealCritical, UnitAttribute.HealCritical,
+        UnitAttribute.HealCriticalMul, base.HealCritical);
+
+    [UnitAttribute(UnitAttribute.Dodge)]
+    public override float DodgeRate => GetCombatRate(UnitFormulaKind.Dodge, UnitAttribute.Dodge,
+        UnitAttribute.DodgeMul, base.DodgeRate);
+
+    [UnitAttribute(UnitAttribute.Block)]
+    public override float BlockRate => GetCombatRate(UnitFormulaKind.Block, UnitAttribute.Block,
+        UnitAttribute.BlockMul, base.BlockRate);
+
+    [UnitAttribute(UnitAttribute.MeleeParry)]
+    public override float MeleeParryRate => GetCombatRate(UnitFormulaKind.MeleeParry, UnitAttribute.MeleeParry,
+        UnitAttribute.MeleeParryMul, base.MeleeParryRate);
+
+    [UnitAttribute(UnitAttribute.RangedParry)]
+    public override float RangedParryRate => GetCombatRate(UnitFormulaKind.RangedParry, UnitAttribute.RangedParry,
+        UnitAttribute.RangedParryMul, base.RangedParryRate);
+
+    [UnitAttribute(UnitAttribute.MeleeCriticalBonus)]
+    public override float MeleeCriticalBonus => GetCriticalBonus(UnitFormulaKind.MeleeCriticalBonus,
+        UnitAttribute.MeleeCriticalBonus, base.MeleeCriticalBonus);
+
+    [UnitAttribute(UnitAttribute.RangedCriticalBonus)]
+    public override float RangedCriticalBonus => GetCriticalBonus(UnitFormulaKind.RangedCriticalBonus,
+        UnitAttribute.RangedCriticalBonus, base.RangedCriticalBonus);
+
+    [UnitAttribute(UnitAttribute.SpellCriticalBonus)]
+    public override float SpellCriticalBonus => GetCriticalBonus(UnitFormulaKind.SpellCriticalBonus,
+        UnitAttribute.SpellCriticalBonus, base.SpellCriticalBonus);
+
+    [UnitAttribute(UnitAttribute.HealCriticalBonus)]
+    public override float HealCriticalBonus => GetCriticalBonus(UnitFormulaKind.HealCriticalBonus,
+        UnitAttribute.HealCriticalBonus, base.HealCriticalBonus);
+
+    [UnitAttribute(UnitAttribute.BullsEye)]
+    public override int BullsEye => (int)CalculateWithBonuses(base.BullsEye, UnitAttribute.BullsEye);
+
+    [UnitAttribute(UnitAttribute.Flexibility)]
+    public override int Flexibility => (int)CalculateWithBonuses(base.Flexibility, UnitAttribute.Flexibility);
+
+    private float GetCombatRate(UnitFormulaKind kind, UnitAttribute attribute, UnitAttribute rateModifier, float fallback)
+    {
+        if (!TryGetCombatFormula(kind, attribute, out var rating))
+            return fallback;
+
+        var facets = Facets;
+        var rate = facets > 0 ? rating * 100d / facets : rating;
+        return (float)(rate + CalculateWithBonuses(0d, rateModifier) / 10d);
+    }
+
+    private float GetCriticalBonus(UnitFormulaKind kind, UnitAttribute attribute, float fallback) =>
+        TryGetCombatFormula(kind, attribute, out var value) ? (float)((value - 1000d) / 10d) : fallback;
+
+    private bool TryGetCombatFormula(UnitFormulaKind kind, UnitAttribute attribute, out double value)
+    {
+        value = 0d;
+        if (Template is not { } template || !FormulaManager.TryGetInstance(out var formulas) ||
+            formulas.GetUnitFormula(FormulaOwnerType.Npc, kind) is not { } formula)
+            return false;
+
+        var parameters = new Dictionary<string, double>
+        {
+            ["level"] = Level,
+            ["heir_level"] = HeirLevel,
+            ["npc_template"] = formulas.GetUnitVariable(formula.Id, UnitFormulaVariableType.NpcTemplate, (uint)template.NpcTemplateId),
+            ["npc_kind"] = formulas.GetUnitVariable(formula.Id, UnitFormulaVariableType.NpcKind, (uint)template.NpcKindId),
+            ["npc_grade"] = formulas.GetUnitVariable(formula.Id, UnitFormulaVariableType.NpcGrade, (uint)template.NpcGradeId)
+        };
+
+        // Primary attributes evaluate their own formulas. Avoid evaluating unrelated ratings on every roll.
+        var expression = formula.TextFormula;
+        if (expression.Contains("str", StringComparison.Ordinal)) parameters["str"] = Str;
+        if (expression.Contains("dex", StringComparison.Ordinal)) parameters["dex"] = Dex;
+        if (expression.Contains("sta", StringComparison.Ordinal)) parameters["sta"] = Sta;
+        if (expression.Contains("int", StringComparison.Ordinal)) parameters["int"] = Int;
+        if (expression.Contains("spi", StringComparison.Ordinal)) parameters["spi"] = Spi;
+        if (expression.Contains("fai", StringComparison.Ordinal)) parameters["fai"] = Fai;
+
+        value = CalculateWithBonuses(formula.Evaluate(parameters), attribute);
+        return true;
+    }
+
     public int KillExp
     {
         get

@@ -28,7 +28,7 @@ public class FormulaManager : Singleton<FormulaManager>, IFormulaManager
 
     public UnitFormula GetUnitFormula(FormulaOwnerType owner, UnitFormulaKind kind)
     {
-        if (_unitFormulas.TryGetValue(owner, out var value)
+        if (_unitFormulas?.TryGetValue(owner, out var value) == true
             && value.TryGetValue(kind, out var kindFound))
             return kindFound;
 
@@ -37,7 +37,7 @@ public class FormulaManager : Singleton<FormulaManager>, IFormulaManager
 
     public float GetUnitVariable(uint formulaId, UnitFormulaVariableType type, uint key)
     {
-        if (_unitVariables.TryGetValue(formulaId, out var unitFormulas)
+        if (_unitVariables?.TryGetValue(formulaId, out var unitFormulas) == true
             && unitFormulas.TryGetValue(type, out var formulaVariables)
             && formulaVariables.TryGetValue(key, out var formulaVariable))
             return formulaVariable.Value;

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 using AAEmu.Commons.IO;
 using AAEmu.Commons.Utils;
@@ -144,6 +144,32 @@ public class CompactDatabasePatcherTests
                                      """);
         var expectedBuffId = hasEnlightenedBuff ? 9001198 : 7946;
         await Assert.That((string)gradeBuffs).IsEqualTo($"31655:7:7946,9001894:7:{expectedBuffId},9001894:8:9001199");
+    }
+
+    [Test]
+    public async Task CastingInterferencePatch_CorrectsOnlyTheOriginalSpellAccuracyModifier()
+    {
+        using var files = new PatchFiles();
+        files.Execute("""
+                      CREATE TABLE unit_modifiers (owner_type TEXT, owner_id INT, linear_level_bonus INT,
+                          unit_attribute_id INT, unit_modifier_type_id INT, value INT);
+                      INSERT INTO unit_modifiers VALUES
+                          ('Buff', 807, 0, 88, 0, -3000), ('Buff', 807, 0, 71, 0, 300),
+                          ('Buff', 807, 0, 88, 1, -3000), ('Buff', 807, 0, 88, 0, -200),
+                          ('Buff', 26158, 0, 78, 0, -700);
+                      """);
+
+        const string patchName = "2026-11-26-casting-interference-accuracy.sql";
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "SQL", "patches", "compact", "startup", patchName),
+            Path.Combine(files.PatchDirectory, patchName));
+        CompactDatabasePatcher.Apply(files.Root);
+        CompactDatabasePatcher.Apply(files.Root);
+
+        var modifiers = files.Scalar("""
+                                     SELECT group_concat(owner_id || ':' || unit_attribute_id || ':' || value, ',')
+                                     FROM (SELECT * FROM unit_modifiers ORDER BY owner_id, unit_attribute_id, unit_modifier_type_id, value);
+                                     """);
+        await Assert.That((string)modifiers).IsEqualTo("807:71:300,807:88:-300,807:88:-200,807:88:-3000,26158:78:-700");
     }
 
     [Test]

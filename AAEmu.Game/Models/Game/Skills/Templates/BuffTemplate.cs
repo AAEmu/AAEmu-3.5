@@ -554,11 +554,7 @@ public class BuffTemplate
 
         foreach (var tickEff in TickEffects)
         {
-            if (tickEff.TargetBuffTagId > 0 &&
-                !owner.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(tickEff.TargetBuffTagId)))
-                continue;
-            if (tickEff.TargetNoBuffTagId > 0 &&
-                owner.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(tickEff.TargetNoBuffTagId)))
+            if (!tickEff.MeetsTargetBuffTags(owner, caster))
                 continue;
 
             var eff = SkillManager.Instance.GetEffectTemplate(tickEff.EffectId);
@@ -607,11 +603,7 @@ public class BuffTemplate
                 foreach (var trg in unitsCopy)
                 //foreach (var trg in units)
                 {
-                    if (tickEff.TargetBuffTagId > 0 &&
-                        !trg.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(tickEff.TargetBuffTagId)))
-                        continue;
-                    if (tickEff.TargetNoBuffTagId > 0 &&
-                        trg.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(tickEff.TargetNoBuffTagId)))
+                    if (!tickEff.MeetsTargetBuffTags(trg, source))
                         continue;
 
                     var targetObj = new SkillCastUnitTarget(trg.ObjId);

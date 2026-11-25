@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Reflection;
+using AAEmu.Commons.Network;
 using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
@@ -7,6 +8,7 @@ using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Effects;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Tasks.Skills;
@@ -33,6 +35,45 @@ public class ChannelingTests
 
     [After(Test)]
     public void TearDown() => s_taskManagerInstance.SetValue(null, _previousTaskManager);
+
+    [Test]
+    public async Task ChannelDurationModifierAlsoExtendsTheManaTickBudget()
+    {
+        var caster = new TestUnit { ObjId = 101, Hp = 100, Mp = 50 };
+        caster.SkillModifiersCache.AddModifier(new SkillModifier
+        {
+            SkillId = 10714, SkillAttribute = SkillAttribute.ChannelingTime, UnitModifierType = UnitModifierType.Value, Value = 2000
+        });
+        var startedAt = DateTime.UtcNow;
+        Start(caster, duration: 2500, interval: 1000, cost: 10, skillId: 10714);
+        var end = caster.SkillTask;
+        var scheduled = end.TriggerTime - startedAt;
+        end.Execute();
+
+        await Assert.That(scheduled.TotalMilliseconds >= 4500).IsTrue();
+        await Assert.That(caster.Mp).IsEqualTo(10);
+        await Assert.That(caster.AdvertisedChannelTime).IsEqualTo(4500);
+    }
+
+    [Test]
+    public async Task FiredPacketEncodesLongChannelingInTenMillisecondUnits()
+    {
+        var caster = new SkillCasterUnit(1);
+        var target = new SkillCastUnitTarget(2);
+        var skillObject = new SkillObject();
+        var skill = new Skill(new SkillTemplate { ChannelingTime = 180_000 });
+        var packet = new SCSkillFiredPacket(1, 1, caster, target, skill, skillObject);
+        var prefix = new PacketStream();
+        prefix.Write((ushort)1);
+        prefix.Write(caster);
+        prefix.Write(target);
+        prefix.Write(skillObject);
+        prefix.Write((ushort)0); // effect delay
+
+        var bytes = packet.Write(new PacketStream()).GetBytes();
+        var wireChannelTime = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(prefix.GetBytes().Length));
+        await Assert.That(wireChannelTime).IsEqualTo((ushort)18_000);
+    }
 
     [Test]
     public async Task FirstTickChargesTheAuthoredAmountAndNaturalEndSettlesTheLastTick()
@@ -176,9 +217,9 @@ public class ChannelingTests
         return null;
     }
 
-    private static Skill Start(TestUnit caster, int duration = 2000, int interval = 1000, int cost = 14)
+    private static Skill Start(TestUnit caster, int duration = 2000, int interval = 1000, int cost = 14, uint skillId = 0)
     {
-        var skill = new Skill(new SkillTemplate { ChannelingTime = duration, ChannelingTick = interval, ChannelingMana = cost })
+        var skill = new Skill(new SkillTemplate { Id = skillId, ChannelingTime = duration, ChannelingTick = interval, ChannelingMana = cost })
         {
             TlId = SkillTlIdManager.GetNextId(caster)
         };
@@ -190,6 +231,7 @@ public class ChannelingTests
     {
         public List<ushort> EndedTimelines { get; } = [];
         public int ManaUpdates { get; private set; }
+        public int AdvertisedChannelTime { get; private set; }
 
         public override void BroadcastPacket(GamePacket packet, bool self)
         {
@@ -197,6 +239,8 @@ public class ChannelingTests
                 EndedTimelines.Add(ended.TlId);
             if (packet is SCUnitPointsPacket)
                 ManaUpdates++;
+            if (packet is SCSkillFiredPacket fired)
+                AdvertisedChannelTime = fired.ChannelingTime;
         }
     }
 }

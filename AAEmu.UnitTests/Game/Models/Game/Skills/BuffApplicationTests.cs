@@ -13,6 +13,8 @@ using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Effects;
+using AAEmu.Game.Models.Game.Skills.Effects.Enums;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
@@ -56,6 +58,10 @@ public class BuffApplicationTests
             CREATE TABLE tagged_immune_buffs (buff_id, buff_tag_id);
             CREATE TABLE tagged_require_buffs (buff_id, buff_tag_id);
             CREATE TABLE buff_breakers (id, buff_id, buff_tag_id);
+            CREATE TABLE buff_unit_modifiers (id, owner_type, owner_id, buff_id, tag_id);
+            CREATE TABLE unit_modifiers (owner_type, owner_id, linear_level_bonus, unit_attribute_id, unit_modifier_type_id, value);
+            INSERT INTO buff_unit_modifiers VALUES (1, 'Buff', 9101, 9102, 0), (2, 'Buff', 9103, 0, 11);
+            INSERT INTO unit_modifiers VALUES ('BuffUnitModifier', 1, 0, 78, 0, -300), ('BuffUnitModifier', 2, 0, 78, 0, 200);
             INSERT INTO buff_tolerances VALUES (1, 10, 30, 3, 0);
             INSERT INTO buff_tolerance_steps VALUES (9, 1, 100, 0), (7, 1, 100, 0), (8, 1, 100, 25);
             INSERT INTO tagged_immune_buffs VALUES (4, 10), (4, 11), (4, 11);
@@ -1134,6 +1140,149 @@ public class BuffApplicationTests
     }
 
     private DispelTask GetQueuedDispelTask() => (DispelTask)GetQueuedTasks().Single(task => task is DispelTask);
+
+    [Test]
+    [Arguments(9101u, 9102u, 0.7f)]
+    [Arguments(9103u, 2u, 1.2f)]
+    public async Task ConditionalUnitModifierTracksBothBuffs(uint providerId, uint requiredId, float expected)
+    {
+        var owner = new TestUnit { ObjId = 1 };
+        var provider = Register(new BuffTemplate { Id = providerId });
+        var required = Register(new BuffTemplate { Id = requiredId });
+        var providingBuff = Add(owner, owner, provider);
+        await Assert.That(owner.MeleeAntiMissMul).IsEqualTo(1f);
+
+        var requiredBuff = Add(owner, owner, required);
+        await Assert.That(owner.MeleeAntiMissMul).IsEqualTo(expected);
+        requiredBuff.Exit();
+        await Assert.That(owner.MeleeAntiMissMul).IsEqualTo(1f);
+
+        Add(owner, owner, required);
+        await Assert.That(owner.MeleeAntiMissMul).IsEqualTo(expected);
+        providingBuff.Exit();
+        await Assert.That(owner.MeleeAntiMissMul).IsEqualTo(1f);
+    }
+
+    [Test]
+    [Arguments(0, false, 25, 7500)]
+    [Arguments(4, false, 4, 5400)]
+    [Arguments(4, true, 1, 5100)]
+    public async Task BuffUsesEffectiveSkillRankOrItsExplicitLevel(int explicitLevel, bool fixedToOne, int level, int duration)
+    {
+        var caster = new TestUnit { ObjId = 1 };
+        var target = new TestUnit { ObjId = 2 };
+        var template = Register(new BuffTemplate { Id = 9201, Duration = 5000, LevelDuration = 100, FixAbilityLevelToOne = fixedToOne });
+        var skill = new Skill(new SkillTemplate { Id = 12026, AbilityLevel = 20, LevelStep = 5 });
+        caster.SkillModifiersCache.AddModifier(new SkillModifier
+        {
+            SkillId = skill.Id, SkillAttribute = SkillAttribute.SkillLevel,
+            UnitModifierType = UnitModifierType.Value, Value = 1
+        });
+        var effect = new BuffEffect { Buff = template, Chance = 100, AbLevel = explicitLevel };
+
+        effect.Apply(caster, new SkillCasterUnit(caster.ObjId), target, new SkillCastUnitTarget(target.ObjId),
+            new CastSkill(skill.Id, 1), new EffectSource(skill), null, DateTime.UtcNow);
+
+        var applied = target.Buffs.GetEffectFromBuffId(template.Id);
+        await Assert.That(applied).IsNotNull();
+        await Assert.That(applied!.AbLevel).IsEqualTo((ushort)level);
+        await Assert.That(applied.Duration).IsEqualTo(duration);
+        await Assert.That(skill.Level).IsEqualTo((byte)1);
+    }
+
+    [Test]
+    public async Task NpcLevelScalesNegativeBaseDurationIntoAFiniteFear()
+    {
+        var caster = new Npc { ObjId = 1, Level = 35 };
+        var target = new TestUnit { ObjId = 2 };
+        var template = Register(new BuffTemplate { Id = 5738, Duration = -1200, LevelDuration = 100 });
+        var skill = new Skill(new SkillTemplate { Id = 1, AbilityLevel = 1, LevelStep = 5 });
+        var effect = new BuffEffect { Buff = template, Chance = 100 };
+
+        effect.Apply(caster, new SkillCasterUnit(caster.ObjId), target, new SkillCastUnitTarget(target.ObjId),
+            new CastSkill(skill.Id, 1), new EffectSource(skill), null, DateTime.UtcNow);
+
+        var applied = target.Buffs.GetEffectFromBuffId(template.Id);
+        await Assert.That(applied).IsNotNull();
+        await Assert.That(applied!.Duration).IsEqualTo(2300);
+    }
+
+    [Test]
+    public async Task BuffChanceModifierCanPreventAnOtherwiseGuaranteedApplication()
+    {
+        var caster = new TestUnit { ObjId = 1 };
+        var target = new TestUnit { ObjId = 2 };
+        var template = Register(new BuffTemplate { Id = 173 });
+        var effect = new BuffEffect { Buff = template, Chance = 100 };
+        caster.BuffModifiersCache.AddModifier(new BuffModifier
+        {
+            BuffId = template.Id, BuffAttribute = BuffAttribute.Chance,
+            UnitModifierType = UnitModifierType.Percent, Value = -100
+        });
+
+        effect.Apply(caster, new SkillCasterUnit(caster.ObjId), target, new SkillCastUnitTarget(target.ObjId),
+            new CastSkill(1, 1), new EffectSource(), null, DateTime.UtcNow);
+
+        await Assert.That(target.Buffs.CheckBuff(template.Id)).IsFalse();
+        await Assert.That(caster.ConditionChance).IsFalse();
+    }
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task OnlyTheCastersOwnMarkSatisfiesSourceScopedSkillTags(bool blockingTag)
+    {
+        var manager = SkillManager.Instance;
+        SetField(manager, "_skillReagents", new Dictionary<uint, SkillReagent>());
+        SetField(manager, "_skillProducts", new Dictionary<uint, SkillProduct>());
+        var caster = new TestUnit { ObjId = 1 };
+        var other = new TestUnit { ObjId = 2 };
+        var target = new TestUnit { ObjId = 3 };
+        var mark = Register(new BuffTemplate { Id = 2 }); // Tag 11.
+        var otherMark = Add(target, other, mark);
+        var recorded = new RecordingEffect();
+        var skill = new Skill(new SkillTemplate { Id = 35717, TargetType = SkillTargetType.AnyUnit });
+        skill.Template.Effects.Add(new SkillEffect
+        {
+            ApplicationMethod = SkillEffectApplicationMethod.Target, EndLevel = 99, Chance = 100, Template = recorded,
+            TargetBuffTagId = blockingTag ? 0u : 11u, CheckTargetTagSrc = !blockingTag,
+            TargetNoBuffTagId = blockingTag ? 11u : 0u, CheckNoTargetTagSrc = blockingTag
+        });
+        var casterObject = new SkillCasterUnit(caster.ObjId);
+        var targetObject = new SkillCastUnitTarget(target.ObjId);
+
+        skill.ApplyEffects(caster, casterObject, target, targetObject, null);
+        await Assert.That(recorded.Applications).IsEqualTo(blockingTag ? 1 : 0);
+        otherMark.Exit();
+        Add(target, caster, mark);
+        skill.ApplyEffects(caster, casterObject, target, targetObject, null);
+        await Assert.That(recorded.Applications).IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task APeriodicEffectOnlyRejectsItsCastSourcesOwnBlockingTag()
+    {
+        var manager = SkillManager.Instance;
+        var recorded = new RecordingEffect();
+        SetField(manager, "_types", new Dictionary<uint, EffectType> { [1] = new() { Id = 1, Type = "Test", ActualId = 1 } });
+        SetField(manager, "_effects", new Dictionary<string, Dictionary<uint, EffectTemplate>> { ["Test"] = new() { [1] = recorded } });
+        var caster = new TestUnit { ObjId = 1 };
+        var other = new TestUnit { ObjId = 2 };
+        var target = new TestUnit { ObjId = 3 };
+        var mark = Register(new BuffTemplate { Id = 2 }); // Tag 11.
+        var otherMark = Add(target, other, mark);
+        var template = Register(new BuffTemplate { Id = 9202 });
+        template.TickEffects.Add(new TickEffect { EffectId = 1, TargetNoBuffTagId = 11, CheckNoTargetTagSrc = true });
+        var casterObject = new SkillCasterUnit(caster.ObjId);
+        var periodic = new Buff(target, caster, casterObject, template, null, DateTime.UtcNow);
+
+        template.TimeToTimeApply(caster, target, periodic, casterObject);
+        await Assert.That(recorded.Applications).IsEqualTo(1);
+        otherMark.Exit();
+        Add(target, caster, mark);
+        template.TimeToTimeApply(caster, target, periodic, casterObject);
+        await Assert.That(recorded.Applications).IsEqualTo(1);
+    }
 
     private BuffTemplate Register(BuffTemplate template)
     {

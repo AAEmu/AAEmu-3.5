@@ -39,6 +39,10 @@ public partial class Buffs : IBuffs
     private WeakReference _owner;
     private readonly List<Buff> _effects;
     private readonly Dictionary<uint, BuffToleranceCounter> _toleranceCounters;
+    private Bonus[] _conditionalUnitBonuses = [];
+
+    // Attribute reads consume a published snapshot without taking the buff collection lock.
+    internal Bonus[] ConditionalUnitBonuses => Volatile.Read(ref _conditionalUnitBonuses);
 
     public Buffs()
     {
@@ -302,8 +306,26 @@ public partial class Buffs : IBuffs
         return false;
     }
 
+    public bool CheckBuffs(List<uint> ids, BaseUnit caster)
+    {
+        if (caster == null || ids is not { Count: > 0 })
+            return false;
+
+        lock (_lock)
+        {
+            foreach (var buff in _effects)
+            {
+                if (buff is { InUse: true } && !buff.IsEnded() && ReferenceEquals(buff.Caster, caster) &&
+                    buff.Template is { BuffId: > 0 } template && ids.Contains(template.BuffId))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
-    /// Same as <see cref="CheckBuffs"/> but ignores any active buff that ALSO carries
+    /// Same as <see cref="CheckBuffs(List{uint})"/> but ignores any active buff that ALSO carries
     /// one of <paramref name="excludedTagIds"/>. Used by the NPC movement gate to
     /// stop on pure Shackle / Snare roots but allow movement when the buff additionally
     /// carries the DecreaseMoveSpeed tag (slow debuffs that ride the Shackle family
@@ -629,7 +651,35 @@ public partial class Buffs : IBuffs
                     }
                 }
             }
+
+            RefreshConditionalUnitBonuses();
         }
+    }
+
+    private void RefreshConditionalUnitBonuses()
+    {
+        if (!BuffGameData.TryGetInstance(out var data))
+            return;
+
+        List<Bonus> bonuses = null;
+        foreach (var effect in _effects)
+        {
+            if (!effect.InUse || effect.IsEnded())
+                continue;
+
+            foreach (var modifier in data.GetConditionalUnitModifiers(effect.Template.Id))
+            {
+                if ((modifier.RequiredBuffId != 0 && !CheckBuff(modifier.RequiredBuffId)) ||
+                    (modifier.RequiredTagId != 0 && !CheckBuffTag(modifier.RequiredTagId)))
+                    continue;
+
+                var template = modifier.Bonus;
+                var value = template.Value + template.LinearLevelBonus * (effect.AbLevel / 100f);
+                (bonuses ??= []).Add(new Bonus { Template = template, Value = (int)Math.Round(value) });
+            }
+        }
+
+        Volatile.Write(ref _conditionalUnitBonuses, bonuses?.ToArray() ?? []);
     }
 
     private bool TryAdvanceTolerance(Buff buff, List<uint> buffTags, out BuffToleranceCounter counter,
@@ -815,6 +865,7 @@ public partial class Buffs : IBuffs
                 own.SkillModifiersCache.RemoveModifiers(buff.Template.BuffId);
                 own.BuffModifiersCache.RemoveModifiers(buff.Template.BuffId);
                 own.CombatBuffs.RemoveCombatBuff(buff.Template.BuffId);
+                RefreshConditionalUnitBonuses();
             }
             else if (!_effects.Contains(buff))
                 return;

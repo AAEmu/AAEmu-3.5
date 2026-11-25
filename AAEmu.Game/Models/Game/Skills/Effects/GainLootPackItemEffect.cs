@@ -21,6 +21,8 @@ public class GainLootPackItemEffect : EffectTemplate
     public bool InheritGrade { get; set; }
 
     public override bool OnActionTime => false;
+    internal override bool HandlesSourceItemConsumption => ConsumeSourceItem;
+    internal override bool HandlesItemTemplateConsumption => !ConsumeSourceItem && ConsumeItemId > 0 && ConsumeCount > 0;
 
     public override void Apply(BaseUnit caster, SkillCaster casterObj, BaseUnit target, SkillCastTarget targetObj,
         CastAction castObj, EffectSource source, SkillObject skillObject, DateTime time,
@@ -51,7 +53,7 @@ public class GainLootPackItemEffect : EffectTemplate
             return;
 
         var sourceItem = character.Inventory.Bag.GetItemByItemId(skillItem.ItemId);
-        if (sourceItem == null)
+        if (sourceItem == null || sourceItem.OwnerId != character.Id)
         {
             Logger.Warn($"Invalid loot result items {skillItem.ItemId} in lootpack {LootPackId}");
             return;
@@ -59,7 +61,9 @@ public class GainLootPackItemEffect : EffectTemplate
 
         if (ConsumeSourceItem)
         {
-            character.Inventory.Bag.RemoveItem(ItemTaskType.ConsumeSkillSource, sourceItem, true);
+            if (!sourceItem.CanDestroy() ||
+                !character.Inventory.Bag.TryConsumeExact(ItemTaskType.ConsumeSkillSource, sourceItem.TemplateId, 1, sourceItem))
+                return;
         }
         else
         {
@@ -70,7 +74,9 @@ public class GainLootPackItemEffect : EffectTemplate
         byte? inheritedGrade = InheritGrade ? sourceItem.Grade : null;
 
         // Give the results
-        pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem, inheritedGrade: inheritedGrade);
+        if (pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem, inheritedGrade: inheritedGrade) &&
+            ConsumeSourceItem && source?.Skill != null && character.ConditionChance)
+            character.ItemUse(sourceItem);
 
         Logger.Debug($"GainLootPackItemEffect {LootPackId}");
     }

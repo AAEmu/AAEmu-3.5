@@ -49,6 +49,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
     private Dictionary<uint, List<uint>> _skillTags;
     private Dictionary<uint, List<uint>> _taggedSkills;
     private Dictionary<uint, List<SkillModifier>> _skillModifiers;
+    private readonly Dictionary<uint, List<SkillModifier>> _itemSkillModifiers = [];
     private Dictionary<uint, List<BuffTriggerTemplate>> _buffTriggers;
     private Dictionary<uint, List<CombatBuffTemplate>> _combatBuffs;
     private Dictionary<uint, LinearFuncTemplate> _linearFuncs;
@@ -256,6 +257,9 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
         return [];
     }
 
+    internal IReadOnlyList<SkillModifier> GetItemSkillModifiers(uint id) =>
+        _itemSkillModifiers.TryGetValue(id, out var modifiers) ? modifiers : [];
+
     public List<CombatBuffTemplate> GetCombatBuffs(uint reqBuffId)
     {
         return _combatBuffs.TryGetValue(reqBuffId, out var buffs) ? buffs : [];
@@ -377,6 +381,7 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
         _buffTags = [];
         _taggedBuffs = [];
         _skillModifiers = [];
+        _itemSkillModifiers.Clear();
         _skillTags = [];
         _taggedSkills = [];
         _combatBuffs = [];
@@ -2103,9 +2108,17 @@ public class SkillManager(IAnimationManager animationManager, IPlotManager plotM
                         template.SkillId = reader.GetUInt32("skill_id", 0);
                         template.Synergy = reader.GetBoolean("synergy", true);
 
-                        if (!_skillModifiers.ContainsKey(template.OwnerId))
-                            _skillModifiers.Add(template.OwnerId, []);
-                        _skillModifiers[template.OwnerId].Add(template);
+                        var byOwner = template.OwnerType switch
+                        {
+                            "Buff" => _skillModifiers,
+                            "Item" => _itemSkillModifiers,
+                            _ => null
+                        };
+                        if (byOwner == null)
+                            continue;
+                        if (!byOwner.TryGetValue(template.OwnerId, out var modifiers))
+                            byOwner[template.OwnerId] = modifiers = [];
+                        modifiers.Add(template);
                     }
                 }
             }

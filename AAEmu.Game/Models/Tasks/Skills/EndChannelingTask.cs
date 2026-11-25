@@ -10,13 +10,14 @@ public class EndChannelingTask(
     Unit caster,
     SkillCaster casterCaster,
     BaseUnit target,
-    Doodad channelDoodad)
+    Doodad channelDoodad,
+    int duration)
     : SkillTask(skill)
 {
     private readonly Lock _stateLock = new();
     private ChannelingManaTask _manaTask;
     private int _remainingManaTicks = skill.Template.ChannelingTick > 0 && skill.Template.ChannelingMana > 0
-        ? skill.Template.ChannelingTime / skill.Template.ChannelingTick
+        ? duration / skill.Template.ChannelingTick
         : 0;
     private bool _finished;
 
@@ -33,7 +34,7 @@ public class EndChannelingTask(
                 tasks.Schedule(_manaTask, interval, interval, _remainingManaTicks);
             }
 
-            tasks.Schedule(this, TimeSpan.FromMilliseconds(Skill.Template.ChannelingTime));
+            tasks.Schedule(this, TimeSpan.FromMilliseconds(duration));
         }
     }
 

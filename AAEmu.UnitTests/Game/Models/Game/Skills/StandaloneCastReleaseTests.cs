@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Reflection;
 
 using AAEmu.Commons.Network;
@@ -10,7 +10,9 @@ using AAEmu.Game.Core.Network.Connections;
 using AAEmu.Game.Core.Network.Game;
 using AAEmu.Game.Core.Packets;
 using AAEmu.Game.Core.Packets.C2G;
+using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Models;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Effects;
 using AAEmu.Game.Models.Game.Skills.Effects.Enums;
@@ -38,6 +40,9 @@ public sealed class StandaloneCastReleaseTests
         SetField(skills, "_skillProducts", new Dictionary<uint, SkillProduct>());
         Install(skills);
         Install(new TaskManager(null));
+        var models = new ModelManager();
+        SetField(models, "_modelTypes", new Dictionary<uint, ModelType>());
+        Install(models);
         _caster.Hp = 100;
         _caster.Actability = new CharacterActability(_caster);
         var world = new WorldInstance(new WorldTemplate(), 0, true, 0);
@@ -77,6 +82,55 @@ public sealed class StandaloneCastReleaseTests
         await Assert.That(effect.Applications).IsEqualTo(1);
         await Assert.That(effect.Progress).IsBetween(1, 99);
         await Assert.That(_caster.SkillTask).IsNull();
+    }
+
+    [Test]
+    public async Task DelayedEffectsKeepTheSkillRankFromTheStartOfTheCast()
+    {
+        var effect = new RecordedEffect();
+        var template = CreateTemplate(5_000);
+        template.Effects.Add(Band(effect, 1, 100));
+        var modifier = new SkillModifier
+        {
+            SkillId = template.Id, SkillAttribute = SkillAttribute.SkillLevel, UnitModifierType = UnitModifierType.Value, Value = 1
+        };
+        _caster.SkillModifiersCache.AddModifier(modifier);
+        var skill = new Skill(template);
+        var result = skill.Use(_caster, new SkillCasterUnit(_caster.ObjId), new SkillCastUnitTarget(_caster.ObjId), null, true, out _);
+        await Assert.That(result).IsEqualTo(SkillResult.Success);
+        var task = (CastTask)_caster.SkillTask;
+        _caster.SkillModifiersCache.RemoveModifier(modifier);
+
+        task.Execute();
+
+        await Assert.That(effect.EffectLevel).IsEqualTo(2);
+        await Assert.That(skill.Level).IsEqualTo((byte)1);
+    }
+
+    [Test]
+    [Arguments(0.05f, 0, 0)]
+    [Arguments(12f, 25, 102)]
+    [Arguments(0f, 90_000, 9_000)]
+    public async Task FiredPacketReportsTheActualEffectDelay(float speed, int effectDelay, int expectedWireDelay)
+    {
+        var effect = new RecordedEffect();
+        var template = CreateTemplate(0);
+        template.EffectSpeed = speed;
+        template.EffectDelay = effectDelay;
+        template.Effects.Add(Band(effect, 1, 100));
+        var skill = new Skill(template);
+        var target = new TestCharacter { ObjId = 202, Level = 55, ParentWorld = _caster.ParentWorld };
+        target.Transform.Local.SetPosition(12, 0, 0);
+        var casterObject = new SkillCasterUnit(_caster.ObjId);
+        var targetObject = new SkillCastUnitTarget(target.ObjId);
+        var skillObject = new SkillObject();
+
+        skill.ScheduleEffects(_caster, casterObject, target, targetObject, skillObject);
+
+        var serialized = _caster.FiredPacket!.Write(new PacketStream()).GetBytes();
+        var prefix = new PacketStream().Write((ushort)0).Write(casterObject).Write(targetObject).Write(skillObject).GetBytes();
+        await Assert.That((int)BitConverter.ToUInt16(serialized, prefix.Length)).IsEqualTo(expectedWireDelay);
+        await Assert.That(effect.Applications).IsEqualTo(expectedWireDelay == 0 ? 1 : 0);
     }
 
     [Test]
@@ -240,13 +294,20 @@ public sealed class StandaloneCastReleaseTests
     {
         public override int MaxHp => 100;
         public override int MaxMp => 100;
-        public override void BroadcastPacket(GamePacket packet, bool self) { }
+        public SCSkillFiredPacket FiredPacket { get; private set; }
+
+        public override void BroadcastPacket(GamePacket packet, bool self)
+        {
+            if (packet is SCSkillFiredPacket firedPacket)
+                FiredPacket = firedPacket;
+        }
     }
 
     private sealed class RecordedEffect : EffectTemplate
     {
         public int Applications { get; private set; }
         public int Progress { get; private set; }
+        public int EffectLevel { get; private set; }
         public override bool OnActionTime => false;
 
         public override void Apply(BaseUnit caster, SkillCaster casterObj, BaseUnit target, SkillCastTarget targetObj,
@@ -255,6 +316,7 @@ public sealed class StandaloneCastReleaseTests
         {
             Applications++;
             Progress = source.Skill.EarlyCastingProgress ?? 100;
+            EffectLevel = source.Skill.GetEffectLevel(caster);
         }
     }
 }

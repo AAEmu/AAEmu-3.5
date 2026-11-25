@@ -114,9 +114,7 @@ public class DamageEffect : EffectTemplate
 
         var preparedHit = SkillHitType.Invalid;
         plot?.TryGetCombatHit(caster, trg, out preparedHit, preparedOnly: true);
-        var hitType = preparedHit;
-        if (plot == null && source?.Skill is { } ordinarySkill)
-            ordinarySkill.HitTypes.TryGetValue(trg.ObjId, out hitType);
+        var hitType = plot == null && source != null ? source.GetCombatHit(trg.ObjId) : preparedHit;
         if (CombatDiceResults.PreventsHit(hitType))
         {
             plot?.SetCombatHit(caster, trg, hitType);
@@ -139,15 +137,33 @@ public class DamageEffect : EffectTemplate
             return;
         }
 
-        if (Bonuses != null)
+        var attackerUnit = (Unit)caster;
+        var result = CombatDiceResults.FromHitType(hitType);
+        var hasCastRoll = castObj is CastSkill && result is CombatDiceResult.Hit or CombatDiceResult.Critical;
+        var hasBonuses = Bonuses is { Count: > 0 };
+        var originalCriticalChance = hasBonuses && hasCastRoll
+            ? CombatDiceResults.GetCriticalChance(attackerUnit, trg, DamageType) : 0f;
+
+        if (hasBonuses)
         {
             foreach (var bonus in Bonuses)
                 caster.AddBonus(uint.MaxValue, new Bonus { Template = bonus, Value = bonus.Value });
         }
 
-        hitType = CombatDiceResults.MatchesDamageType(preparedHit, DamageType)
-            ? preparedHit
-            : CombatDiceResults.RollCritical((Unit)caster, trg, DamageType);
+        if (hasCastRoll)
+        {
+            var critical = result == CombatDiceResult.Critical;
+            if (hasBonuses)
+            {
+                // A DamageEffect can author a critical chance modifier specific to this hit.
+                var modifiedChance = CombatDiceResults.GetCriticalChance(attackerUnit, trg, DamageType);
+                if (modifiedChance != originalCriticalChance)
+                    critical = Random.Shared.NextSingle() * 100f < modifiedChance;
+            }
+            hitType = CombatDiceResults.GetHitType(DamageType, critical);
+        }
+        else if (!CombatDiceResults.MatchesDamageType(preparedHit, DamageType))
+            hitType = CombatDiceResults.RollCritical(attackerUnit, trg, DamageType);
         plot?.SetCombatHit(caster, trg, hitType);
 
         var min = 0.0f;
@@ -160,7 +176,7 @@ public class DamageEffect : EffectTemplate
         {
             var lvlMd = ((Unit)caster).LevelDps * LevelMd;
             // Hack null-check on skill
-            var levelModifier = (((source.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
+            var levelModifier = (((source?.Skill?.GetEffectLevel(caster) ?? 1) - 1) / 49f * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
 
             levelMin += lvlMd - levelModifier * lvlMd + 0.5f;
             levelMax += (levelModifier + 1) * lvlMd + 0.5f;
@@ -277,8 +293,9 @@ public class DamageEffect : EffectTemplate
             var effect = caster.Buffs.GetEffectFromBuffId(ChargedBuffId);
             var charges = effect?.Charge ?? 0;
 
-            min += charges * (ChargedMul + source.Skill.Level * ChargedLevelMul);
-            max += charges * (ChargedMul + source.Skill.Level * ChargedLevelMul);
+            var chargedBonus = charges * (ChargedMul + source.Skill.GetEffectLevel(caster) * ChargedLevelMul);
+            min += chargedBonus;
+            max += chargedBonus;
             effect?.Exit();
         }
 
@@ -307,6 +324,9 @@ public class DamageEffect : EffectTemplate
         }
 
         var finalDamage = Random.Shared.Next(min, max);
+        var originatingBuff = source?.Buff ?? (castObj as CastBuff)?.Buff.Template;
+        if (originatingBuff != null)
+            finalDamage = (float)Math.Max(0d, caster.ApplyBuffModifers(originatingBuff, BuffAttribute.Damage, finalDamage));
         if (TargetHealthMax > 0)
         {
             var health = trg.Hpp;
@@ -329,21 +349,15 @@ public class DamageEffect : EffectTemplate
         if (caster is Character && trg is Character)
             finalDamage *= 1 - trg.BattleResist / (8000f + trg.BattleResist);
 
-        // Do Critical Dmgs
-        switch (hitType)
+        var criticalDamageBonus = hitType switch
         {
-            case SkillHitType.MeleeCritical:
-                finalDamage *= 1 + (((Unit)caster).MeleeCriticalBonus - trg.Flexibility / 100) / 100;
-                break;
-            case SkillHitType.RangedCritical:
-                finalDamage *= 1 + (((Unit)caster).RangedCriticalBonus - trg.Flexibility / 100) / 100;
-                break;
-            case SkillHitType.SpellCritical:
-                finalDamage *= 1 + (((Unit)caster).SpellCriticalBonus - trg.Flexibility / 100) / 100;
-                break;
-            default:
-                break;
-        }
+            SkillHitType.MeleeCritical => attackerUnit.MeleeCriticalBonus,
+            SkillHitType.RangedCritical => attackerUnit.RangedCriticalBonus,
+            SkillHitType.SpellCritical => attackerUnit.SpellCriticalBonus,
+            _ => (float?)null
+        };
+        if (criticalDamageBonus is { } criticalBonus)
+            finalDamage *= 1f + (criticalBonus + CriticalBonus - trg.Flexibility / 100f) / 100f;
 
         // Reduction
         var reductionMul = 1.0f;
@@ -367,6 +381,9 @@ public class DamageEffect : EffectTemplate
                     armor = Math.Max(0f, targetUnit.MagicResistance - ((Unit)caster).MagicPenetration);
                     reductionMul = 1.0f - armor / (armor + 5300.0f);
                     finalDamage = finalDamage * targetUnit.IncomingSpellDamageMul;
+                    break;
+                case DamageType.Siege:
+                    finalDamage *= targetUnit.IncomingDamageMul * targetUnit.IncomingSiegeDamageMul;
                     break;
                 default:
                     finalDamage = finalDamage * targetUnit.IncomingDamageMul;
@@ -403,9 +420,9 @@ public class DamageEffect : EffectTemplate
             caster.BroadcastPacket(new SCUnitPointsPacket(caster.ObjId, ((Unit)caster).Hp, ((Unit)caster).Mp, ((Unit)caster).HighAbilityRsc), true);
         }
 
-        if (Bonuses != null)
+        if (hasBonuses)
         {
-            ((Unit)caster).ClearBonuses(uint.MaxValue);
+            attackerUnit.ClearBonuses(uint.MaxValue);
         }
 
         var trgCharacter = trg as Character;

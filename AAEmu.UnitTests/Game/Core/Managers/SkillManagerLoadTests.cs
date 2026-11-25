@@ -1,11 +1,17 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 using AAEmu.Commons.IO;
+using AAEmu.Commons.Utils;
 using AAEmu.Game.Core.Managers;
+using AAEmu.Game.GameData;
 using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Items;
+using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Effects;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
+using AAEmu.Game.Models.Game.Units;
 using Microsoft.Data.Sqlite;
 
 #nullable enable
@@ -18,6 +24,55 @@ public class SkillManagerLoadTests
     private static readonly object s_sync = new();
     private static SkillManager? s_manager;
     private static string? s_repoDataDir;
+
+    [Test]
+    public async Task EquipmentSocketModifiersFollowEquippedGemsWithoutStackingOnRebuild()
+    {
+        var skills = GetLoadedManager();
+        var items = new ItemManager(null, null, null, null, null, null);
+        typeof(ItemManager).GetField("_itemUnitModifiers", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(items, new Dictionary<uint, List<BonusTemplate>>());
+        using var compact = OpenSourceConnection("compact.sqlite3");
+        using var server = OpenSourceConnection("compact.server.table.sqlite3");
+        var buffs = new BuffGameData();
+        buffs.Load(compact, server);
+        var skillsField = typeof(Singleton<SkillManager>).GetField("s_instance", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var itemsField = typeof(Singleton<ItemManager>).GetField("s_instance", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var buffsField = typeof(Singleton<BuffGameData>).GetField("s_instance", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var previousSkills = skillsField.GetValue(null);
+        var previousItems = itemsField.GetValue(null);
+        var previousBuffs = buffsField.GetValue(null);
+        try
+        {
+            skillsField.SetValue(null, skills);
+            itemsField.SetValue(null, items);
+            buffsField.SetValue(null, buffs);
+            var owner = new Unit();
+            var item = new EquipItem(1, new EquipItemTemplate { Id = 42 }, 1);
+            item.GemIds[0] = 38125; // The appearance field cannot grant a modifier.
+            item.GemIds[4] = 38125;
+            item.GemIds[5] = 38124;
+            owner.Equipment.Items.Add(item);
+            var skill = new Skill(skills.GetSkillTemplate(12048));
+            var buff = skills.GetBuffTemplate(3780);
+
+            owner.UpdateGearBonuses(null, null);
+            owner.UpdateGearBonuses(null, null);
+            await Assert.That((int)Math.Round(owner.SkillModifiersCache.ApplyModifiers(skill, SkillAttribute.Damage, 100))).IsEqualTo(103);
+            await Assert.That(owner.BuffModifiersCache.ApplyModifiers(buff, BuffAttribute.Duration, 1000)).IsEqualTo(1200d);
+
+            // The source container can still contain the item while the transfer callback runs.
+            owner.RebuildGearBonuses(item);
+            await Assert.That(owner.SkillModifiersCache.ApplyModifiers(skill, SkillAttribute.Damage, 100)).IsEqualTo(100d);
+            await Assert.That(owner.BuffModifiersCache.ApplyModifiers(buff, BuffAttribute.Duration, 1000)).IsEqualTo(1000d);
+        }
+        finally
+        {
+            skillsField.SetValue(null, previousSkills);
+            itemsField.SetValue(null, previousItems);
+            buffsField.SetValue(null, previousBuffs);
+        }
+    }
 
     [Test]
     public async Task Load_UsesDefaultsForNullOptionalBuffColumns()

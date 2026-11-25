@@ -4,10 +4,6 @@ namespace AAEmu.Game.Models.Game.Skills.Effects.SpecialEffects;
 
 public class CombatDice : SpecialEffectAction
 {
-    private const int AlwaysHit = 4;
-    private const int MeleeUndefendable = 5;
-    private const int RangedUndefendable = 8;
-
     public override void Execute(BaseUnit caster,
         SkillCaster casterObj,
         BaseUnit target,
@@ -25,22 +21,12 @@ public class CombatDice : SpecialEffectAction
             target is not Unit victim || skill?.Template == null)
             return;
 
-        var damageType = value1 switch
-        {
-            MeleeUndefendable => DamageType.Melee,
-            RangedUndefendable => DamageType.Ranged,
-            _ => (DamageType)skill.Template.DamageTypeId
-        };
-        var hit = victim.Buffs.CheckDamageImmune(damageType) ? SkillHitType.Immune : value1 switch
-        {
-            AlwaysHit when damageType is < DamageType.Melee or > DamageType.Heal => SkillHitType.MeleeHit,
-            AlwaysHit when damageType == DamageType.Heal => SkillHitType.SpellHit,
-            AlwaysHit => CombatDiceResults.RollCritical(attacker, victim, damageType),
-            MeleeUndefendable when Random.Shared.NextSingle() * 100f >= attacker.MeleeAccuracy => SkillHitType.MeleeMiss,
-            RangedUndefendable when Random.Shared.NextSingle() * 100f >= attacker.RangedAccuracy => SkillHitType.RangedMiss,
-            MeleeUndefendable or RangedUndefendable => CombatDiceResults.RollCritical(attacker, victim, damageType),
-            _ => skill.RollCombatDice(attacker, victim)
-        };
+        var damageType = (DamageType)skill.Template.DamageTypeId;
+        var kind = value1 is >= 1 and <= 8 ? (CombatDiceKind)value1 : CombatDiceResolver.GetKind(skill.Template.CombatDiceId, damageType);
+        var hit = CombatDiceResolver.Roll(attacker, victim, kind, damageType, checkDamageImmunity: true);
+        // Plots can author a guaranteed hit even when the skill has no damage family.
+        if (hit == SkillHitType.Invalid && kind == CombatDiceKind.AlwaysHit)
+            hit = SkillHitType.MeleeHit;
         plot.SetCombatHit(attacker, victim, hit, prepared: true);
     }
 }

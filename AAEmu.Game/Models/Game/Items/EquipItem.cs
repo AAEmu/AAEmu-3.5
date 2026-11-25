@@ -11,6 +11,18 @@ public class EquipItem : Item
 
     private uint _dyeItemId;
 
+    // AAC3500 stores the nine socket IDs between metadata and the additional effects.
+    internal Span<uint> SocketGemIds
+    {
+        get
+        {
+            const int socketStart = 4;
+            const int socketCount = 9;
+            var gems = GemIds;
+            return gems.Length <= socketStart ? [] : gems.AsSpan(socketStart, Math.Min(socketCount, gems.Length - socketStart));
+        }
+    }
+
     public uint RemainingExperience { get; set; }
     public uint LunaStone { get; set; }
 

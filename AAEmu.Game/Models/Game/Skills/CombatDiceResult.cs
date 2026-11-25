@@ -47,18 +47,33 @@ internal static class CombatDiceResults
         _ => false
     };
 
-    internal static SkillHitType RollCritical(Unit attacker, Unit target, DamageType type)
+    internal static SkillHitType GetHitType(DamageType type, bool critical = false) => type switch
     {
-        var reduction = target.Flexibility / 1000 * 3;
-        return type switch
-        {
-            DamageType.Melee => IsCritical(attacker.MeleeCritical) ? SkillHitType.MeleeCritical : SkillHitType.MeleeHit,
-            DamageType.Ranged => IsCritical(attacker.RangedCritical) ? SkillHitType.RangedCritical : SkillHitType.RangedHit,
-            DamageType.Magic => IsCritical(attacker.SpellCritical) ? SkillHitType.SpellCritical : SkillHitType.SpellHit,
-            DamageType.Siege => SkillHitType.RangedHit,
-            _ => SkillHitType.Invalid
-        };
+        DamageType.Melee => critical ? SkillHitType.MeleeCritical : SkillHitType.MeleeHit,
+        DamageType.Ranged => critical ? SkillHitType.RangedCritical : SkillHitType.RangedHit,
+        DamageType.Magic => critical ? SkillHitType.SpellCritical : SkillHitType.SpellHit,
+        DamageType.Heal => SkillHitType.SpellHit,
+        DamageType.Siege => SkillHitType.RangedHit,
+        _ => SkillHitType.Invalid
+    };
 
-        bool IsCritical(float chance) => Random.Shared.NextSingle() * 100f < chance - reduction;
+    internal static SkillHitType RollCritical(Unit attacker, Unit target, DamageType type) =>
+        GetHitType(type, Random.Shared.NextSingle() * 100f < GetCriticalChance(attacker, target, type));
+
+    internal static float GetCriticalChance(Unit attacker, Unit target, DamageType type)
+    {
+        var chance = type switch
+        {
+            DamageType.Melee => attacker.MeleeCritical,
+            DamageType.Ranged => attacker.RangedCritical,
+            DamageType.Magic => attacker.SpellCritical,
+            _ => 0f
+        };
+        // Formula 25 converts Flexibility to a share of the defender's facets.
+        var flexibility = target.Flexibility;
+        return flexibility > 0 ? chance - GetRatingReduction(flexibility, target.Facets, 90f) : chance;
     }
+
+    internal static float GetRatingReduction(int rating, int facets, float multiplier) =>
+        facets > 0 ? rating * multiplier / facets * 100f : rating * 0.003f;
 }

@@ -10,32 +10,42 @@ public class BuffModifiers
 {
     private readonly Dictionary<uint, List<BuffModifier>> _modifiersByBuffId = [];
     private readonly Dictionary<uint, List<BuffModifier>> _modifiersByTagId = [];
+    private readonly Lock _lock = new();
+    private IReadOnlyList<BuffModifier> _equipmentModifiers = [];
 
     public double ApplyModifiers(BuffTemplate buff, BuffAttribute attribute, double baseValue)
     {
-        var endValue = baseValue;
-
-        var modifiers = GetModifiersForBuffIdWithAttribute(buff.Id, attribute).OrderBy(mod => mod.UnitModifierType).ToList();
-
-        foreach (var tag in SkillManager.Instance.GetBuffTags(buff.Id))
+        lock (_lock)
         {
-            modifiers.AddRange(GetModifiersForTagIdWithAttribute(tag, attribute));
-        }
-
-        foreach (var modifier in modifiers)
-        {
-            switch (modifier.UnitModifierType)
+            var value = baseValue;
+            if (_modifiersByBuffId.TryGetValue(buff.Id, out var byBuff))
             {
-                case UnitModifierType.Percent:
-                    endValue += endValue * (modifier.Value / 100.0f);
-                    break;
-                case UnitModifierType.Value:
-                    endValue += modifier.Value;
-                    break;
+                foreach (var modifier in byBuff)
+                    if (modifier.BuffAttribute == attribute && modifier.UnitModifierType == UnitModifierType.Value)
+                        value += modifier.Value;
+                foreach (var modifier in byBuff)
+                    if (modifier.BuffAttribute == attribute && modifier.UnitModifierType == UnitModifierType.Percent)
+                        value += value * (modifier.Value / 100f);
             }
-        }
 
-        return endValue;
+            if (_modifiersByTagId.Count == 0)
+                return value;
+
+            foreach (var tag in SkillManager.Instance.GetBuffTags(buff.Id))
+            {
+                if (!_modifiersByTagId.TryGetValue(tag, out var byTag))
+                    continue;
+                foreach (var modifier in byTag)
+                    if (modifier.BuffAttribute == attribute)
+                        value += modifier.UnitModifierType switch
+                        {
+                            UnitModifierType.Value => modifier.Value,
+                            UnitModifierType.Percent => value * (modifier.Value / 100f),
+                            _ => 0d
+                        };
+            }
+            return value;
+        }
     }
 
     public List<BuffModifier> GetModifiersForBuffIdWithAttribute(uint skillId, BuffAttribute attribute)
@@ -54,62 +64,77 @@ public class BuffModifiers
 
     public List<BuffModifier> GetModifiersForBuffId(uint skillId)
     {
-        if (_modifiersByBuffId.TryGetValue(skillId, out var id))
-            return id;
-        return null;
+        lock (_lock)
+            return _modifiersByBuffId.TryGetValue(skillId, out var modifiers) ? [.. modifiers] : null;
     }
 
     public List<BuffModifier> GetModifiersForTagId(uint tagId)
     {
-        if (_modifiersByTagId.TryGetValue(tagId, out var id))
-            return id;
-        return null;
+        lock (_lock)
+            return _modifiersByTagId.TryGetValue(tagId, out var modifiers) ? [.. modifiers] : null;
     }
 
     public void AddModifiers(uint ownerId)
     {
         var modifiers = BuffGameData.Instance.GetModifiersForBuff(ownerId);
-        if (modifiers != null)
-        {
+        lock (_lock)
             foreach (var modifier in modifiers)
-            {
                 AddModifier(modifier);
-            }
-        }
     }
 
     public void RemoveModifiers(uint ownerId)
     {
         var modifiers = BuffGameData.Instance.GetModifiersForBuff(ownerId);
-        foreach (var modifier in modifiers)
-        {
-            RemoveModifier(modifier);
-        }
+        lock (_lock)
+            foreach (var modifier in modifiers)
+                RemoveModifier(modifier);
     }
 
     public void AddModifier(BuffModifier modifier)
     {
-        if (modifier.BuffId > 0)
+        lock (_lock)
         {
-            if (!_modifiersByBuffId.ContainsKey(modifier.BuffId))
-                _modifiersByBuffId.Add(modifier.BuffId, []);
-            _modifiersByBuffId[modifier.BuffId].Add(modifier);
-        }
-
-        if (modifier.TagId > 0)
-        {
-            if (!_modifiersByTagId.ContainsKey(modifier.TagId))
-                _modifiersByTagId.Add(modifier.TagId, []);
-            _modifiersByTagId[modifier.TagId].Add(modifier);
+            if (modifier.BuffId > 0)
+                AddModifier(_modifiersByBuffId, modifier.BuffId, modifier);
+            if (modifier.TagId > 0)
+                AddModifier(_modifiersByTagId, modifier.TagId, modifier);
         }
     }
 
     public void RemoveModifier(BuffModifier modifier)
     {
-        if (_modifiersByBuffId.TryGetValue(modifier.BuffId, out var buffsById))
-            buffsById.Remove(modifier);
+        lock (_lock)
+        {
+            RemoveModifier(_modifiersByBuffId, modifier.BuffId, modifier);
+            RemoveModifier(_modifiersByTagId, modifier.TagId, modifier);
+        }
+    }
 
-        if (_modifiersByTagId.TryGetValue(modifier.TagId, out var buffsByTag))
-            buffsByTag.Remove(modifier);
+    internal void ReplaceEquipmentModifiers(IReadOnlyList<BuffModifier> modifiers)
+    {
+        lock (_lock)
+        {
+            foreach (var previous in _equipmentModifiers)
+                RemoveModifier(previous);
+            foreach (var modifier in modifiers)
+                AddModifier(modifier);
+            _equipmentModifiers = modifiers;
+        }
+    }
+
+    private static void AddModifier(Dictionary<uint, List<BuffModifier>> byId, uint id, BuffModifier modifier)
+    {
+        if (!byId.TryGetValue(id, out var modifiers))
+            byId[id] = modifiers = [];
+        modifiers.Add(modifier);
+    }
+
+    private static void RemoveModifier(Dictionary<uint, List<BuffModifier>> byId, uint id, BuffModifier modifier)
+    {
+        if (!byId.TryGetValue(id, out var modifiers))
+            return;
+        modifiers.Remove(modifier);
+        if (modifiers.Count == 0)
+            byId.Remove(id);
     }
 }

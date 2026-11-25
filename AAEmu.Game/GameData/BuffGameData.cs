@@ -3,6 +3,7 @@ using AAEmu.Game.GameData.Framework;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Static;
+using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Utils.DB;
 
@@ -14,16 +15,21 @@ namespace AAEmu.Game.GameData;
 public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
 {
     private Dictionary<uint, List<BuffModifier>> _buffModifiers;
+    private Dictionary<uint, List<BuffModifier>> _itemBuffModifiers = [];
     private Dictionary<uint, BuffTolerance> _buffTolerances;
     private Dictionary<uint, BuffTolerance> _buffTolerancesById;
     private Dictionary<uint, HashSet<uint>> _immuneBuffTags = [];
     private Dictionary<uint, HashSet<uint>> _requiredBuffTags = [];
     private Dictionary<uint, HashSet<uint>> _buffsBrokenByTag = [];
+    private Dictionary<uint, List<ConditionalUnitModifier>> _conditionalUnitModifiers = [];
 
     public List<BuffModifier> GetModifiersForBuff(uint ownerId)
     {
         return _buffModifiers.TryGetValue(ownerId, out var modifier) ? modifier : [];
     }
+
+    internal IReadOnlyList<BuffModifier> GetItemBuffModifiers(uint id) =>
+        _itemBuffModifiers.TryGetValue(id, out var modifiers) ? modifiers : [];
 
     public BuffTolerance GetBuffToleranceForBuffTag(uint buffTag)
     {
@@ -34,15 +40,19 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
 
     public IReadOnlySet<uint> GetRequiredBuffTags(uint buffId) => _requiredBuffTags.GetValueOrDefault(buffId);
     public IReadOnlySet<uint> GetBuffsBrokenByTag(uint tagId) => _buffsBrokenByTag.GetValueOrDefault(tagId);
+    internal IReadOnlyList<ConditionalUnitModifier> GetConditionalUnitModifiers(uint buffId) =>
+        _conditionalUnitModifiers.TryGetValue(buffId, out var modifiers) ? modifiers : [];
 
     public void Load(SqliteConnection connection, SqliteConnection connection2)
     {
         _buffModifiers = [];
+        _itemBuffModifiers = [];
         _buffTolerances = [];
         _buffTolerancesById = [];
         _immuneBuffTags = ReadBuffTags(connection, "SELECT buff_id AS buff_key, buff_tag_id AS buff_value FROM tagged_immune_buffs");
         _requiredBuffTags = ReadBuffTags(connection, "SELECT buff_id AS buff_key, buff_tag_id AS buff_value FROM tagged_require_buffs");
         _buffsBrokenByTag = ReadBuffTags(connection2, "SELECT buff_tag_id AS buff_key, buff_id AS buff_value FROM buff_breakers");
+        _conditionalUnitModifiers = ReadConditionalUnitModifiers(connection);
 
         using (var command = connection.CreateCommand())
         {
@@ -64,9 +74,17 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
                     template.BuffId = reader.GetUInt32("buff_id", 0);
                     template.Synergy = reader.GetBoolean("synergy");
 
-                    if (!_buffModifiers.ContainsKey(template.OwnerId))
-                        _buffModifiers.Add(template.OwnerId, []);
-                    _buffModifiers[template.OwnerId].Add(template);
+                    var byOwner = template.OwnerType switch
+                    {
+                        "Buff" => _buffModifiers,
+                        "Item" => _itemBuffModifiers,
+                        _ => null
+                    };
+                    if (byOwner == null)
+                        continue;
+                    if (!byOwner.TryGetValue(template.OwnerId, out var modifiers))
+                        byOwner[template.OwnerId] = modifiers = [];
+                    modifiers.Add(template);
                 }
             }
         }
@@ -128,6 +146,41 @@ public class BuffGameData : Singleton<BuffGameData>, IGameDataLoader
         {
             tolerance.Steps.Sort(static (left, right) => left.Id.CompareTo(right.Id));
         }
+    }
+
+    private static Dictionary<uint, List<ConditionalUnitModifier>> ReadConditionalUnitModifiers(SqliteConnection connection)
+    {
+        Dictionary<uint, List<ConditionalUnitModifier>> result = [];
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('buff_unit_modifiers', 'unit_modifiers')";
+        if (Convert.ToInt32(command.ExecuteScalar()) != 2)
+            return result;
+
+        command.CommandText = """
+                              SELECT selector.owner_id, selector.buff_id, selector.tag_id, modifier.unit_attribute_id,
+                                     modifier.unit_modifier_type_id, modifier.value, modifier.linear_level_bonus
+                              FROM buff_unit_modifiers selector
+                              JOIN unit_modifiers modifier ON modifier.owner_type = 'BuffUnitModifier' AND modifier.owner_id = selector.id
+                              WHERE selector.owner_type = 'Buff'
+                              ORDER BY selector.id
+                              """;
+        using var reader = new SQLiteWrapperReader(command.ExecuteReader());
+        while (reader.Read())
+        {
+            var ownerId = reader.GetUInt32("owner_id");
+            if (!result.TryGetValue(ownerId, out var modifiers))
+                result[ownerId] = modifiers = [];
+
+            var bonus = new BonusTemplate
+            {
+                Attribute = (UnitAttribute)reader.GetUInt32("unit_attribute_id"),
+                ModifierType = (UnitModifierType)reader.GetByte("unit_modifier_type_id"),
+                Value = reader.GetInt32("value"),
+                LinearLevelBonus = reader.GetInt32("linear_level_bonus")
+            };
+            modifiers.Add(new ConditionalUnitModifier(reader.GetUInt32("buff_id", 0), reader.GetUInt32("tag_id", 0), bonus));
+        }
+        return result;
     }
 
     private static Dictionary<uint, HashSet<uint>> ReadBuffTags(SqliteConnection connection, string query)

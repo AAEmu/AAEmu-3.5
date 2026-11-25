@@ -32,6 +32,7 @@ public partial class Buff
     private bool _dispelTaskRunning;
     private int _count;
     private bool _chargeInitialized;
+    private ushort _abLevel;
 
     public uint Index { get; set; }
     public Skill Skill { get; set; }
@@ -49,7 +50,11 @@ public partial class Buff
     public DateTime EndTime { get; set; }
     public int Charge { get; set; }
     public bool Passive { get; set; }
-    public ushort AbLevel { get; set; }
+    public ushort AbLevel
+    {
+        get => Template?.FixAbilityLevelToOne == true ? (ushort)1 : _abLevel;
+        set => _abLevel = value;
+    }
     public bool IsRestored { get; set; }
     internal bool IsCrowdGrant { get; set; }
     public int Stack { get; set; } = 1;

@@ -1,4 +1,5 @@
 ﻿using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Skills.Utils;
 using AAEmu.Game.Models.Game.Units;
@@ -90,7 +91,8 @@ public partial class Buff
             var team = relation is SkillTargetRelation.Party or SkillTargetRelation.Raid
                 ? TeamManager.Instance.GetTeamByObjId(caster.ObjId)
                 : null;
-            foreach (var candidate in world.GetUnitsWithinRadius(Owner, Template.AuraRadius))
+            var radius = (float)Math.Max(0d, caster.ApplyBuffModifers(Template, BuffAttribute.AuraRadius, Template.AuraRadius));
+            foreach (var candidate in world.GetUnitsWithinRadius(Owner, radius))
             {
                 if (IsAuraRecipient(caster, candidate, relation, team))
                     eligible.Add(candidate);

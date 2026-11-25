@@ -33,8 +33,8 @@ public class SCSkillFiredPacket : GamePacket
     private readonly SkillObject _skillObject;
     private readonly Skill _skill;
 
-    public ushort EffectDelay { get; set; }
-    public ushort ChannelingTime { get; set; }
+    public int EffectDelay { get; set; }
+    public int ChannelingTime { get; set; }
 
     /// <summary>
     /// Fire animation id sent to the client.
@@ -51,7 +51,7 @@ public class SCSkillFiredPacket : GamePacket
         _target = target;
         _skill = skill;
         _skillObject = skillObject;
-        ChannelingTime = (ushort)skill.Template.ChannelingTime;
+        ChannelingTime = skill.Template.ChannelingTime;
         FireAnimId = skill.Template.FireAnim?.Id ?? 0;
     }
 
@@ -62,8 +62,8 @@ public class SCSkillFiredPacket : GamePacket
         stream.Write(_target);
         stream.Write(_skillObject);
 
-        stream.Write((ushort)(EffectDelay / 10));
-        stream.Write((ushort)(ChannelingTime / 10));
+        stream.Write((ushort)Math.Clamp(EffectDelay / 10, 0, ushort.MaxValue));
+        stream.Write((ushort)Math.Clamp(ChannelingTime / 10, 0, ushort.MaxValue));
 
         // extra-data flags (sub_39921B90); no optional c/e/p/d data is currently sent.
         stream.Write((byte)0);
@@ -76,13 +76,13 @@ public class SCSkillFiredPacket : GamePacket
         return stream;
     }
 
-    public SCSkillFiredPacket SetEffectDelay(ushort effectDelay)
+    public SCSkillFiredPacket SetEffectDelay(int effectDelay)
     {
         EffectDelay = effectDelay;
         return this;
     }
 
-    public SCSkillFiredPacket SetChannelingTime(ushort channelingTime)
+    public SCSkillFiredPacket SetChannelingTime(int channelingTime)
     {
         ChannelingTime = channelingTime;
         return this;

@@ -11,6 +11,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.Skills;
 using AAEmu.Game.Models.Game.Skills.Buffs;
 using AAEmu.Game.Models.Game.Skills.Effects;
+using AAEmu.Game.Models.Game.Skills.Static;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Team;
 using AAEmu.Game.Models.Game.Units;
@@ -263,6 +264,30 @@ public class BuffAuraTests
         RunAuraPulse();
         await Assert.That(near.Buffs.CheckBuff(child.Id)).IsTrue();
         await Assert.That(outside.Buffs.CheckBuff(child.Id)).IsFalse();
+    }
+
+    [Test]
+    public async Task AuraUsesTheCastersCurrentRadiusModifier()
+    {
+        var caster = PlaceUnit(1, 11);
+        var holder = PlaceUnit(2, 24);
+        var near = PlaceUnit(3, 49);
+        var child = Register(new BuffTemplate { Id = 4001 });
+        var template = Register(new BuffTemplate { Id = 21451, AuraSlaveBuffId = child.Id, AuraRadius = 20 });
+        var modifier = new BuffModifier
+        {
+            BuffId = template.Id, BuffAttribute = BuffAttribute.AuraRadius,
+            UnitModifierType = UnitModifierType.Value, Value = 10
+        };
+        caster.BuffModifiersCache.AddModifier(modifier);
+        Add(holder, caster, template);
+
+        RunAuraPulse();
+        await Assert.That(near.Buffs.CheckBuff(child.Id)).IsTrue();
+
+        caster.BuffModifiersCache.RemoveModifier(modifier);
+        RunAuraPulse();
+        await Assert.That(near.Buffs.CheckBuff(child.Id)).IsFalse();
     }
 
     [Test]

@@ -177,7 +177,7 @@ public class PlotCondition
         {
             // Some plots start with a result condition without an authored roll or damage event.
             hit = skill.RollCombatDice(caster, target);
-            targetInfo.SetCombatHit(caster, target, hit, prepared: CombatDiceResults.PreventsHit(hit));
+            targetInfo.SetCombatHit(caster, target, hit, prepared: true);
         }
         return CombatDiceResults.MatchesMask(hit, Param1);
     }

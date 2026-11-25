@@ -49,6 +49,7 @@ public class Skill
     public Dictionary<uint, SkillHitType> HitTypes { get; set; }
     public BaseUnit InitialTarget { get; set; }//Temp Hack Fix. Replace this with UnitsEffected
     private bool _bypassGcd;
+    private byte? _castEffectLevel;
     public bool Cancelled { get; set; } = false;
     internal int? EarlyCastingProgress { get; set; }
     public Action Callback { get; set; }
@@ -73,10 +74,17 @@ public class Skill
         HitTypes = [];
         Id = template.Id;
         Template = template;
-        if (owner != null)
-            Level = template.LevelStep > 0 ? (byte)((owner.GetAbLevel(template.AbilityId) - template.AbilityLevel) / template.LevelStep + 1) : (byte)1;
-        else
-            Level = 1;
+        Level = owner != null && template.LevelStep > 0
+            ? (byte)Math.Clamp((owner.GetAbLevel(template.AbilityId) - template.AbilityLevel) / template.LevelStep + 1, 1, byte.MaxValue)
+            : (byte)1;
+    }
+
+    internal int GetEffectLevel(BaseUnit caster) => _castEffectLevel ?? CalculateEffectLevel(caster);
+
+    private byte CalculateEffectLevel(BaseUnit caster)
+    {
+        var level = Math.Max(1, (int)Level);
+        return (byte)Math.Clamp(caster?.ApplySkillModifiers(this, SkillAttribute.SkillLevel, level) ?? level, 1d, byte.MaxValue);
     }
 
     /// <summary>
@@ -105,6 +113,7 @@ public class Skill
             character.Abilities?.IsHighAbilityActive(Template.HighAbilityId, Template.AbilityId) != true)
             return SkillResult.InvalidSkill;
 
+        _castEffectLevel = CalculateEffectLevel(unit);
         unit.ConditionChance = true;
 
         if (Id == CharacterMates.RecoveryPotionSkillId)
@@ -865,8 +874,10 @@ public class Skill
             doodad.Spawn();
         }
 
-        caster.BroadcastPacket(new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject), true);
-        var channel = new EndChannelingTask(this, unit, casterCaster, target, doodad);
+        var duration = (int)Math.Clamp(unit.ApplySkillModifiers(this, SkillAttribute.ChannelingTime, Template.ChannelingTime), 0d, int.MaxValue);
+        caster.BroadcastPacket(new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
+            .SetChannelingTime(duration), true);
+        var channel = new EndChannelingTask(this, unit, casterCaster, target, doodad, duration);
         channel.Start();
     }
 
@@ -911,7 +922,8 @@ public class Skill
         var totalDelay = 0;
         if (Template.EffectDelay > 0)
             totalDelay += Template.EffectDelay;
-        if (Template.EffectSpeed > 0)
+        // Only authored projectile speeds of at least 1 m/s contribute travel time.
+        if (Template.EffectSpeed >= 1f)
             totalDelay += (int)(unit.GetDistanceTo(target) / Template.EffectSpeed * 1000.0f);
         if (Template.FireAnim != null && Template.UseAnimTime)
             totalDelay += (int)(Template.FireAnim.CombatSyncTime * (unit.GlobalCooldownMul / 100));
@@ -920,7 +932,7 @@ public class Skill
         // 0 means "no override" — packet keeps its default (skill template's FireAnim).
         var weaponAnimId = GetWeaponAttackAnimId(caster);
         var firedPacket = new SCSkillFiredPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
-            .SetEffectDelay((ushort)totalDelay);
+            .SetEffectDelay(totalDelay);
         if (weaponAnimId > 0)
             firedPacket.SetFireAnimId(weaponAnimId);
         caster.BroadcastPacket(firedPacket, true);
@@ -1054,42 +1066,11 @@ public class Skill
                 .ToList();
         }
 
+        HitTypes.Clear();
         foreach (var target in possibleTargets)
         {
-            if (target is Unit targetUnit && Template.TargetType == SkillTargetType.Hostile)
-            {
-                var diceResult = RollCombatDice(caster, targetUnit);
-                if (Template.LevelRuleNoConsideration)
-                {
-                    var damageType = (DamageType)Template.DamageTypeId;
-                    switch (damageType)
-                    {
-                        case DamageType.Melee:
-                            diceResult = SkillHitType.MeleeHit;
-                            break;
-                        case DamageType.Magic:
-                            diceResult = SkillHitType.SpellHit;
-                            break;
-                        case DamageType.Siege:
-                            diceResult = SkillHitType.RangedHit; // no siege version?
-                            break;
-                        case DamageType.Ranged:
-                            diceResult = SkillHitType.RangedHit;
-                            break;
-                        case DamageType.Heal:
-                            diceResult = SkillHitType.SpellHit;
-                            break;
-                        default:
-                            diceResult = SkillHitType.Invalid;
-                            break;
-                    }
-                }
-                HitTypes.TryAdd(targetUnit.ObjId, diceResult);
-            }
-            else if (target is Doodad doodad)
-            {
+            if (target is Doodad doodad)
                 doodad.OnSkillHit(caster, Id);
-            }
         }
 
         var packets = new CompressedGamePackets();
@@ -1167,23 +1148,23 @@ public class Skill
                 }
 
                 // Blocking buffs and tags checks 
-                if (effect.SourceBuffTagId > 0 && !caster.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(effect.SourceBuffTagId)))
+                if (effect.SourceBuffTagId > 0 && !SkillTargetingUtil.HasBuffTag(caster, effect.SourceBuffTagId, caster, effect.CheckSourceTagSrc))
                 {
                     // TODO Commented out the code for the Id=2255 quest to work. Restore after finding a solution to the lack of a debuff.
                     continue;
                 }
 
-                if (effect.SourceNoBuffTagId > 0 && caster.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(effect.SourceNoBuffTagId)))
+                if (effect.SourceNoBuffTagId > 0 && SkillTargetingUtil.HasBuffTag(caster, effect.SourceNoBuffTagId, caster, effect.CheckNoSourceTagSrc))
                 {
                     continue;
                 }
 
-                if (effect.TargetBuffTagId > 0 && !target.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(effect.TargetBuffTagId)))
+                if (effect.TargetBuffTagId > 0 && !SkillTargetingUtil.HasBuffTag(target, effect.TargetBuffTagId, caster, effect.CheckTargetTagSrc))
                 {
                     continue;
                 }
 
-                if (effect.TargetNoBuffTagId > 0 && target.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(effect.TargetNoBuffTagId)))
+                if (effect.TargetNoBuffTagId > 0 && SkillTargetingUtil.HasBuffTag(target, effect.TargetNoBuffTagId, caster, effect.CheckNoTargetTagSrc))
                 {
                     continue;
                 }
@@ -1218,44 +1199,39 @@ public class Skill
             }
         }
 
-        // Handle consumption of items from effects
-        // Placed outside the loop to prevent multiple uses
-        var handlesSourceItemConsumption = lastAppliedEffect?.Template?.HandlesSourceItemConsumption == true;
-        if (lastAppliedEffect != null)
+        var damageType = (DamageType)Template.DamageTypeId;
+        var diceKind = Template.LevelRuleNoConsideration
+            ? CombatDiceKind.AlwaysHit : CombatDiceResolver.GetKind(Template.CombatDiceId, damageType);
+        if (diceKind != CombatDiceKind.EachEffectRollDice)
         {
-            // Consume the item
-            if (!handlesSourceItemConsumption && casterCaster is SkillItem castItem && player != null && Id != CharacterMates.RecoveryPotionSkillId)
+            // Position and area skills may damage units without declaring a hostile cast target.
+            foreach (var (target, effect) in effectsToApply)
             {
-                var useItem = ItemManager.Instance.GetItemByItemId(castItem.ItemId);
-                if (lastAppliedEffect.ConsumeSourceItem)
-                    consumedItems.Add((useItem, lastAppliedEffect.ConsumeItemCount));
-                else
-                {
-                    var castItemTemplate = ItemManager.Instance.GetTemplate(castItem.ItemTemplateId);
-                    if (castItemTemplate.UseSkillAsReagent)
-                        consumedItems.Add((useItem, lastAppliedEffect.ConsumeItemCount));
-                }
+                if (target is not Unit victim || ReferenceEquals(caster, victim) || effect.Template is not DamageEffect damage ||
+                    HitTypes.ContainsKey(victim.ObjId))
+                    continue;
+
+                var attackType = damageType == 0 ? damage.DamageType : damageType;
+                HitTypes.Add(victim.ObjId, CombatDiceResolver.Roll(caster, victim, diceKind, attackType));
             }
 
-            if (player != null && lastAppliedEffect.Template?.HandlesItemTemplateConsumption != true &&
-                lastAppliedEffect.ConsumeItemId != 0 && lastAppliedEffect.ConsumeItemCount > 0)
+            if (Template.TargetType == SkillTargetType.Hostile)
             {
-                if (lastAppliedEffect.ConsumeSourceItem)
+                foreach (var target in possibleTargets)
                 {
-                    consumedItemTemplates.Add((lastAppliedEffect.ConsumeItemId, lastAppliedEffect.ConsumeItemCount));
-                }
-                else
-                {
-                    var inventory = player.Inventory.CheckItems(SlotType.Inventory, lastAppliedEffect.ConsumeItemId,
-                        lastAppliedEffect.ConsumeItemCount);
-                    var equipment = player.Inventory.CheckItems(SlotType.Equipment, lastAppliedEffect.ConsumeItemId,
-                        lastAppliedEffect.ConsumeItemCount);
-                    if (inventory || equipment)
-                    {
-                        consumedItemTemplates.Add((lastAppliedEffect.ConsumeItemId, lastAppliedEffect.ConsumeItemCount));
-                    }
+                    if (target is Unit victim && !HitTypes.ContainsKey(victim.ObjId))
+                        HitTypes.Add(victim.ObjId, CombatDiceResolver.Roll(caster, victim, diceKind, damageType));
                 }
             }
+        }
+
+        SelectWeightedEffects(effectsToApply);
+        var handlesSourceItemConsumption = false;
+        if (player != null && !TryQueueEffectItemConsumption(player, casterCaster, effectsToApply,
+                consumedItems, consumedItemTemplates, out handlesSourceItemConsumption))
+        {
+            Cancelled = true;
+            return;
         }
 
         // This will handle all items with a reagent/product
@@ -1305,39 +1281,9 @@ public class Skill
             }
         }
 
-        // Check if any of the effects use Weight, and pick a random value
-        var weightedTotal = 0;
-        var selectedWeight = -1;
-        foreach (var (_, effect) in effectsToApply)
-            weightedTotal += effect.Weight;
-        if (weightedTotal > 0)
-            selectedWeight = Random.Shared.Next(weightedTotal);
-        var currentWeight = 0;
-        // (caster as Character)?.SendMessage($"Effect Random {selectedWeight+1}/{weightedTotal}");
-
         // Apply the effects that need to happen
         foreach (var (target, effect) in effectsToApply)
         {
-            // If this item uses Weight, handle the random selector
-            // For example NPC /useskill 13834 has multiple bubble chat effects that need to be picked from
-            // Probably used for some combat and loot skills as well
-            if (effect.Weight > 0)
-            {
-                // Check if we already have a result
-                if (selectedWeight == -1)
-                    continue;
-
-                // If selection is outside the current range, then skip this effect
-                currentWeight += effect.Weight;
-                if (selectedWeight >= currentWeight)
-                {
-                    continue;
-                }
-
-                // (caster as Character)?.SendMessage($"Selected Effect {effect.EffectId} ({currentWeight}) using {selectedWeight} / {weightedTotal} - Buff {effect.Template.BuffId}");
-                selectedWeight = -1;
-            }
-
             // Template can be null for some reason.
             if (effect.Template != null)
             {
@@ -1347,8 +1293,12 @@ public class Skill
                     ? targetCaster
                     : new SkillCastUnitTarget(target.ObjId);
 
+                var effectSource = new EffectSource(this)
+                {
+                    CombatHit = ResolveEffectCombatHit(caster, target, effect, diceKind, damageType)
+                };
                 effect.Template.Apply(caster, casterCaster, target, thisTargetCaster, new CastSkill(Template.Id, TlId),
-                    new EffectSource(this), skillObject, DateTime.UtcNow, packets);
+                    effectSource, skillObject, DateTime.UtcNow, packets);
                 if (player is { SkillCancelled: true })
                     Cancelled = true;
 
@@ -1387,7 +1337,7 @@ public class Skill
             // TODO: Check if this is intended behaviour, or if this is a bug in the compact.sqlite3 file
             if (Id != CharacterMates.RecoveryPotionSkillId && reagents.Count <= 0 &&
                 skillProducts.Count <= 0 && consumedItems.Count <= 0 &&
-                ItemManager.Instance.GetItemByItemId(skillItem.ItemId) is { Template.UseSkillAsReagent: true } item)
+                skillItem.ResolveSourceItem(player) && skillItem.SkillSourceItem is { Template.UseSkillAsReagent: true } item)
             {
                 consumedItems.Add((item, 1));
                 Logger.Debug($"Consumed item template 1 x {item.TemplateId} ({item.Id}) because of missing reagent information with skill {Template.Id}");
@@ -1419,7 +1369,7 @@ public class Skill
                 // Actually consume the to be consumed items
                 // Specific Items
                 foreach (var (item, amount) in consumedItems)
-                    if (item.HoldingContainer != null)
+                    if (item?.HoldingContainer != null && item.OwnerId == player.Id)
                     {
                         item.HoldingContainer.ConsumeItem(ItemTaskType.SkillReagents, item.TemplateId, amount, item);
                     }
@@ -1432,6 +1382,113 @@ public class Skill
         }
     }
 
+
+    private static void SelectWeightedEffects(List<(BaseUnit target, SkillEffect effect)> effects)
+    {
+        long weight = 0;
+        foreach (var (_, effect) in effects)
+            weight += Math.Max(0, effect.Weight);
+        if (weight == 0)
+            return;
+
+        var roll = Random.Shared.NextInt64(weight);
+        var kept = 0;
+        for (var index = 0; index < effects.Count; index++)
+        {
+            var entry = effects[index];
+            if (entry.effect.Weight > 0)
+            {
+                if (roll < 0)
+                    continue;
+                roll -= entry.effect.Weight;
+                if (roll >= 0)
+                    continue;
+            }
+
+            effects[kept++] = entry;
+        }
+
+        effects.RemoveRange(kept, effects.Count - kept);
+    }
+
+    private bool TryQueueEffectItemConsumption(Character player, SkillCaster caster, List<(BaseUnit target, SkillEffect effect)> effects,
+        List<(Item, int)> items, List<(uint, int)> itemTemplates, out bool handlesSourceItemConsumption)
+    {
+        handlesSourceItemConsumption = false;
+        var castItem = Id == CharacterMates.RecoveryPotionSkillId ? null : caster as SkillItem;
+        var sourceCost = 0;
+        var sourceReagentCount = 0;
+        Dictionary<uint, int> templateCosts = null;
+        HashSet<SkillEffect> counted = null;
+
+        foreach (var (_, effect) in effects)
+        {
+            if (effect.Template == null)
+                continue;
+
+            handlesSourceItemConsumption |= effect.Template.HandlesSourceItemConsumption;
+            sourceReagentCount = Math.Max(sourceReagentCount, effect.ConsumeItemCount);
+
+            var consumesSource = castItem != null && effect.ConsumeSourceItem;
+            if (consumesSource)
+                sourceCost = Math.Max(sourceCost, effect.ConsumeItemCount);
+
+            if (effect.ConsumeItemId == 0 || effect.ConsumeItemCount <= 0 || effect.Template.HandlesItemTemplateConsumption ||
+                consumesSource && effect.ConsumeItemId == castItem.ItemTemplateId)
+                continue;
+
+            // A row can be selected for multiple targets. Its cost belongs to the cast.
+            counted ??= [];
+            if (!counted.Add(effect))
+                continue;
+
+            templateCosts ??= [];
+            templateCosts.TryGetValue(effect.ConsumeItemId, out var count);
+            templateCosts[effect.ConsumeItemId] = checked(count + effect.ConsumeItemCount);
+        }
+
+        Item sourceItem = null;
+        var sourceAmount = 0;
+        if (!handlesSourceItemConsumption && castItem != null && (sourceCost > 0 || sourceReagentCount > 0))
+        {
+            if (castItem.ResolveSourceItem(player))
+                sourceItem = castItem.SkillSourceItem;
+
+            if (sourceCost > 0)
+            {
+                if (sourceItem?.HoldingContainer == null ||
+                    !sourceItem.HoldingContainer.GetAllItemsByTemplate(sourceItem.TemplateId, -1, out _, out var available) ||
+                    available < sourceCost)
+                    return false;
+
+                sourceAmount = sourceCost;
+            }
+            else if (sourceItem?.Template.UseSkillAsReagent == true)
+            {
+                sourceAmount = sourceReagentCount;
+            }
+
+            if (sourceAmount > 0)
+                items.Add((sourceItem, sourceAmount));
+        }
+
+        if (templateCosts != null)
+        {
+            foreach (var (templateId, amount) in templateCosts)
+            {
+                var available = (long)player.Inventory.GetItemsCount(SlotType.Inventory, templateId) +
+                    player.Inventory.GetItemsCount(SlotType.Equipment, templateId);
+                if (sourceItem?.TemplateId == templateId)
+                    available -= sourceAmount;
+                if (available < amount)
+                    return false;
+
+                itemTemplates.Add((templateId, amount));
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// End skill in a normal way
@@ -1531,96 +1588,43 @@ public class Skill
             character.ResetSkillCooldown(Template.Id, false);
     }
 
+    private SkillHitType? ResolveEffectCombatHit(BaseUnit attacker, BaseUnit target, SkillEffect effect,
+        CombatDiceKind kind, DamageType damageType)
+    {
+        if (target is not Unit victim || effect.Template is not (DamageEffect or BuffEffect))
+            return null;
+
+        var effectDamageType = effect.Template is DamageEffect damage ? damage.DamageType : damageType;
+        if (kind == CombatDiceKind.EachEffectRollDice)
+        {
+            var contestsHit = effect.Template is DamageEffect ||
+                              !ReferenceEquals(attacker, victim) && (effect.NonFriendly || Template.TargetType == SkillTargetType.Hostile);
+            if (contestsHit)
+                return CombatDiceResolver.Roll(attacker, victim, effect.AlwaysHit ? CombatDiceKind.AlwaysHit : kind, effectDamageType);
+        }
+        else if (effect.AlwaysHit && HitTypes.TryGetValue(victim.ObjId, out var hit) && CombatDiceResults.PreventsHit(hit))
+        {
+            return CombatDiceResolver.Roll(attacker, victim, CombatDiceKind.AlwaysHit, effectDamageType);
+        }
+
+        return null;
+    }
+
     public SkillHitType RollCombatDice(BaseUnit attacker, BaseUnit target)
     {
-        var Attacker = attacker as Unit;
-        var Target = target as Unit;
-        // TODO
-        //  -Calculate Hit/Miss Rates
-        //  -Check for AlwaysHit?
-        //  -Only Parry if sword equipped?
+        if (target is not Unit victim)
+            return SkillHitType.Invalid;
+
         var damageType = (DamageType)Template.DamageTypeId;
-        if (Attacker != null)
-        {
-            var bullsEyeMod = Attacker.BullsEye / 1000f * 3f / 100f;
-
-            //TODO Check immunity a better way!!!
-            //if (target.Buffs.CheckBuffs(SkillManager.Instance.GetBuffsByTagId(361)))
-            //return SkillHitType.Immune;
-
-            //Idk if this is right. Double check it
-            if (!MathUtil.IsFront(attacker, target))
-                goto AlwaysHit;
-
-            if (Target != null && Random.Shared.Next(0f, 100f) < Target.DodgeRate - bullsEyeMod)
-            {
-                if (damageType == DamageType.Melee)
-                    return SkillHitType.MeleeDodge;
-                if (damageType == DamageType.Ranged)
-                    return SkillHitType.RangedDodge;
-            }
-            if (Target != null && Random.Shared.Next(0f, 100f) < Target.BlockRate - bullsEyeMod)
-            {
-                if (damageType == DamageType.Melee)
-                    return SkillHitType.MeleeBlock;
-                if (damageType == DamageType.Ranged)
-                    return SkillHitType.RangedBlock;
-            }
-            if (Target != null && Random.Shared.Next(0F, 100f) < Target.MeleeParryRate - bullsEyeMod)
-            {
-                if (damageType == DamageType.Melee)
-                    return SkillHitType.MeleeParry;
-                if (damageType == DamageType.Ranged
-                    && target.Buffs.CheckBuff((uint)BuffConstants.EquipDualwield)
-                    && target.Buffs.CheckBuff((uint)BuffConstants.DualwieldProficiency))
-                {
-                    return SkillHitType.MeleeParry;
-                }
-            }
-            if (Target != null && Random.Shared.Next(0f, 100f) < Target.RangedParryRate - bullsEyeMod)
-            {
-                if (damageType == DamageType.Ranged)
-                    return SkillHitType.RangedParry;
-            }
-        }
-
-AlwaysHit:
-        switch (damageType)
-        {
-            case DamageType.Melee:
-                if (Attacker != null && Random.Shared.Next(0f, 100f) < Attacker.MeleeAccuracy)
-                    return SkillHitType.MeleeHit;
-                return SkillHitType.MeleeMiss;
-            case DamageType.Magic:
-                if (Attacker != null && Random.Shared.Next(0f, 100f) < Attacker.SpellAccuracy)
-                    return SkillHitType.SpellHit;
-                return SkillHitType.SpellMiss;
-            case DamageType.Ranged:
-                if (Attacker != null && Random.Shared.Next(0f, 100f) < Attacker.RangedAccuracy)
-                    return SkillHitType.RangedHit;
-                return SkillHitType.RangedMiss;
-            case DamageType.Siege:
-                return SkillHitType.RangedHit;//No siege type?
-            default:
-                return SkillHitType.Invalid;
-        }
+        var kind = CombatDiceResolver.GetKind(Template.CombatDiceId, damageType);
+        return CombatDiceResolver.Roll(attacker, victim, kind, damageType);
     }
 
     public bool SkillMissed(uint objId)
     {
         if (HitTypes.TryGetValue(objId, out var hitType))
         {
-            return hitType == SkillHitType.MeleeDodge
-                || hitType == SkillHitType.MeleeParry
-                || hitType == SkillHitType.MeleeBlock
-                || hitType == SkillHitType.MeleeMiss
-                || hitType == SkillHitType.RangedDodge
-                || hitType == SkillHitType.RangedParry
-                || hitType == SkillHitType.RangedBlock
-                || hitType == SkillHitType.RangedMiss
-                || hitType == SkillHitType.SpellMiss
-                || hitType == SkillHitType.SpellResist
-                || hitType == SkillHitType.Immune;
+            return CombatDiceResults.PreventsHit(hitType);
         }
         Logger.Error($"Unit[{objId}] was not found in the CbtDiceRolls.");
         return true;

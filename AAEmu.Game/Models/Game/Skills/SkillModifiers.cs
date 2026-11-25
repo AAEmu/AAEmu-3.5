@@ -9,6 +9,7 @@ public class SkillModifiers
     private readonly Dictionary<uint, List<SkillModifier>> _modifiersBySkillId = [];
     private readonly Dictionary<uint, List<SkillModifier>> _modifiersByTagId = [];
     private readonly object _lock = new();
+    private IReadOnlyList<SkillModifier> _equipmentModifiers = [];
 
     public double ApplyModifiers(Skill skill, SkillAttribute attribute, double baseValue)
     {
@@ -112,6 +113,18 @@ public class SkillModifiers
                 AddModifier(_modifiersBySkillId, modifier.SkillId, modifier);
             if (modifier.TagId > 0)
                 AddModifier(_modifiersByTagId, modifier.TagId, modifier);
+        }
+    }
+
+    internal void ReplaceEquipmentModifiers(IReadOnlyList<SkillModifier> modifiers)
+    {
+        lock (_lock)
+        {
+            foreach (var previous in _equipmentModifiers)
+                RemoveModifier(previous);
+            foreach (var modifier in modifiers)
+                AddModifier(modifier);
+            _equipmentModifiers = modifiers;
         }
     }
 

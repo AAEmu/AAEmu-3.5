@@ -24,7 +24,6 @@ public class ItemSocketing : SpecialEffectAction
         int value3,
         int value4)
     {
-        // TODO ...
         Logger.Debug("Special effects: ItemSocketing value1 {0}, value2 {1}, value3 {2}, value4 {3}", value1, value2, value3, value4);
 
         if (caster is not Character owner)
@@ -64,47 +63,39 @@ public class ItemSocketing : SpecialEffectAction
 
         byte result = 0;
         var installed = false;
+        var sockets = equipItem.SocketGemIds;
         if (gemItem.TemplateId != (uint)ItemConstants.DawnStone)
         {
-            // Add LunaGem
-            var gemCount = 0u;
-            foreach (var gem in equipItem.GemIds)
+            var freeSocket = sockets.IndexOf(0u);
+            if (freeSocket >= 0)
             {
-                if (gem != 0)
-                {
-                    gemCount++;
-                }
-            }
+                var gemCount = 0u;
+                foreach (var gem in sockets)
+                    if (gem != 0)
+                        gemCount++;
 
-            // Roll for Success
-            var gemRoll = Random.Shared.Next(0, 10000);
-            var gemChance = ItemManager.Instance.GetSocketChance(gemCount); // fetches chances from sqlite3
-            // var gemChance = int.MaxValue; //gives 100% success rates
-
-            if (gemRoll < gemChance)
-            {
-                // Success
-                equipItem.GemIds[gemCount] = gemItem.TemplateId;
-                result = 1;
-            }
-            else
-            {
-                // Failed!
-                for (var i = 0; i < equipItem.GemIds.Length; i++)
+                var gemChance = ItemManager.Instance.GetSocketChance(gemCount);
+                if (Random.Shared.Next(0, 10000) < gemChance)
                 {
-                    equipItem.GemIds[i] = 0;
+                    sockets[freeSocket] = gemItem.TemplateId;
+                    result = 1;
                 }
+                else
+                    sockets.Clear();
+                installed = true;
             }
-            installed = true;
         }
         else
         {
-            // DawnStone
-            for (var i = 0; i < equipItem.GemIds.Length; i++)
-            {
-                equipItem.GemIds[i] = 0;
-            }
+            sockets.Clear();
             result = 1;
+        }
+
+        if (installed || result == 1)
+        {
+            equipItem.IsDirty = true;
+            if (ReferenceEquals(equipItem.HoldingContainer, owner.Equipment))
+                owner.RebuildGearBonuses();
         }
 
         tasksSocketing.Add(new ItemUpdate(equipItem));

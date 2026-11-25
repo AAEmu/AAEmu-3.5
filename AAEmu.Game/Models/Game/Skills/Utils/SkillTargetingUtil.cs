@@ -11,6 +11,12 @@ public static class SkillTargetingUtil
         target != null && !ReferenceEquals(targeter, target) &&
         target.Buffs is Units.Buffs collection && collection.RestrictsTargetSelection(targeter);
 
+    internal static bool HasBuffTag(BaseUnit holder, uint tagId, BaseUnit caster, bool fromCaster)
+    {
+        var ids = SkillManager.Instance.GetBuffsByTagId(tagId);
+        return fromCaster ? holder.Buffs.CheckBuffs(ids, caster) : holder.Buffs.CheckBuffs(ids);
+    }
+
     public static IEnumerable<T> FilterWithRelation<T>(SkillTargetRelation relation, T caster, IEnumerable<T> units) where T : BaseUnit
     {
         switch (relation)

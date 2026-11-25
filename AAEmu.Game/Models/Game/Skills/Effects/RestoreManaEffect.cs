@@ -50,7 +50,7 @@ public class RestoreManaEffect : EffectTemplate
         var skillLevel = 1;
         if (source?.Skill is { } skill)
         {
-            skillLevel = (skill.Level - 1) * skill.Template.LevelStep + skill.Template.AbilityLevel;
+            skillLevel = (skill.GetEffectLevel(caster) - 1) * skill.Template.LevelStep + skill.Template.AbilityLevel;
             if (skillLevel >= skill.Template.AbilityLevel)
                 levelBonus = 0.15f * (skillLevel - skill.Template.AbilityLevel + 1);
         }

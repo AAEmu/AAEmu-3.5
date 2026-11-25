@@ -29,7 +29,7 @@ public class ManaBurnEffect : EffectTemplate
             return;
 
         var lvlMd = casterUnit.LevelDps * LevelMd;
-        var levelModifier = (((source?.Skill?.Level ?? 1) - 1) / 49 * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
+        var levelModifier = (((source?.Skill?.GetEffectLevel(caster) ?? 1) - 1) / 49f * (LevelVaEnd - LevelVaStart) + LevelVaStart) * 0.01f;
         var min = BaseMin + lvlMd - levelModifier * lvlMd + 0.5f;
         var max = BaseMax + (levelModifier + 1) * lvlMd + 0.5f;
 

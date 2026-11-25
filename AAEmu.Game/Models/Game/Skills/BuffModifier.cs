@@ -1,4 +1,5 @@
-using AAEmu.Game.Models.Game.Skills.Static;
+﻿using AAEmu.Game.Models.Game.Skills.Static;
+using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Models.Game.Skills;
@@ -15,3 +16,5 @@ public class BuffModifier
     public uint BuffId { get; set; }
     public bool Synergy { get; set; }
 }
+
+internal sealed record ConditionalUnitModifier(uint RequiredBuffId, uint RequiredTagId, BonusTemplate Bonus);

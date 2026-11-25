@@ -181,8 +181,10 @@ public class Unit : BaseUnit, IUnit
     public virtual int HDps { get; set; }
     [UnitAttribute(UnitAttribute.HealDpsInc)]
     public virtual int HDpsInc { get; set; }
-    [UnitAttribute(UnitAttribute.MeleeAntiMissMul)]
+    [UnitAttribute(UnitAttribute.MeleeAntiMiss)]
     public virtual float MeleeAccuracy { get; set; } = 100f;
+    [UnitAttribute(UnitAttribute.MeleeAntiMissMul)]
+    public float MeleeAntiMissMul => CalculateNonNegativeMultiplier(UnitAttribute.MeleeAntiMissMul);
     [UnitAttribute(UnitAttribute.MeleeCritical)]
     public virtual float MeleeCritical { get; set; }
     [UnitAttribute(UnitAttribute.MeleeCriticalBonus)]
@@ -191,6 +193,8 @@ public class Unit : BaseUnit, IUnit
     public virtual float MeleeCriticalMul { get; set; } = 1f;
     [UnitAttribute(UnitAttribute.RangedAntiMiss)]
     public virtual float RangedAccuracy { get; set; } = 100f;
+    [UnitAttribute(UnitAttribute.RangedAntiMissMul)]
+    public float RangedAntiMissMul => CalculateNonNegativeMultiplier(UnitAttribute.RangedAntiMissMul);
     [UnitAttribute(UnitAttribute.RangedCritical)]
     public virtual float RangedCritical { get; set; }
     [UnitAttribute(UnitAttribute.RangedCriticalBonus)]
@@ -199,6 +203,8 @@ public class Unit : BaseUnit, IUnit
     public virtual float RangedCriticalMul { get; set; } = 1f;
     [UnitAttribute(UnitAttribute.SpellAntiMiss)]
     public virtual float SpellAccuracy { get; set; } = 100f;
+    [UnitAttribute(UnitAttribute.SpellAntiMissMul)]
+    public float SpellAntiMissMul => CalculateNonNegativeMultiplier(UnitAttribute.SpellAntiMissMul);
     [UnitAttribute(UnitAttribute.SpellCritical)]
     public virtual float SpellCritical { get; set; }
     [UnitAttribute(UnitAttribute.SpellCriticalBonus)]
@@ -254,6 +260,8 @@ public class Unit : BaseUnit, IUnit
     public virtual float IncomingRangedDamageMul { get; set; } = 1f;
     [UnitAttribute(UnitAttribute.IncomingSpellDamageMul)]
     public virtual float IncomingSpellDamageMul { get; set; } = 1f;
+    [UnitAttribute(UnitAttribute.IncomingSiegeDamageMul)]
+    public float IncomingSiegeDamageMul => CalculateNonNegativeMultiplier(UnitAttribute.IncomingSiegeDamageMul);
     [UnitAttribute(UnitAttribute.AggroMul)]
     public float AggroMul
     {
@@ -782,6 +790,8 @@ public class Unit : BaseUnit, IUnit
             _bonuses[bonusIndex] = [];
     }
 
+    private ReadOnlySpan<Bonus> ConditionalUnitBonuses => (Buffs as Buffs)?.ConditionalUnitBonuses;
+
     public List<Bonus> GetBonuses(UnitAttribute attribute)
     {
         var result = new List<Bonus>();
@@ -791,6 +801,9 @@ public class Unit : BaseUnit, IUnit
                 foreach (var bonus in bonuses)
                     if (bonus.Template?.Attribute == attribute)
                         result.Add(bonus);
+            foreach (var bonus in ConditionalUnitBonuses)
+                if (bonus.Template.Attribute == attribute)
+                    result.Add(bonus);
         }
         return result;
     }
@@ -838,20 +851,27 @@ public class Unit : BaseUnit, IUnit
         // Keep the static and dynamic modifiers from one snapshot, with flat modifiers applied first.
         lock (_bonusLock)
         {
-            value = ApplyBonuses(value, attr, UnitModifierType.Value);
-            return ApplyBonuses(value, attr, UnitModifierType.Percent);
+            var conditional = ConditionalUnitBonuses;
+            value = ApplyBonuses(value, attr, UnitModifierType.Value, conditional);
+            return ApplyBonuses(value, attr, UnitModifierType.Percent, conditional);
         }
     }
+
+    private float CalculateNonNegativeMultiplier(UnitAttribute attribute) =>
+        (float)Math.Max(0d, 1d + CalculateWithBonuses(0d, attribute) / 1000d);
 
     // The ship controller scales the flat subtotal by the sum of its percentage modifiers.
     internal double CalculateWithAdditiveBonuses(double value, UnitAttribute attr)
     {
         lock (_bonusLock)
-            return ApplyBonuses(value, attr, UnitModifierType.Value) *
-                   ApplyBonuses(100d, attr, UnitModifierType.Percent, sum: true) * 0.01d;
+        {
+            var conditional = ConditionalUnitBonuses;
+            return ApplyBonuses(value, attr, UnitModifierType.Value, conditional) *
+                   ApplyBonuses(100d, attr, UnitModifierType.Percent, conditional, sum: true) * 0.01d;
+        }
     }
 
-    private double ApplyBonuses(double value, UnitAttribute attr, UnitModifierType type, bool sum = false)
+    private double ApplyBonuses(double value, UnitAttribute attr, UnitModifierType type, ReadOnlySpan<Bonus> conditional, bool sum = false)
     {
         var additive = type == UnitModifierType.Value || sum;
         foreach (var bonuses in _bonuses.Values)
@@ -863,6 +883,9 @@ public class Unit : BaseUnit, IUnit
             foreach (var bonus in bonuses)
                 if (bonus.Template is { } template && template.Attribute == attr && template.ModifierType == type && bonus.Evaluate(out var amount))
                     value += additive ? amount : value * amount / 100f;
+        foreach (var bonus in conditional)
+            if (bonus.Template.Attribute == attr && bonus.Template.ModifierType == type)
+                value += additive ? bonus.Value : value * bonus.Value / 100f;
         return value;
     }
 
@@ -1123,33 +1146,54 @@ public class Unit : BaseUnit, IUnit
 
     public void UpdateGearBonuses(Item itemAdded, Item itemRemoved)
     {
+        RebuildGearBonuses(itemRemoved);
+
+        ApplyEquipEffects(itemAdded, itemRemoved);
+        ApplyWeaponWieldBuff();
+        ApplyArmorGradeBuff(itemAdded, itemRemoved);
+        ApplyEquipItemSetBonuses();
+    }
+
+    internal void RebuildGearBonuses(Item itemRemoved = null)
+    {
         var bonuses = new List<Bonus>();
+        var skillModifiers = new List<SkillModifier>();
+        var buffModifiers = new List<BuffModifier>();
+        SkillManager.TryGetInstance(out var skills);
+        BuffGameData.TryGetInstance(out var buffs);
 
         foreach (var item in Equipment.Items)
         {
-            if (item is not EquipItem ei)
+            // A transfer can notify the source container before it removes the item from its list.
+            if (item is not EquipItem ei || ReferenceEquals(item, itemRemoved))
                 continue;
 
             // Mods on the gear Itself
             foreach (var template in ItemManager.Instance.GetUnitModifiers(item.TemplateId))
                 bonuses.Add(new Bonus { Template = template, Value = template.Value });
+            AddItemModifiers(item.TemplateId);
 
             // Mods from equipped Gems
             foreach (var gem in ei.GemIds)
                 foreach (var template in ItemManager.Instance.GetUnitModifiers(gem))
                     bonuses.Add(new Bonus { Template = template, Value = template.Value });
+            foreach (var gem in ei.SocketGemIds)
+                if (gem != 0)
+                    AddItemModifiers(gem);
         }
 
         lock (_bonusLock)
             _bonuses[GearBonusesIndex] = bonuses;
+        SkillModifiersCache.ReplaceEquipmentModifiers(skillModifiers);
+        BuffModifiersCache.ReplaceEquipmentModifiers(buffModifiers);
 
-        // Apply Equipment Effects
-        ApplyEquipEffects(itemAdded, itemRemoved);
-
-        // Compute gear buff
-        ApplyWeaponWieldBuff();
-        ApplyArmorGradeBuff(itemAdded, itemRemoved);
-        ApplyEquipItemSetBonuses();
+        void AddItemModifiers(uint templateId)
+        {
+            if (skills != null)
+                skillModifiers.AddRange(skills.GetItemSkillModifiers(templateId));
+            if (buffs != null)
+                buffModifiers.AddRange(buffs.GetItemBuffModifiers(templateId));
+        }
     }
 
     private void ApplyWeaponWieldBuff()
