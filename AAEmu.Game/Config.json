@@ -25,7 +25,7 @@
             "Port": "%db_port%",
             "User": "%db_user%",
             "Password": "%db_password%",
-            "Database": "aaemu_game"
+            "Database": "aaemu_game_35aac"
         }
     },
     "CharacterNameRegex": "^[a-zA-Z0-9а-яА-Я]{1,18}$",
