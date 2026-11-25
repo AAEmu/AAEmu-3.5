@@ -1,4 +1,5 @@
-﻿using AAEmu.Login.Models;
+﻿using AAEmu.Commons.Utils.Updater;
+using AAEmu.Login.Models;
 using Microsoft.Extensions.Options;
 using MySql.Data.MySqlClient;
 
@@ -9,6 +10,11 @@ public class MySqlConnectionFactory(IConfiguration configuration, IOptions<DBCon
 {
     private readonly string _connectionString =
         configuration.GetConnectionString("MySqlConnection") ?? CreateConnectionString(dbConnectionsConfig);
+
+    internal MySqlConnection OpenStartupConnection()
+    {
+        return MySqlSchemaBootstrap.Open(_connectionString, "aaemu_login");
+    }
 
     public MySqlConnection CreateConnection()
     {

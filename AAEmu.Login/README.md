@@ -1,5 +1,7 @@
 ﻿## Setup instructions
 
+At startup, the login server creates the configured MySQL database if it is missing and installs the bundled login schema into a new or empty database. The configured MySQL user needs permission to create the database and its tables for this first startup. If `ConnectionStrings:MySqlConnection` is configured, the server uses the database named in that connection string.
+
 ### Configuration
 
 To configure the login you have you can just use a **configuration file** or combine it with **user secrets (preferred)** to hide credentials from files in the repository.

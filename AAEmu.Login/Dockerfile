@@ -6,6 +6,7 @@ COPY ./Directory.Build.props .
 COPY ./Directory.Packages.props .
 COPY ./AAEmu.Commons ./AAEmu.Commons
 COPY ./AAEmu.Login ./AAEmu.Login
+COPY ./SQL/aaemu_game.sql ./SQL/aaemu_login.sql ./SQL/
 RUN dotnet publish ./AAEmu.Login/AAEmu.Login.csproj -c $CONFIGURATION -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine

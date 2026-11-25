@@ -1,4 +1,5 @@
 ﻿using AAEmu.Commons.Models;
+using AAEmu.Commons.Utils.Updater;
 using MySql.Data.MySqlClient;
 using NLog;
 
@@ -17,6 +18,11 @@ public static class MySQL
     public static MySqlConnection CreateConnection()
     {
         return CreateConnection(allowUserVariables: false);
+    }
+
+    public static MySqlConnection OpenStartupConnection(string moduleName)
+    {
+        return MySqlSchemaBootstrap.Open(s_connectionString, moduleName);
     }
 
     public static MySqlConnection CreateConnection(bool allowUserVariables)

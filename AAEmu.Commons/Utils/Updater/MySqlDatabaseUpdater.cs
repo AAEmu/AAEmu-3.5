@@ -46,31 +46,19 @@ public static class MySqlDatabaseUpdater
     /// </summary>
     /// <param name="connection"></param>
     /// <returns></returns>
-    private static bool CreateUpdatesTable(MySqlConnection connection)
+    internal static void CreateUpdatesTable(MySqlConnection connection)
     {
-        using (var command = connection.CreateCommand())
-        {
-            command.CommandText = "CREATE TABLE `updates` ( " +
-                                  "`script_name` varchar(255) NOT NULL, " +
-                                  "`installed` tinyint NOT NULL DEFAULT '0', " +
-                                  "`install_date` datetime NOT NULL, " +
-                                  "`last_error` text NOT NULL " +
-                                  ") COMMENT='Table containing SQL update script information' COLLATE 'utf8mb4_general_ci';" +
-                                  "ALTER TABLE `updates` ADD PRIMARY KEY `script_name` (`script_name`);";
-            try
-            {
-                command.ExecuteNonQuery();
-            }
-            catch (MySqlException ex)
-            {
-                Logger.Fatal(ex, "Failed to create updates table!");
-                // Failed to create the new table
-                return false;
-            }
-
-            Logger.Info("Created updates table");
-        }
-        return true;
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS `updates` (
+              `script_name` varchar(255) NOT NULL,
+              `installed` tinyint NOT NULL DEFAULT '0',
+              `install_date` datetime NOT NULL,
+              `last_error` text NOT NULL,
+              PRIMARY KEY (`script_name`)
+            ) ENGINE=InnoDB COMMENT='Table containing SQL update script information' COLLATE='utf8mb4_general_ci'
+            """;
+        command.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -196,9 +184,14 @@ public static class MySqlDatabaseUpdater
         // (try to) Create the table if it doesn't exist yet
         if (updateDbExists == false)
         {
-            if (!CreateUpdatesTable(connection))
+            try
             {
-                Logger.Fatal($"Was unable to create updates table in {databaseSchemaName} !");
+                CreateUpdatesTable(connection);
+                Logger.Info("Created updates table");
+            }
+            catch (MySqlException exception)
+            {
+                Logger.Fatal(exception, "Could not create the updates table in '{0}'.", databaseSchemaName);
                 return false;
             }
         }

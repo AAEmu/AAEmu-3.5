@@ -1,5 +1,7 @@
 ﻿## Setup instructions
 
+At startup, the game server creates the configured MySQL database if it is missing and installs the bundled game schema into a new or empty database. The configured MySQL user needs permission to create the database and its tables for this first startup. Databases with game data continue through the regular update process.
+
 ### Configuration
 
 To configure the game server you have you can just use a **configuration file** or combine it with **user secrets (preferred)** to hide credentials from files in the repository.

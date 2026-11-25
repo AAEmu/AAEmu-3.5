@@ -23,7 +23,7 @@ public sealed class LoginService(
         await using (var connection = connectionFactory.CreateConnection())
         {
             if (!MySqlDatabaseUpdater.Run(connection, "aaemu_login",
-                    dbConnectionsConfig.Value.MySQLProvider.Database,
+                    connection.Database,
                     dbConnectionsConfig.Value.AutoApplyUpdates))
             {
                 logger.LogCritical("Failed to update database!");

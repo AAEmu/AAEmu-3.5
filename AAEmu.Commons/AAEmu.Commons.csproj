@@ -11,4 +11,9 @@
     <PackageReference Include="NetCoreServer" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\SQL\aaemu_game.sql" LogicalName="AAEmu.MySql.aaemu_game.sql" />
+    <EmbeddedResource Include="..\SQL\aaemu_login.sql" LogicalName="AAEmu.MySql.aaemu_login.sql" />
+    <EmbeddedResource Include="Utils\Updater\mysql-bootstrap-baseline.txt" LogicalName="AAEmu.MySql.mysql-bootstrap-baseline.txt" />
+  </ItemGroup>
 </Project>

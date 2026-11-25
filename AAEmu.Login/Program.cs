@@ -110,7 +110,8 @@ public static class Program
             .BindConfiguration(PublicNetworkConfig.ConfigurationSectionName)
             .ValidateDataAnnotations();
 
-        builder.Services.AddSingleton<IMySqlConnectionFactory, MySqlConnectionFactory>();
+        builder.Services.AddSingleton<MySqlConnectionFactory>();
+        builder.Services.AddSingleton<IMySqlConnectionFactory>(sp => sp.GetRequiredService<MySqlConnectionFactory>());
         builder.Services.AddTransient<MySqlConnection>(sp =>
             sp.GetRequiredService<IMySqlConnectionFactory>().CreateConnection());
 

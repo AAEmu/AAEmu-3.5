@@ -67,10 +67,7 @@ public static class Program
 
         try
         {
-            // Test the DB connection
-            var connection = MySQL.CreateConnection();
-            connection.Close();
-            connection.Dispose();
+            using var connection = MySQL.OpenStartupConnection("aaemu_game");
         }
         catch (Exception ex)
         {

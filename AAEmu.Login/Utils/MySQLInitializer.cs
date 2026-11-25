@@ -1,6 +1,6 @@
 namespace AAEmu.Login.Utils;
 
-public class MySqlInitializer(IMySqlConnectionFactory connectionFactory, ILogger<MySqlInitializer> logger)
+public class MySqlInitializer(MySqlConnectionFactory connectionFactory, ILogger<MySqlInitializer> logger)
     : IHostedService
 {
     // Not using BackgroundService here due to it not preventing other hosted services from starting:
@@ -11,8 +11,7 @@ public class MySqlInitializer(IMySqlConnectionFactory connectionFactory, ILogger
     {
         try
         {
-            // Test the DB connection
-            await using var connection = connectionFactory.CreateConnection();
+            await using var connection = connectionFactory.OpenStartupConnection();
             logger.LogInformation(
                 "MySQL connection established successfully to {DataSource}. Server version {ServerVersion}",
                 connection.DataSource, connection.ServerVersion);
