@@ -1,3 +1,11 @@
+using System.Reflection;
+
+using AAEmu.Commons.IO;
+using AAEmu.Commons.Utils;
+using AAEmu.Game.Core.Managers.UnitManagers;
+using AAEmu.Game.GameData;
+using AAEmu.Game.Models.Game.DoodadObj;
+using AAEmu.Game.Physics.Static;
 using AAEmu.Game.Utils.DB;
 
 using Microsoft.Data.Sqlite;
@@ -103,6 +111,91 @@ public class CompactDatabasePatcherTests
 
         await Assert.That((long)files.Scalar("SELECT count(*) FROM buffs WHERE id=22659 AND duration=0 AND fx_group_id=836 AND system=1")).IsEqualTo(1L);
         await Assert.That((long)files.Scalar("SELECT count(*) FROM tagged_buffs WHERE buff_id=22659 AND tag_id=2480")).IsEqualTo(1L);
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task FlameEarringPatch_KeepsTheCorrectGradeBuff(bool hasEnlightenedBuff)
+    {
+        using var files = new PatchFiles();
+        files.Execute("""
+                      CREATE TABLE item_grade_buffs (id INT PRIMARY KEY, buff_id INT, item_grade_id INT, item_id INT);
+                      INSERT INTO item_grade_buffs VALUES
+                          (9001718, 7946, 7, 9001894), (9001864, 9001199, 8, 9001894), (9001858, 7946, 7, 31655);
+                      """);
+        if (hasEnlightenedBuff)
+            files.Execute("INSERT INTO item_grade_buffs VALUES (9001863, 9001198, 7, 9001894)");
+
+        const string patchName = "2026-11-25-enlightened-flame-earring-grade-buff.sql";
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "SQL", "patches", "compact", "startup", patchName),
+            Path.Combine(files.PatchDirectory, patchName));
+
+        CompactDatabasePatcher.Apply(files.Root);
+        CompactDatabasePatcher.Apply(files.Root);
+
+        using var connection = new SqliteConnection($"Data Source={files.Database};Mode=ReadOnly;Pooling=false");
+        connection.Open();
+        new ItemGameData().Load(connection, connection);
+
+        var gradeBuffs = files.Scalar("""
+                                     SELECT group_concat(item_id || ':' || item_grade_id || ':' || buff_id, ',')
+                                     FROM (SELECT * FROM item_grade_buffs ORDER BY item_id, item_grade_id);
+                                     """);
+        var expectedBuffId = hasEnlightenedBuff ? 9001198 : 7946;
+        await Assert.That((string)gradeBuffs).IsEqualTo($"31655:7:7946,9001894:7:{expectedBuffId},9001894:8:9001199");
+    }
+
+    [Test]
+    [NotInParallel]
+    public async Task NavalMinePatch_RestoresTheStartingPhaseForTheShipAttachment()
+    {
+        using var files = new PatchFiles();
+        var sourceData = Path.Combine(AppContext.BaseDirectory, "Data");
+        var testData = Path.GetDirectoryName(files.Database)!;
+        foreach (var fileName in new[] { "compact.sqlite3", "compact.server.table.sqlite3", "Creatures.xml" })
+            File.Copy(Path.Combine(sourceData, fileName), Path.Combine(testData, fileName));
+
+        files.Execute("DELETE FROM doodad_almighties WHERE id = 7367; DROP TABLE IF EXISTS sql_patches_applied;");
+        const string patchName = "2026-11-25-seastorm-naval-mine-template.sql";
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "SQL", "patches", "compact", "startup", patchName),
+            Path.Combine(files.PatchDirectory, patchName));
+        CompactDatabasePatcher.Apply(files.Root);
+
+        const BindingFlags staticFields = BindingFlags.Static | BindingFlags.NonPublic;
+        var appPath = typeof(FileManager).GetField("_appPath", staticFields)!;
+        var singleton = typeof(Singleton<DoodadManager>).GetField("s_instance", staticFields)!;
+        var creatures = typeof(DoodadManager).GetField("_creatures", staticFields)!;
+        var catalog = typeof(ShipDoodadCollision).GetField("_catalog", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previousAppPath = appPath.GetValue(null);
+        var previousManager = singleton.GetValue(null);
+        var previousCreatures = creatures.GetValue(null);
+        var previousCatalog = (ShipDoodadModelCatalog)catalog.GetValue(ShipDoodadCollision.Instance);
+
+        try
+        {
+            var manager = new DoodadManager(null, null, null, null, null);
+            appPath.SetValue(null, files.Root);
+            singleton.SetValue(null, manager);
+            manager.Load();
+
+            var doodad = new Doodad { TemplateId = 7367, Template = manager.GetTemplate(7367) };
+            var startingPhase = doodad.GetFuncGroupId();
+            await Assert.That(startingPhase).IsEqualTo(20113u);
+            await Assert.That(manager.GetFunc(startingPhase, 24010).NextPhase).IsEqualTo(20114);
+            await Assert.That((long)files.Scalar("""
+                                                 SELECT COUNT(*) FROM slave_doodad_bindings
+                                                 WHERE owner_type = 'Slave' AND owner_id = 22 AND doodad_id = 7367;
+                                                 """)).IsEqualTo(6L);
+        }
+        finally
+        {
+            appPath.SetValue(null, previousAppPath);
+            singleton.SetValue(null, previousManager);
+            creatures.SetValue(null, previousCreatures);
+            ShipDoodadCollision.Instance.SetCatalog(previousCatalog);
+            SqliteConnection.ClearAllPools();
+        }
     }
 
     private sealed class PatchFiles : IDisposable

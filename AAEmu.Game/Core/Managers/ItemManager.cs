@@ -1032,7 +1032,7 @@ public class ItemManager(ISkillManager skillManager, IItemIdManager itemIdManage
 
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM item_enchanting_gems";
+                command.CommandText = "SELECT DISTINCT * FROM item_enchanting_gems";
                 command.Prepare();
                 using (var sqliteReader = command.ExecuteReader())
                 using (var reader = new SQLiteWrapperReader(sqliteReader))

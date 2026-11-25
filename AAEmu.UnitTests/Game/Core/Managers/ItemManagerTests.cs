@@ -1,4 +1,7 @@
-﻿using AAEmu.Game.Core.Managers;
+﻿using System.Reflection;
+
+using AAEmu.Commons.IO;
+using AAEmu.Game.Core.Managers;
 using AAEmu.Game.Core.Managers.Id;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Models.Game.Items;
@@ -7,11 +10,74 @@ using AAEmu.Game.Models.Game.Items.Procs;
 using AAEmu.Game.Models.Game.Items.Templates;
 using AAEmu.Game.Models.Game.Skills.Templates;
 using AAEmu.Game.Models.Game.Units;
+using Microsoft.Data.Sqlite;
 
 namespace AAEmu.UnitTests.Game.Core.Managers;
 
 public class ItemManagerTests
 {
+    [Test]
+    [NotInParallel]
+    public async Task Load_IdenticalEnchantingGemRows_LoadsRuneTemplate()
+    {
+        const uint itemId = 9002040;
+        var sourceDataDir = Path.Combine(AppContext.BaseDirectory, "Data");
+        var appPathField = typeof(FileManager).GetField("_appPath", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new InvalidOperationException("Could not locate the application path field.");
+        var originalAppPath = appPathField.GetValue(null);
+        var originalMaxGradeId = ItemManager.MaxGradeId;
+        var originalMaxGradeValue = ItemManager.MaxGradeValue;
+        var testAppPath = Path.Combine(Path.GetTempPath(), $"AAEmu.ItemManagerTests.{Guid.NewGuid():N}");
+        var testDataDir = Path.Combine(testAppPath, "Data");
+        var databasePath = Path.Combine(testDataDir, "compact.sqlite3");
+        var serverDatabasePath = Path.Combine(testDataDir, "compact.server.table.sqlite3");
+        Directory.CreateDirectory(testDataDir);
+
+        try
+        {
+            File.Copy(Path.Combine(sourceDataDir, "compact.sqlite3"), databasePath);
+            File.Copy(Path.Combine(sourceDataDir, "compact.server.table.sqlite3"), serverDatabasePath);
+
+            using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=false;Foreign Keys=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                                      DELETE FROM item_enchanting_gems WHERE item_id = $itemId;
+                                      INSERT INTO item_enchanting_gems
+                                          (item_id, eiset_id, equip_item_tag_id, equip_item_id, equip_level,
+                                           equip_slot_group_id, gem_visual_effect_id, ignore_equip_item_tag, item_grade_id)
+                                      VALUES ($itemId, 0, 0, 0, 0, 9000004, 0, 0, 0),
+                                             ($itemId, 0, 0, 0, 0, 9000004, 0, 0, 0);
+                                      """;
+                command.Parameters.AddWithValue("$itemId", itemId);
+                command.ExecuteNonQuery();
+            }
+
+            appPathField.SetValue(null, testAppPath);
+            var manager = CreateItemManager();
+            SetPrivateField(manager, "_loadedUserItems", true);
+
+            manager.Load();
+
+            var template = manager.GetTemplate(itemId) as RuneTemplate;
+            await Assert.That(template).IsNotNull();
+            await Assert.That(template.EquipSlotGroupId).IsEqualTo(9000004u);
+            await Assert.That(template.Name).IsEqualTo("Perfect Tidal Lunasigil");
+        }
+        finally
+        {
+            appPathField.SetValue(null, originalAppPath);
+            ItemManager.MaxGradeId = originalMaxGradeId;
+            ItemManager.MaxGradeValue = originalMaxGradeValue;
+            SqliteConnection.ClearAllPools();
+            File.Delete(databasePath);
+            File.Delete(serverDatabasePath);
+            Directory.Delete(testDataDir);
+            Directory.Delete(testAppPath);
+        }
+    }
+
     #region Constructor Tests
 
     [Test]
